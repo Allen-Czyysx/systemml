@@ -183,6 +183,12 @@ public class DmlPreprocessor implements DmlListener {
 	public void exitWhileStatement(WhileStatementContext ctx) {}
 
 	@Override
+	public void enterDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
+
+	@Override
+	public void exitDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
+
+	@Override
 	public void enterConstStringIdExpression(ConstStringIdExpressionContext ctx) {}
 
 	@Override

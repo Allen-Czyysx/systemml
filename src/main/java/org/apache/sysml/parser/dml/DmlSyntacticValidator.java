@@ -37,6 +37,7 @@ import org.apache.sysml.parser.AssignmentStatement;
 import org.apache.sysml.parser.ConditionalPredicate;
 import org.apache.sysml.parser.DMLProgram;
 import org.apache.sysml.parser.DataIdentifier;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression;
 import org.apache.sysml.parser.ExpressionList;
 import org.apache.sysml.parser.ExternalFunctionStatement;
@@ -76,6 +77,7 @@ import org.apache.sysml.parser.dml.DmlParser.ConstStringIdExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ConstTrueExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.DataIdExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.DataIdentifierContext;
+import org.apache.sysml.parser.dml.DmlParser.DWhileStatementContext;
 import org.apache.sysml.parser.dml.DmlParser.ExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ExternalFunctionDefExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ForStatementContext;
@@ -500,12 +502,12 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			functionName = convertedSyntax.functionName;
 			paramExpression = convertedSyntax.paramExpression;
 		}
-		
+
 		// handle built-in functions
 		ctx.info.expr = buildForBuiltInFunction(ctx, functionName, paramExpression);
 		if( ctx.info.expr != null )
 			return;
-		
+
 		// handle user-defined functions
 		ctx.info.expr = createFunctionCall(ctx, namespace, functionName, paramExpression);
 	}
@@ -616,6 +618,32 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	}
 
 	@Override
+	public void exitDWhileStatement(DWhileStatementContext ctx) {
+		// TODO added by czh
+		DWhileStatement dWhileStatement = new DWhileStatement();
+
+		// 循环条件
+		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
+		dWhileStatement.setPredicate(predicate);
+
+		// 增量迭代变量
+		DataIdentifier dVar = new DataIdentifier(ctx.dVar.getText());
+		dWhileStatement.setDVar(dVar);
+
+		dWhileStatement.setCtxValuesAndFilename(ctx, currentFile);
+
+		if (ctx.body.size() > 0) {
+			for (StatementContext stmtCtx : ctx.body) {
+				dWhileStatement.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
+			}
+			dWhileStatement.mergeStatementBlocks();
+		}
+
+		ctx.info.stmt = dWhileStatement;
+		setFileLineColumn(ctx.info.stmt, ctx);
+	}
+
+	@Override
 	public void exitForStatement(ForStatementContext ctx) {
 		ForStatement forStmt = new ForStatement();
 
@@ -677,7 +705,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 				|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
 				"scalar" : paramCtx.paramType.dataType().getText();
 			String valueType = paramCtx.paramType.valueType().getText();
-			
+
 			//check and assign data type
 			checkValidDataType(dataType, paramCtx.start);
 			if( !setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true) )
@@ -686,7 +714,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		}
 		return retVal;
 	}
-	
+
 	private ArrayList<DataIdentifier> getFunctionParametersAssign(List<TypedArgAssignContext> ctx) {
 		ArrayList<DataIdentifier> retVal = new ArrayList<>(ctx.size());
 		for(TypedArgAssignContext paramCtx : ctx) {
@@ -695,7 +723,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 				|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
 				"scalar" : paramCtx.paramType.dataType().getText();
 			String valueType = paramCtx.paramType.valueType().getText();
-			
+
 			//check and assign data type
 			checkValidDataType(dataType, paramCtx.start);
 			if( !setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true) )
@@ -704,9 +732,9 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		}
 		return retVal;
 	}
-	
+
 	private ArrayList<Expression> getFunctionDefaults(List<TypedArgAssignContext> ctx) {
-		return new ArrayList<>(ctx.stream().map(arg -> 
+		return new ArrayList<>(ctx.stream().map(arg ->
 			(arg.paramVal!=null)?arg.paramVal.info.expr:null).collect(Collectors.toList()));
 	}
 
@@ -742,7 +770,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		functionStmt.setInputParams(getFunctionParametersAssign(ctx.inputParams));
 		functionStmt.setInputDefaults(getFunctionDefaults(ctx.inputParams));
 		functionStmt.setOutputParams(getFunctionParametersNoAssign(ctx.outputParams));
-		
+
 		if(ctx.body.size() > 0) {
 			// handle function body
 			// Create arraylist of one statement block
@@ -874,7 +902,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		//mark as accumulator
 		((AssignmentStatement)ctx.info.stmt).setAccumulator(true);
 	}
-	
+
 	@Override
 	public void exitMatrixDataTypeCheck(MatrixDataTypeCheckContext ctx) {
 		checkValidDataType(ctx.ID().getText(), ctx.start);
@@ -910,7 +938,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	@Override public void enterIfdefAssignmentStatement(IfdefAssignmentStatementContext ctx) {}
 
 	@Override public void enterAccumulatorAssignmentStatement(AccumulatorAssignmentStatementContext ctx) {}
-	
+
 	@Override public void enterConstStringIdExpression(ConstStringIdExpressionContext ctx) {}
 
 	@Override public void enterConstTrueExpression(ConstTrueExpressionContext ctx) {}
@@ -924,6 +952,8 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	@Override public void enterPathStatement(PathStatementContext ctx) {}
 
 	@Override public void enterWhileStatement(WhileStatementContext ctx) {}
+
+	@Override public void enterDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
 
 	@Override public void enterCommandlineParamExpression(CommandlineParamExpressionContext ctx) {}
 

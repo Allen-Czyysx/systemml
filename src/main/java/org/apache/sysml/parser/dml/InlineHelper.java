@@ -476,6 +476,9 @@ public class InlineHelper extends CommonSyntacticValidator implements DmlListene
 	}
 
 	@Override
+	public void enterDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
+
+	@Override
 	public void exitAccumulatorAssignmentStatement(AccumulatorAssignmentStatementContext ctx) {
 		if(currentFunction != null && isRewritePhase) {
 			rewriter.insertAfter(ctx.stop, ";\n");
@@ -757,6 +760,9 @@ public class InlineHelper extends CommonSyntacticValidator implements DmlListene
 			rewriter.insertAfter(ctx.stop, "\n");
 		}
 	}
+
+	@Override
+	public void exitDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
 
 	@Override
 	public String falseStringLiteral() {
