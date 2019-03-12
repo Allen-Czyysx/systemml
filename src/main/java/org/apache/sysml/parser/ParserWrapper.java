@@ -66,6 +66,10 @@ public abstract class ParserWrapper {
 			blk = new IfStatementBlock();
 			blk.addStatement(current);
 		}
+		else if(current instanceof DWhileStatement) {
+			blk = new DWhileStatementBlock();
+			blk.addStatement(current);
+		}
 		else if(current instanceof WhileStatement) {
 			blk = new WhileStatementBlock();
 			blk.addStatement(current);

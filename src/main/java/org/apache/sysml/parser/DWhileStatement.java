@@ -1,15 +1,16 @@
-/*
- * TODO added by czh
- */
-
 package org.apache.sysml.parser;
 
+// TODO added by czh
 public class DWhileStatement extends WhileStatement {
 
 	private DataIdentifier _dVar;
 
 	public DWhileStatement() {
 		_dVar = null;
+	}
+
+	public DataIdentifier getDVar() {
+		return _dVar;
 	}
 
 	public void setDVar(DataIdentifier dVar) {

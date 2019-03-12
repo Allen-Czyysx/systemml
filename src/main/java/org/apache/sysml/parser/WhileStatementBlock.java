@@ -31,9 +31,9 @@ import org.apache.sysml.lops.Lop;
 public class WhileStatementBlock extends StatementBlock 
 {
 	
-	private Hop _predicateHops;
-	private Lop _predicateLops = null;
-	private boolean _requiresPredicateRecompile = false;
+	Hop _predicateHops;
+	Lop _predicateLops = null;
+	boolean _requiresPredicateRecompile = false;
 	
 	@Override
 	public VariableSet validate(DMLProgram dmlProg, VariableSet ids, HashMap<String,ConstIdentifier> constVars, boolean conditional) 

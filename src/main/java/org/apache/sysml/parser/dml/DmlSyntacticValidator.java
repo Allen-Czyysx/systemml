@@ -619,7 +619,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitDWhileStatement(DWhileStatementContext ctx) {
-		// TODO added by czh
 		DWhileStatement dWhileStatement = new DWhileStatement();
 
 		// 循环条件
