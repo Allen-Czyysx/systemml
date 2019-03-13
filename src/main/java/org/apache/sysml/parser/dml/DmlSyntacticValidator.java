@@ -33,29 +33,7 @@ import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.sysml.conf.CompilerConfig.ConfigType;
 import org.apache.sysml.conf.ConfigurationManager;
-import org.apache.sysml.parser.AssignmentStatement;
-import org.apache.sysml.parser.ConditionalPredicate;
-import org.apache.sysml.parser.DMLProgram;
-import org.apache.sysml.parser.DataIdentifier;
-import org.apache.sysml.parser.DWhileStatement;
-import org.apache.sysml.parser.Expression;
-import org.apache.sysml.parser.ExpressionList;
-import org.apache.sysml.parser.ExternalFunctionStatement;
-import org.apache.sysml.parser.ForStatement;
-import org.apache.sysml.parser.FunctionCallIdentifier;
-import org.apache.sysml.parser.FunctionStatement;
-import org.apache.sysml.parser.IfStatement;
-import org.apache.sysml.parser.IndexedIdentifier;
-import org.apache.sysml.parser.IterablePredicate;
-import org.apache.sysml.parser.LanguageException;
-import org.apache.sysml.parser.ParForStatement;
-import org.apache.sysml.parser.ParameterExpression;
-import org.apache.sysml.parser.ParseException;
-import org.apache.sysml.parser.ParserWrapper;
-import org.apache.sysml.parser.PathStatement;
-import org.apache.sysml.parser.Statement;
-import org.apache.sysml.parser.StatementBlock;
-import org.apache.sysml.parser.WhileStatement;
+import org.apache.sysml.parser.*;
 import org.apache.sysml.parser.common.CommonSyntacticValidator;
 import org.apache.sysml.parser.common.CustomErrorListener;
 import org.apache.sysml.parser.common.ExpressionInfo;
@@ -113,6 +91,8 @@ import org.apache.sysml.parser.dml.DmlParser.UnaryExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ValueTypeContext;
 import org.apache.sysml.parser.dml.DmlParser.WhileStatementContext;
 import org.apache.sysml.runtime.util.UtilFunctions;
+
+import static org.apache.sysml.parser.ParameterizedBuiltinFunctionExpression.getParamBuiltinFunctionExpression;
 
 
 public class DmlSyntacticValidator extends CommonSyntacticValidator implements DmlListener {
@@ -625,9 +605,24 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
 		dWhileStatement.setPredicate(predicate);
 
-		// 增量迭代变量
-		DataIdentifier dVar = new DataIdentifier(ctx.dVar.getText());
-		dWhileStatement.setDVar(dVar);
+		// 增量迭代Begin
+		// TODO added by czh 暂时先实现打印
+		ArrayList<ParameterExpression> bParamExprs = new ArrayList<>();
+		ParameterExpression bParamExpr = new ParameterExpression("target", new DataIdentifier(ctx.dVar.getText()));
+		bParamExprs.add(bParamExpr);
+		ParameterizedBuiltinFunctionExpression bToString = getParamBuiltinFunctionExpression(
+				ctx,
+				"toString",
+				bParamExprs,
+				currentFile
+		);
+		List<Expression> expList = new ArrayList<>();
+		expList.add(bToString);
+		PrintStatement bPrint = new PrintStatement(ctx, "print", expList, currentFile);
+		dWhileStatement.setDIterBegin(bPrint);
+
+		// 增量迭代After
+		// TODO added by czh
 
 		dWhileStatement.setCtxValuesAndFilename(ctx, currentFile);
 

@@ -81,6 +81,7 @@ import org.apache.sysml.parser.Expression.ParameterizedBuiltinFunctionOp;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.parser.PrintStatement.PRINTTYPE;
 import org.apache.sysml.runtime.DMLRuntimeException;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.ExternalFunctionProgramBlock;
 import org.apache.sysml.runtime.controlprogram.ExternalFunctionProgramBlockCP;
 import org.apache.sysml.runtime.controlprogram.ForProgramBlock;
@@ -331,6 +332,15 @@ public class DMLTranslator {
 			Lop l = wsb.getPredicateHops().constructLops();
 			wsb.setPredicateLops(l);
 			ret |= wsb.updatePredicateRecompilationFlag();
+			if (sb instanceof DWhileStatementBlock) {
+				DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
+				Lop beginLops = dwsb.getDIterBeginHops().constructLops();
+				Lop afterLops = dwsb.getDIterBeginHops().constructLops();
+				dwsb.setDIterBeginLops(beginLops);
+				dwsb.setDIterBeginLops(afterLops);
+				ret |= dwsb.updateDIterBeginRecompilationFlag();
+				ret |= dwsb.updateDIterAfterRecompilationFlag();
+			}
 		} else if (sb instanceof IfStatementBlock) {
 			IfStatementBlock isb = (IfStatementBlock) sb;
 			IfStatement ifStmt = (IfStatement) isb.getStatement(0);
@@ -443,19 +453,56 @@ public class DMLTranslator {
 
 		ProgramBlock retPB = null;
 
+		// process DWhile Statement - add runtime program blocks to program
+		if (sb instanceof DWhileStatementBlock) {
+			DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
+
+			// predicate指令
+			pred_dag = new Dag<>();
+			dwsb.getPredicateLops().addToDag(pred_dag);
+			pred_instruct = pred_dag.getJobs(null, config);
+
+			// dBegin指令
+			Dag<Lop> dBegin_dag = new Dag<>();
+			dwsb.getDIterBeginLops().addToDag(dBegin_dag);
+			ArrayList<Instruction> dBegin_instruct = dBegin_dag.getJobs(null, config);
+
+			// create dwhile program block
+			DWhileProgramBlock rtpb = new DWhileProgramBlock(prog, pred_instruct, dBegin_instruct, null);
+
+			// process the body of the dwhile statement block
+			DWhileStatement dwstmt = (DWhileStatement) dwsb.getStatement(0);
+			for (StatementBlock sblock : dwstmt.getBody()) {
+				// process the body
+				ProgramBlock childBlock = createRuntimeProgramBlock(prog, sblock, config);
+				rtpb.addProgramBlock(childBlock);
+			}
+
+			// dAfter指令
+			// TODO added by czh
+//			Dag<Lop> dAfter_dag = new Dag<>();
+//			dwsb.getDIterAfterLops().addToDag(dAfter_dag);
+//			ArrayList<Instruction> dAfter_instruct = dAfter_dag.getJobs(null, config);
+//			rtpb.setDIterAfter(dAfter_instruct);
+
+			retPB = rtpb;
+
+			// add statement block
+			retPB.setStatementBlock(sb);
+
+			// add location information
+			retPB.setParseInfo(sb);
+		}
+
 		// process While Statement - add runtime program blocks to program
-		if (sb instanceof WhileStatementBlock) {
+		else if (sb instanceof WhileStatementBlock) {
 
 			// create DAG for loop predicates
 			pred_dag = new Dag<>();
 			((WhileStatementBlock) sb).getPredicateLops().addToDag(pred_dag);
 
 			// create instructions for loop predicates
-			pred_instruct = new ArrayList<>();
-			ArrayList<Instruction> pInst = pred_dag.getJobs(null, config);
-			for (Instruction i : pInst) {
-				pred_instruct.add(i);
-			}
+			pred_instruct = pred_dag.getJobs(null, config);
 
 			// create while program block
 			WhileProgramBlock rtpb = new WhileProgramBlock(prog, pred_instruct);
@@ -488,11 +535,7 @@ public class DMLTranslator {
 			((IfStatementBlock) sb).getPredicateLops().addToDag(pred_dag);
 
 			// create instructions for loop predicates
-			pred_instruct = new ArrayList<>();
-			ArrayList<Instruction> pInst = pred_dag.getJobs(null, config);
-			for (Instruction i : pInst) {
-				pred_instruct.add(i);
-			}
+			pred_instruct = pred_dag.getJobs(null, config);
 
 			// create if program block
 			IfProgramBlock rtpb = new IfProgramBlock(prog, pred_instruct);
@@ -1463,53 +1506,92 @@ public class DMLTranslator {
 
 	private void constructHopsForDIter(DWhileStatementBlock dwsb) {
 		// 1. 处理before
-		// 读增量迭代的变量
-		DWhileStatement dws = (DWhileStatement) (dwsb).getStatement(0);
-		DataIdentifier dVar = dws.getDVar();
-		long actualDim1 =
-				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim1() : dVar.getDim1();
-		long actualDim2 =
-				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim2() : dVar.getDim2();
-		DataOp dVarHops = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
-				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
-		dVarHops.setParseInfo(dVar);
+		PrintStatement dBegin = ((DWhileStatement) dwsb.getStatement(0)).getDIterBegin();
 
-		// 记录旧值
-		// TODO added by czh 不是每次都要记录
+		// 读数据
+		HashMap<String, Hop> _ids = new HashMap<>();
+		VariableSet varsRead = dBegin.variablesRead();
+		for (String varName : varsRead.getVariables().keySet()) {
+			// creating transient read for live in variables
+			DataIdentifier var = dwsb.liveIn().getVariables().get(varName);
+			DataOp read = null;
+			if (var == null) {
+				throw new ParseException("variable " + varName + " not live variable for conditional predicate");
+			} else {
+				long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
+				long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
 
-//		// TODO added by czh 先暂时加入livein
-//		String dVarPreName = getDVarPreName(dVar);
-//		DataIdentifier preDVar = new DataIdentifier(dVarPreName);
-//		dwsb.liveIn().addVariable(dVarPreName, preDVar);
+				read = new DataOp(var.getName(), var.getDataType(), var.getValueType(), DataOpTypes.TRANSIENTREAD,
+						null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+				read.setParseInfo(var);
+			}
+			_ids.put(varName, read);
+		}
 
-		Hop preDVarHops = HopRewriteUtils.createTransientWrite(getDVarPreName(dVar), dVarHops);
-		dwsb.setDIterBeginHops(preDVarHops);
+		// 打印
+		// TODO added by czh 暂时打印dVar
+		DataIdentifier target = createTarget();
+		target.setDataType(DataType.SCALAR);
+		target.setValueType(ValueType.STRING);
+		target.setParseInfo(dwsb);
 
-		// TODO added by czh 暂时打印出来
-		Hop printfHop = new NaryOp(getDVarPreName(dVar), dVar.getDataType(), dVar.getValueType(), OpOpN.PRINTF,
-				preDVarHops);
-		dwsb.setDIterBeginHops(printfHop);
+		Hop.OpOp1 op = Hop.OpOp1.PRINT;
+		Expression source = dBegin.getExpressions().get(0);
+		Hop ae = processExpression(source, target, _ids);
+		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
+		printHop.setParseInfo(dwsb);
+		dwsb.setDIterBeginHops(printHop);
+
+//		// 读增量迭代的变量
+//		DWhileStatement dws = (DWhileStatement) (dwsb).getStatement(0);
+//		DataIdentifier dVar = dwsb.liveIn().getVariable(dws.getDVarName());
+//		long actualDim1 =
+//				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim1() : dVar.getDim1();
+//		long actualDim2 =
+//				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim2() : dVar.getDim2();
+//		DataOp dVarHops = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
+//				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
+//		dVarHops.setParseInfo(dVar);
+//
+//		// 记录旧值
+//		// TODO added by czh 不是每次都要记录
+//		// TODO added by czh 忽略preDVar
+////		Hop preDVarHops = HopRewriteUtils.createTransientWrite(getDVarPreName(dVar), dVarHops);
+////		dwsb.setDIterBeginHops(preDVarHops);
+//
+//		// TODO added by czh 暂时打印出来dVar
+//		// toString(dVar)
+//		LinkedHashMap<String, Hop> paramHops = new LinkedHashMap<>();
+//		paramHops.put(dVar.getName(), dVarHops);
+//		DataIdentifier target = createTarget();
+//		target.setDataType(DataType.SCALAR);
+//		target.setValueType(ValueType.STRING);
+//		target.setParseInfo(dws);
+//		Hop toStringOp = !dVarHops.getDataType().isScalar() ?
+//				new ParameterizedBuiltinOp(target.getName(), target.getDataType(),
+//						target.getValueType(), ParamBuiltinOp.TOSTRING, paramHops) :
+//				HopRewriteUtils.createBinary(dVarHops, new LiteralOp(""), OpOp2.PLUS);
+//
+//		// 打印
+//		DataIdentifier target2 = createTarget();
+//		target2.setDataType(DataType.SCALAR);
+//		target2.setValueType(ValueType.STRING);
+//		target2.setParseInfo(dws);
+//		Hop printHop = new UnaryOp(target2.getName(), target2.getDataType(),
+//				target2.getValueType(), Hop.OpOp1.PRINT, toStringOp);
+//		printHop.setParseInfo(dws);
+//		dwsb.setDIterBeginHops(printHop);
 
 
 		// 2. 处理after
 
-		// TODO added by czh 需要再读一次吗?
-		DataOp dVarHops2 = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
-				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
-		dVarHops2.setParseInfo(dVar);
-
-		BinaryOp delta = new BinaryOp(getDVarDName(dVar), dVar.getDataType(), dVar.getValueType(), OpOp2.MINUS,
-				dVarHops2, preDVarHops);
-	}
-
-	// TODO 旧值名称先放这
-	private String getDVarPreName(DataIdentifier dVar) {
-		return "systemml_pre_" + dVar.getName();
-	}
-
-	// TODO 增量名称先放这
-	private String getDVarDName(DataIdentifier dVar) {
-		return "systemml_d_" + dVar.getName();
+//		// TODO added by czh 需要再读一次吗?
+//		DataOp dVarHops2 = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
+//				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
+//		dVarHops2.setParseInfo(dVar);
+//
+//		BinaryOp delta = new BinaryOp(getDVarDName(dVar), dVar.getDataType(), dVar.getValueType(), OpOp2.MINUS,
+//				dVarHops2, preDVarHops);
 	}
 
 
@@ -1521,10 +1603,10 @@ public class DMLTranslator {
 		ConditionalPredicate cp = null;
 
 		if (passedSB instanceof WhileStatementBlock) {
-			WhileStatement ws = (WhileStatement) ((WhileStatementBlock) passedSB).getStatement(0);
+			WhileStatement ws = (WhileStatement) passedSB.getStatement(0);
 			cp = ws.getConditionalPredicate();
 		} else if (passedSB instanceof IfStatementBlock) {
-			IfStatement ws = (IfStatement) ((IfStatementBlock) passedSB).getStatement(0);
+			IfStatement ws = (IfStatement) passedSB.getStatement(0);
 			cp = ws.getConditionalPredicate();
 		} else {
 			throw new ParseException("ConditionalPredicate expected only for while or if statements.");

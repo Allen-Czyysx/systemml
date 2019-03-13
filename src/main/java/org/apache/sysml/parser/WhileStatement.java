@@ -25,8 +25,8 @@ import java.util.ArrayList;
 
 public class WhileStatement extends Statement
 {
-	ConditionalPredicate _predicate;
-	ArrayList<StatementBlock> _body;
+	protected ConditionalPredicate _predicate;
+	protected ArrayList<StatementBlock> _body;
 
 	@Override
 	public Statement rewriteStatement(String prefix) {

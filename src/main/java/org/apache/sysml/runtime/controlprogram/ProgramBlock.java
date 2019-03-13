@@ -198,7 +198,13 @@ public class ProgramBlock implements ParseInfo
 		}
 
 		//actual instruction execution
-		return executePredicateInstructions(tmp, retType, ec);
+		// TODO added by czh 暂时添加UNKNOWN类型不取返回值
+		if (retType != ValueType.UNKNOWN) {
+			return executePredicateInstructions(tmp, retType, ec);
+		} else {
+			executeInstructions(tmp, ec);
+			return null;
+		}
 	}
 
 	protected void executeInstructions(ArrayList<Instruction> inst, ExecutionContext ec) {
@@ -406,8 +412,6 @@ public class ProgramBlock implements ParseInfo
 	 *            parse information, such as beginning line position, beginning
 	 *            column position, ending line position, ending column position,
 	 *            text, and filename
-	 * @param filename
-	 *            the DML/PYDML filename (if it exists)
 	 */
 	public void setParseInfo(ParseInfo parseInfo) {
 		_beginLine = parseInfo.getBeginLine();

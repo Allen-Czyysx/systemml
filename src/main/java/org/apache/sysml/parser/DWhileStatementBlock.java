@@ -8,6 +8,7 @@ import org.apache.sysml.lops.Lop;
 // TODO added by czh: 是否需要常值处理
 public class DWhileStatementBlock extends WhileStatementBlock {
 
+	// TODO added by czh 应该是ArrayList<Hop>
 	private Hop _dIterBeginHops = null;
 	private Hop _dIterAfterHops = null;
 

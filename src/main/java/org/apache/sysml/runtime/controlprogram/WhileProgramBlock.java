@@ -36,9 +36,9 @@ import org.apache.sysml.yarn.DMLAppMasterUtils;
 
 public class WhileProgramBlock extends ProgramBlock 
 {
-	private ArrayList<Instruction> _predicate;
-	private ArrayList <Instruction> _exitInstructions ;
-	private ArrayList<ProgramBlock> _childBlocks;
+	protected ArrayList<Instruction> _predicate;
+	protected ArrayList <Instruction> _exitInstructions;
+	protected ArrayList<ProgramBlock> _childBlocks;
 
 	public WhileProgramBlock(Program prog, ArrayList<Instruction> predicate) {
 		super(prog);
@@ -71,7 +71,7 @@ public class WhileProgramBlock extends ProgramBlock
 		return _exitInstructions; 
 	}
 	
-	private BooleanObject executePredicate(ExecutionContext ec) 
+	protected BooleanObject executePredicate(ExecutionContext ec)
 	{
 		BooleanObject result = null;
 		try

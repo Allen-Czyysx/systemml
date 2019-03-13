@@ -29,6 +29,8 @@ import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.Hop;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.DMLProgram;
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.DWhileStatementBlock;
 import org.apache.sysml.parser.ForStatement;
 import org.apache.sysml.parser.ForStatementBlock;
 import org.apache.sysml.parser.FunctionStatement;
@@ -230,6 +232,15 @@ public class ProgramRewriter
 			FunctionStatementBlock fsb = (FunctionStatementBlock)current;
 			FunctionStatement fstmt = (FunctionStatement)fsb.getStatement(0);
 			for (StatementBlock sb : fstmt.getBody())
+				rRewriteStatementBlockHopDAGs(sb, state);
+		}
+		else if (current instanceof DWhileStatementBlock) {
+			DWhileStatementBlock dwsb = (DWhileStatementBlock) current;
+			DWhileStatement dwstmt = (DWhileStatement)dwsb.getStatement(0);
+			dwsb.setPredicateHops(rewriteHopDAG(dwsb.getPredicateHops(), state));
+			dwsb.setDIterBeginHops(rewriteHopDAG(dwsb.getDIterBeginHops(), state));
+			dwsb.setDIterAfterHops(rewriteHopDAG(dwsb.getDIterAfterHops(), state));
+			for (StatementBlock sb : dwstmt.getBody())
 				rRewriteStatementBlockHopDAGs(sb, state);
 		}
 		else if (current instanceof WhileStatementBlock)
