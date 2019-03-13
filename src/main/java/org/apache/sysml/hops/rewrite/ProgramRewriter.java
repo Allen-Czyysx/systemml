@@ -238,7 +238,7 @@ public class ProgramRewriter
 			DWhileStatementBlock dwsb = (DWhileStatementBlock) current;
 			DWhileStatement dwstmt = (DWhileStatement)dwsb.getStatement(0);
 			dwsb.setPredicateHops(rewriteHopDAG(dwsb.getPredicateHops(), state));
-			dwsb.setDIterBeginHops(rewriteHopDAG(dwsb.getDIterBeginHops(), state));
+			dwsb.setDIterBeforeHops(rewriteHopDAG(dwsb.getDIterBeforeHops(), state));
 			dwsb.setDIterAfterHops(rewriteHopDAG(dwsb.getDIterAfterHops(), state));
 			for (StatementBlock sb : dwstmt.getBody())
 				rRewriteStatementBlockHopDAGs(sb, state);

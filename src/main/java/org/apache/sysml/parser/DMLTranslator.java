@@ -334,10 +334,10 @@ public class DMLTranslator {
 			ret |= wsb.updatePredicateRecompilationFlag();
 			if (sb instanceof DWhileStatementBlock) {
 				DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
-				Lop beginLops = dwsb.getDIterBeginHops().constructLops();
-				Lop afterLops = dwsb.getDIterBeginHops().constructLops();
-				dwsb.setDIterBeginLops(beginLops);
-				dwsb.setDIterBeginLops(afterLops);
+				Lop beginLops = dwsb.getDIterBeforeHops().constructLops();
+				Lop afterLops = dwsb.getDIterAfterHops().constructLops();
+				dwsb.setDIterBeforeLops(beginLops);
+				dwsb.setDIterAfterLops(afterLops);
 				ret |= dwsb.updateDIterBeginRecompilationFlag();
 				ret |= dwsb.updateDIterAfterRecompilationFlag();
 			}
@@ -464,7 +464,7 @@ public class DMLTranslator {
 
 			// dBegin指令
 			Dag<Lop> dBegin_dag = new Dag<>();
-			dwsb.getDIterBeginLops().addToDag(dBegin_dag);
+			dwsb.getDIterBeforeLops().addToDag(dBegin_dag);
 			ArrayList<Instruction> dBegin_instruct = dBegin_dag.getJobs(null, config);
 
 			// create dwhile program block
@@ -479,11 +479,10 @@ public class DMLTranslator {
 			}
 
 			// dAfter指令
-			// TODO added by czh
-//			Dag<Lop> dAfter_dag = new Dag<>();
-//			dwsb.getDIterAfterLops().addToDag(dAfter_dag);
-//			ArrayList<Instruction> dAfter_instruct = dAfter_dag.getJobs(null, config);
-//			rtpb.setDIterAfter(dAfter_instruct);
+			Dag<Lop> dAfter_dag = new Dag<>();
+			dwsb.getDIterAfterLops().addToDag(dAfter_dag);
+			ArrayList<Instruction> dAfter_instruct = dAfter_dag.getJobs(null, config);
+			rtpb.setDIterAfter(dAfter_instruct);
 
 			retPB = rtpb;
 
@@ -1496,102 +1495,95 @@ public class DMLTranslator {
 		// 循环条件
 		constructHopsForConditionalPredicate(sb);
 
-		// 增量迭代
-		constructHopsForDIter(sb);
+		// 增量迭代Before
+		constructHopsForDIterBefore(sb);
 
 		// 循环体内
 		ArrayList<StatementBlock> body = ((DWhileStatement) sb.getStatement(0)).getBody();
 		constructHops(body.get(0));
+
+		// 增量迭代After
+		constructHopsForDIterAfter(sb);
 	}
 
-	private void constructHopsForDIter(DWhileStatementBlock dwsb) {
-		// 1. 处理before
-		PrintStatement dBegin = ((DWhileStatement) dwsb.getStatement(0)).getDIterBegin();
+	private void constructHopsForDIterBefore(DWhileStatementBlock dwsb) {
+		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
 		// 读数据
-		HashMap<String, Hop> _ids = new HashMap<>();
-		VariableSet varsRead = dBegin.variablesRead();
-		for (String varName : varsRead.getVariables().keySet()) {
-			// creating transient read for live in variables
-			DataIdentifier var = dwsb.liveIn().getVariables().get(varName);
-			DataOp read = null;
-			if (var == null) {
-				throw new ParseException("variable " + varName + " not live variable for conditional predicate");
-			} else {
-				long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-				long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
-
-				read = new DataOp(var.getName(), var.getDataType(), var.getValueType(), DataOpTypes.TRANSIENTREAD,
-						null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
-				read.setParseInfo(var);
-			}
-			_ids.put(varName, read);
+		String dVarName = dwst.getDVarName();
+		HashMap<String, Hop> ids = new HashMap<>();
+		DataIdentifier var = dwsb.liveIn().getVariables().get(dVarName);
+		DataOp read;
+		if (var != null) {
+			long actualDim1 =
+					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
+			long actualDim2 =
+					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
+			read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
+					DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2,
+					var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+			read.setParseInfo(var);
+		} else {
+			throw new ParseException("variable " + dVarName + " not live variable for dIter before");
 		}
+		ids.put(dVarName, read);
+
+		// 记录旧值
+		AssignmentStatement bAssign = (AssignmentStatement) dwst.getDIterBeforeByIndex(0);
+		DataIdentifier bAssignTarget = bAssign.getTarget();
+		Expression bAssignSource = bAssign.getSource();
+		Hop bAssignHops = processExpression(bAssignSource, bAssignTarget, ids);
+		bAssignTarget.setProperties(bAssignSource.getOutput());
+		ids.put(bAssignTarget.getName(), bAssignHops);
+
+		DataOp bWrite = new DataOp(bAssignTarget.getName(), bAssignTarget.getDataType(), bAssignTarget.getValueType(),
+				bAssignHops, DataOpTypes.TRANSIENTWRITE, null);
+		bWrite.setOutputParams(bAssignHops.getDim1(), bAssignHops.getDim2(), bAssignHops.getNnz(),
+				bAssignHops.getUpdateType(), bAssignHops.getRowsInBlock(), bAssignHops.getColsInBlock());
+		bWrite.setParseInfo(bAssignTarget);
+
+		dwsb.setDIterBeforeHops(bWrite);
+	}
+
+	private void constructHopsForDIterAfter(DWhileStatementBlock dwsb) {
+		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
+
+		// 读数据
+		String dVarName = dwst.getDVarName();
+		String preDVarName = DWhileStatement.getDVarPreName(dVarName);
+		HashMap<String, Hop> ids = new HashMap<>();
+		DataIdentifier var = dwsb._updated.getVariables().get(preDVarName);
+		DataOp read;
+		if (var != null) {
+			long actualDim1 =
+					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
+			long actualDim2 =
+					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
+			read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
+					DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2,
+					var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+			read.setParseInfo(var);
+		} else {
+			throw new ParseException("variable " + preDVarName + " not live variable for dIter after");
+		}
+		ids.put(preDVarName, read);
 
 		// 打印
-		// TODO added by czh 暂时打印dVar
+		// TODO added by czh 暂时实现打印旧值
+		PrintStatement aPrint = (PrintStatement) dwst.getDIterAfterByIndex(0);
+
 		DataIdentifier target = createTarget();
 		target.setDataType(DataType.SCALAR);
 		target.setValueType(ValueType.STRING);
 		target.setParseInfo(dwsb);
 
-		Hop.OpOp1 op = Hop.OpOp1.PRINT;
-		Expression source = dBegin.getExpressions().get(0);
-		Hop ae = processExpression(source, target, _ids);
+		OpOp1 op = OpOp1.PRINT;
+		Expression source = aPrint.getExpressions().get(0);
+		Hop ae = processExpression(source, target, ids);
 		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
 		printHop.setParseInfo(dwsb);
-		dwsb.setDIterBeginHops(printHop);
 
-//		// 读增量迭代的变量
-//		DWhileStatement dws = (DWhileStatement) (dwsb).getStatement(0);
-//		DataIdentifier dVar = dwsb.liveIn().getVariable(dws.getDVarName());
-//		long actualDim1 =
-//				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim1() : dVar.getDim1();
-//		long actualDim2 =
-//				(dVar instanceof IndexedIdentifier) ? ((IndexedIdentifier) dVar).getOrigDim2() : dVar.getDim2();
-//		DataOp dVarHops = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
-//				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
-//		dVarHops.setParseInfo(dVar);
-//
-//		// 记录旧值
-//		// TODO added by czh 不是每次都要记录
-//		// TODO added by czh 忽略preDVar
-////		Hop preDVarHops = HopRewriteUtils.createTransientWrite(getDVarPreName(dVar), dVarHops);
-////		dwsb.setDIterBeginHops(preDVarHops);
-//
-//		// TODO added by czh 暂时打印出来dVar
-//		// toString(dVar)
-//		LinkedHashMap<String, Hop> paramHops = new LinkedHashMap<>();
-//		paramHops.put(dVar.getName(), dVarHops);
-//		DataIdentifier target = createTarget();
-//		target.setDataType(DataType.SCALAR);
-//		target.setValueType(ValueType.STRING);
-//		target.setParseInfo(dws);
-//		Hop toStringOp = !dVarHops.getDataType().isScalar() ?
-//				new ParameterizedBuiltinOp(target.getName(), target.getDataType(),
-//						target.getValueType(), ParamBuiltinOp.TOSTRING, paramHops) :
-//				HopRewriteUtils.createBinary(dVarHops, new LiteralOp(""), OpOp2.PLUS);
-//
-//		// 打印
-//		DataIdentifier target2 = createTarget();
-//		target2.setDataType(DataType.SCALAR);
-//		target2.setValueType(ValueType.STRING);
-//		target2.setParseInfo(dws);
-//		Hop printHop = new UnaryOp(target2.getName(), target2.getDataType(),
-//				target2.getValueType(), Hop.OpOp1.PRINT, toStringOp);
-//		printHop.setParseInfo(dws);
-//		dwsb.setDIterBeginHops(printHop);
-
-
-		// 2. 处理after
-
-//		// TODO added by czh 需要再读一次吗?
-//		DataOp dVarHops2 = new DataOp(dVar.getName(), dVar.getDataType(), dVar.getValueType(), DataOpTypes.TRANSIENTREAD,
-//				null, actualDim1, actualDim2, dVar.getNnz(), dVar.getRowsInBlock(), dVar.getColumnsInBlock());
-//		dVarHops2.setParseInfo(dVar);
-//
-//		BinaryOp delta = new BinaryOp(getDVarDName(dVar), dVar.getDataType(), dVar.getValueType(), OpOp2.MINUS,
-//				dVarHops2, preDVarHops);
+		dwsb.setDIterAfterHops(printHop);
 	}
 
 

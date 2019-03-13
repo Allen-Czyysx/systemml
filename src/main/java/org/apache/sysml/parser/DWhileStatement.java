@@ -1,27 +1,61 @@
 package org.apache.sysml.parser;
 
-// TODO added by czh
+import java.util.ArrayList;
+
 public class DWhileStatement extends WhileStatement {
 
-	private PrintStatement _dIterBegin;
+	private String _dVarName;
 
-	// TODO added by czh
-	private ParseInfo _dIterAfter;
+	private ArrayList<Statement> _dIterBefore;
 
-	public PrintStatement getDIterBegin() {
-		return _dIterBegin;
+	private ArrayList<Statement> _dIterAfter;
+
+	public String getDVarName() {
+		return _dVarName;
 	}
 
-	public void setDIterBegin(PrintStatement dIterBegin) {
-		_dIterBegin = dIterBegin;
+	public void setDVarName(String dVarName) {
+		_dVarName = dVarName;
 	}
 
-	public String getDVarPreName(DataIdentifier dVar) {
-		return "systemml_pre_" + dVar.getName();
+	public ArrayList<Statement> getDIterBefore() {
+		return _dIterBefore;
 	}
 
-	public String getDVarDName(DataIdentifier dVar) {
-		return "systemml_d_" + dVar.getName();
+	public Statement getDIterBeforeByIndex(int i) {
+		return _dIterBefore.get(i);
+	}
+
+	public int getNumDIterBefore(){
+		return _dIterBefore.size();
+	}
+
+	public void setDIterBefore(ArrayList<Statement> dIterBefore) {
+		_dIterBefore = dIterBefore;
+	}
+
+	public ArrayList<Statement> getDIterAfter() {
+		return _dIterAfter;
+	}
+
+	public Statement getDIterAfterByIndex(int i) {
+		return _dIterAfter.get(i);
+	}
+
+	public int getNumDIterAfter(){
+		return _dIterAfter.size();
+	}
+
+	public void setDIterAfter(ArrayList<Statement> dIterAfter) {
+		_dIterAfter = dIterAfter;
+	}
+
+	public static String getDVarPreName(String dVarName) {
+		return "systemml_pre_" + dVarName;
+	}
+
+	public static String getDVarDName(String dVarName) {
+		return "systemml_d_" + dVarName;
 	}
 
 	@Override
@@ -30,7 +64,7 @@ public class DWhileStatement extends WhileStatement {
 		sb.append("dwhile (");
 		sb.append(_predicate);
 		sb.append(" @\n");
-		sb.append(_dIterBegin.toString());
+		sb.append(_dIterBefore.toString());
 		sb.append(" @\n");
 		sb.append(_dIterAfter.toString());
 		sb.append(") { \n");

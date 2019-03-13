@@ -53,17 +53,28 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			}
 
 			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
-			Hop dIterBeginHops = dwsb.getDIterBeginHops();
+			Hop dIterBeginHops = dwsb.getDIterBeforeHops();
 			boolean recompile = dwsb.requiresDIterBeginRecompilation();
-			executePredicate(_dIterBegin, dIterBeginHops, recompile, Expression.ValueType.UNKNOWN, ec);
-		} catch (Exception ex) {
-			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", ex);
+			executePredicate(getDIterBegin(), dIterBeginHops, recompile, Expression.ValueType.UNKNOWN, ec);
+		} catch (Exception e) {
+			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
 		}
 	}
 
-	// TODO added by czh 执行dAfter
-	private BooleanObject executeDIterAfter(ExecutionContext ec) {
-		return new BooleanObject(true);
+	private void executeDIterAfter(ExecutionContext ec) {
+		try {
+			// set program block specific remote memory
+			if (DMLScript.isActiveAM()) {
+				DMLAppMasterUtils.setupProgramBlockRemoteMaxMemory(this);
+			}
+
+			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
+			Hop dIterAfterHops = dwsb.getDIterAfterHops();
+			boolean recompile = dwsb.requiresDIterAfterRecompilation();
+			executePredicate(getDIterAfter(), dIterAfterHops, recompile, Expression.ValueType.UNKNOWN, ec);
+		} catch (Exception e) {
+			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
+		}
 	}
 
 	@Override
@@ -85,7 +96,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 				}
 
 				// 执行dAfter
-				// TODO added by czh
 				executeDIterAfter(ec);
 			}
 

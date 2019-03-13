@@ -600,38 +600,54 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	@Override
 	public void exitDWhileStatement(DWhileStatementContext ctx) {
 		DWhileStatement dWhileStatement = new DWhileStatement();
+		dWhileStatement.setCtxValuesAndFilename(ctx, currentFile);
 
-		// 循环条件
+		// 1. 循环条件
 		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
 		dWhileStatement.setPredicate(predicate);
 
-		// 增量迭代Begin
-		// TODO added by czh 暂时先实现打印
-		ArrayList<ParameterExpression> bParamExprs = new ArrayList<>();
-		ParameterExpression bParamExpr = new ParameterExpression("target", new DataIdentifier(ctx.dVar.getText()));
-		bParamExprs.add(bParamExpr);
-		ParameterizedBuiltinFunctionExpression bToString = getParamBuiltinFunctionExpression(
-				ctx,
-				"toString",
-				bParamExprs,
-				currentFile
-		);
-		List<Expression> expList = new ArrayList<>();
-		expList.add(bToString);
-		PrintStatement bPrint = new PrintStatement(ctx, "print", expList, currentFile);
-		dWhileStatement.setDIterBegin(bPrint);
 
-		// 增量迭代After
-		// TODO added by czh
+		// 2. 增量迭代Before
+		ArrayList<Statement> before = new ArrayList<>();
 
-		dWhileStatement.setCtxValuesAndFilename(ctx, currentFile);
+		// 记录旧值
+		// TODO added by czh 暂时先记录一个, 每次记录
+		String dVarName = ctx.dVar.getText();
+		String preDVarName = DWhileStatement.getDVarPreName(dVarName);
+		DataIdentifier dVar = new DataIdentifier(dVarName);
+		DataIdentifier preDVar = new DataIdentifier(preDVarName);
+		dWhileStatement.setDVarName(dVarName);
+		AssignmentStatement bStorePreDVar = new AssignmentStatement(ctx, preDVar, dVar);
+		before.add(bStorePreDVar);
 
+		dWhileStatement.setDIterBefore(before);
+
+
+		// 3. 循环体内部
 		if (ctx.body.size() > 0) {
 			for (StatementContext stmtCtx : ctx.body) {
 				dWhileStatement.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
 			}
 			dWhileStatement.mergeStatementBlocks();
 		}
+
+
+		// 4. 增量迭代After
+		ArrayList<Statement> after = new ArrayList<>();
+
+		// TODO added by czh 暂时先打印dVar
+		ArrayList<ParameterExpression> aParamExprs = new ArrayList<>();
+		ParameterExpression aParamExpr = new ParameterExpression("target", preDVar);
+		aParamExprs.add(aParamExpr);
+		ParameterizedBuiltinFunctionExpression aToString =
+				getParamBuiltinFunctionExpression(ctx, "toString", aParamExprs, currentFile);
+		List<Expression> aExpList = new ArrayList<>();
+		aExpList.add(aToString);
+		PrintStatement aPrint = new PrintStatement(ctx, "print", aExpList, currentFile);
+		after.add(aPrint);
+
+		dWhileStatement.setDIterAfter(after);
+
 
 		ctx.info.stmt = dWhileStatement;
 		setFileLineColumn(ctx.info.stmt, ctx);
