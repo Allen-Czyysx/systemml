@@ -9,32 +9,31 @@ import org.apache.sysml.runtime.DMLScriptException;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
-import org.apache.sysml.runtime.instructions.cp.BooleanObject;
 import org.apache.sysml.yarn.DMLAppMasterUtils;
 
 import java.util.ArrayList;
 
 public class DWhileProgramBlock extends WhileProgramBlock {
 
-	private ArrayList<Instruction> _dIterBegin;
+	private ArrayList<Instruction> _dIterBefore;
 
 	private ArrayList<Instruction> _dIterAfter;
 
 	public DWhileProgramBlock(Program prog,
 							  ArrayList<Instruction> predicate,
-							  ArrayList<Instruction> dIterBegin,
+							  ArrayList<Instruction> dIterBefore,
 							  ArrayList<Instruction> dIterAfter) {
 		super(prog, predicate);
-		_dIterBegin = dIterBegin;
+		_dIterBefore = dIterBefore;
 		_dIterAfter = dIterAfter;
 	}
 
-	public ArrayList<Instruction> getDIterBegin() {
-		return _dIterBegin;
+	public ArrayList<Instruction> getDIterBefore() {
+		return _dIterBefore;
 	}
 
-	public void setDIterBegin(ArrayList<Instruction> dIterBegin) {
-		_dIterBegin = dIterBegin;
+	public void setDIterBefore(ArrayList<Instruction> dIterBefore) {
+		_dIterBefore = dIterBefore;
 	}
 
 	public ArrayList<Instruction> getDIterAfter() {
@@ -45,7 +44,7 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 		_dIterAfter = dIterAfter;
 	}
 
-	private void executeDIterBegin(ExecutionContext ec) {
+	private void executeDIterBefore(ExecutionContext ec) {
 		try {
 			// set program block specific remote memory
 			if (DMLScript.isActiveAM()) {
@@ -53,9 +52,9 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			}
 
 			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
-			Hop dIterBeginHops = dwsb.getDIterBeforeHops();
-			boolean recompile = dwsb.requiresDIterBeginRecompilation();
-			executePredicate(getDIterBegin(), dIterBeginHops, recompile, Expression.ValueType.UNKNOWN, ec);
+			ArrayList<Hop> hops = dwsb.getDIterBeforeHops();
+			boolean recompile = dwsb.requiresDIterBeforeRecompilation();
+			executeDWhile(getDIterBefore(), hops, recompile, ec);
 		} catch (Exception e) {
 			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
 		}
@@ -69,9 +68,9 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			}
 
 			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
-			Hop dIterAfterHops = dwsb.getDIterAfterHops();
+			ArrayList<Hop> hops = dwsb.getDIterAfterHops();
 			boolean recompile = dwsb.requiresDIterAfterRecompilation();
-			executePredicate(getDIterAfter(), dIterAfterHops, recompile, Expression.ValueType.UNKNOWN, ec);
+			executeDWhile(getDIterAfter(), hops, recompile, ec);
 		} catch (Exception e) {
 			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
 		}
@@ -87,7 +86,7 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			// run loop body until predicate becomes false
 			while (executePredicate(ec).getBooleanValue()) {
 				// 执行dBefore
-				executeDIterBegin(ec);
+				executeDIterBefore(ec);
 
 				// execute all child blocks
 				for (int i = 0; i < _childBlocks.size(); i++) {
@@ -118,7 +117,8 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 
 	@Override
 	public String printBlockErrorLocation() {
-		return "ERROR: Runtime error in dwhile program block generated from dwhile statement block between lines " + _beginLine + " and " + _endLine + " -- ";
+		return "ERROR: Runtime error in dwhile program block generated from dwhile statement block between lines "
+				+ _beginLine + " and " + _endLine + " -- ";
 	}
 
 }

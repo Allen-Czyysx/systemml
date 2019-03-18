@@ -53,7 +53,7 @@ import org.apache.sysml.yarn.DMLAppMasterUtils;
 public class ProgramBlock implements ParseInfo
 {
 	public static final String PRED_VAR = "__pred";
-	
+
 	protected static final Log LOG = LogFactory.getLog(ProgramBlock.class.getName());
 	private static final boolean CHECK_MATRIX_SPARSITY = false;
 
@@ -198,13 +198,32 @@ public class ProgramBlock implements ParseInfo
 		}
 
 		//actual instruction execution
-		// TODO added by czh 暂时添加UNKNOWN类型不取返回值
-		if (retType != ValueType.UNKNOWN) {
-			return executePredicateInstructions(tmp, retType, ec);
-		} else {
-			executeInstructions(tmp, ec);
-			return null;
+		return executePredicateInstructions(tmp, retType, ec);
+	}
+
+	public void executeDWhile(ArrayList<Instruction> inst, ArrayList<Hop> hops, boolean requiresRecompile, ExecutionContext ec) {
+		ArrayList<Instruction> tmp = inst;
+
+		//dynamically recompile instructions if enabled and required
+		try {
+			long t0 = ConfigurationManager.isStatistics() ? System.nanoTime() : 0;
+			if (ConfigurationManager.isDynamicRecompilation() && requiresRecompile) {
+				tmp = Recompiler.recompileHopsDag(null, hops, ec.getVariables(),
+						null, false, true, _tid);
+				tmp = JMLCUtils.cleanupRuntimeInstructions(tmp, PRED_VAR);
+			}
+			if (ConfigurationManager.isStatistics()) {
+				long t1 = System.nanoTime();
+				Statistics.incrementHOPRecompileTime(t1 - t0);
+				if (tmp != inst)
+					Statistics.incrementHOPRecompilePred();
+			}
+		} catch (Exception ex) {
+			throw new DMLRuntimeException("Unable to recompile dwhile instructions.", ex);
 		}
+
+		//actual instruction execution
+		executeInstructions(tmp, ec);
 	}
 
 	protected void executeInstructions(ArrayList<Instruction> inst, ExecutionContext ec) {
@@ -224,7 +243,7 @@ public class ProgramBlock implements ParseInfo
 			ec.updateDebugState(pos++);
 			executeSingleInstruction(currInst, ec);
 		}
-		
+
 		//get scalar return
 		ScalarObject ret = (ScalarObject) ec.getScalarInput(PRED_VAR, retType, false);
 
@@ -339,7 +358,7 @@ public class ProgramBlock implements ParseInfo
 				mo.setUpdateType(flags[i]);
 			}
 	}
-	
+
 	private static void checkSparsity( Instruction lastInst, LocalVariableMap vars )
 	{
 		for( String varname : vars.keySet() )

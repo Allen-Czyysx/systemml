@@ -334,10 +334,19 @@ public class DMLTranslator {
 			ret |= wsb.updatePredicateRecompilationFlag();
 			if (sb instanceof DWhileStatementBlock) {
 				DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
-				Lop beginLops = dwsb.getDIterBeforeHops().constructLops();
-				Lop afterLops = dwsb.getDIterAfterHops().constructLops();
-				dwsb.setDIterBeforeLops(beginLops);
-				dwsb.setDIterAfterLops(afterLops);
+
+				ArrayList<Lop> before = new ArrayList<>();
+				for (Hop hop : dwsb.getDIterBeforeHops()) {
+					before.add(hop.constructLops());
+				}
+				dwsb.setDIterBeforeLops(before);
+
+				ArrayList<Lop> after = new ArrayList<>();
+				for (Hop hop : dwsb.getDIterAfterHops()) {
+					after.add(hop.constructLops());
+				}
+				dwsb.setDIterAfterLops(after);
+
 				ret |= dwsb.updateDIterBeginRecompilationFlag();
 				ret |= dwsb.updateDIterAfterRecompilationFlag();
 			}
@@ -463,12 +472,14 @@ public class DMLTranslator {
 			pred_instruct = pred_dag.getJobs(null, config);
 
 			// dBegin指令
-			Dag<Lop> dBegin_dag = new Dag<>();
-			dwsb.getDIterBeforeLops().addToDag(dBegin_dag);
-			ArrayList<Instruction> dBegin_instruct = dBegin_dag.getJobs(null, config);
+			Dag<Lop> dBefore_dag = new Dag<>();
+			for (Lop lop : dwsb.getDIterBeforeLops()) {
+				lop.addToDag(dBefore_dag);
+			}
+			ArrayList<Instruction> dBefore_instruct = dBefore_dag.getJobs(null, config);
 
 			// create dwhile program block
-			DWhileProgramBlock rtpb = new DWhileProgramBlock(prog, pred_instruct, dBegin_instruct, null);
+			DWhileProgramBlock rtpb = new DWhileProgramBlock(prog, pred_instruct, dBefore_instruct, null);
 
 			// process the body of the dwhile statement block
 			DWhileStatement dwstmt = (DWhileStatement) dwsb.getStatement(0);
@@ -480,7 +491,9 @@ public class DMLTranslator {
 
 			// dAfter指令
 			Dag<Lop> dAfter_dag = new Dag<>();
-			dwsb.getDIterAfterLops().addToDag(dAfter_dag);
+			for (Lop lop : dwsb.getDIterAfterLops()) {
+				lop.addToDag(dAfter_dag);
+			}
 			ArrayList<Instruction> dAfter_instruct = dAfter_dag.getJobs(null, config);
 			rtpb.setDIterAfter(dAfter_instruct);
 
@@ -1510,80 +1523,93 @@ public class DMLTranslator {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
 		// 读数据
-		String dVarName = dwst.getDVarName();
 		HashMap<String, Hop> ids = new HashMap<>();
-		DataIdentifier var = dwsb.liveIn().getVariables().get(dVarName);
-		DataOp read;
-		if (var != null) {
-			long actualDim1 =
-					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-			long actualDim2 =
-					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
-			read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
-					DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2,
-					var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
-			read.setParseInfo(var);
-		} else {
-			throw new ParseException("variable " + dVarName + " not live variable for dIter before");
+
+		for (String dVarName : dwst.getDVarNames()) {
+			DataIdentifier var = dwsb.liveIn().getVariables().get(dVarName);
+			try {
+				ids.put(dVarName, constructReadOpforVar(var));
+			} catch (ParseException e) {
+				throw new ParseException("variable " + dVarName + " not live variable for dIter before");
+			}
 		}
-		ids.put(dVarName, read);
 
 		// 记录旧值
-		AssignmentStatement bAssign = (AssignmentStatement) dwst.getDIterBeforeByIndex(0);
-		DataIdentifier bAssignTarget = bAssign.getTarget();
-		Expression bAssignSource = bAssign.getSource();
-		Hop bAssignHops = processExpression(bAssignSource, bAssignTarget, ids);
-		bAssignTarget.setProperties(bAssignSource.getOutput());
-		ids.put(bAssignTarget.getName(), bAssignHops);
+		ArrayList<Hop> before = new ArrayList<>();
 
-		DataOp bWrite = new DataOp(bAssignTarget.getName(), bAssignTarget.getDataType(), bAssignTarget.getValueType(),
-				bAssignHops, DataOpTypes.TRANSIENTWRITE, null);
-		bWrite.setOutputParams(bAssignHops.getDim1(), bAssignHops.getDim2(), bAssignHops.getNnz(),
-				bAssignHops.getUpdateType(), bAssignHops.getRowsInBlock(), bAssignHops.getColsInBlock());
-		bWrite.setParseInfo(bAssignTarget);
+		for (Statement stmt : dwst.getDIterBefore()) {
+			AssignmentStatement assign = (AssignmentStatement) stmt;
+			DataIdentifier target = assign.getTarget();
+			Expression source = assign.getSource();
+			Hop assignHops = processExpression(source, target, ids);
+			target.setProperties(source.getOutput());
 
-		dwsb.setDIterBeforeHops(bWrite);
+			DataOp write = new DataOp(target.getName(), target.getDataType(), target.getValueType(),
+					assignHops, DataOpTypes.TRANSIENTWRITE, null);
+			write.setOutputParams(assignHops.getDim1(), assignHops.getDim2(), assignHops.getNnz(),
+					assignHops.getUpdateType(), assignHops.getRowsInBlock(), assignHops.getColsInBlock());
+			write.setParseInfo(target);
+
+			before.add(write);
+		}
+
+		dwsb.setDIterBeforeHops(before);
 	}
+
 
 	private void constructHopsForDIterAfter(DWhileStatementBlock dwsb) {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
 		// 读数据
-		String dVarName = dwst.getDVarName();
-		String preDVarName = DWhileStatement.getDVarPreName(dVarName);
 		HashMap<String, Hop> ids = new HashMap<>();
-		DataIdentifier var = dwsb._updated.getVariables().get(preDVarName);
-		DataOp read;
-		if (var != null) {
-			long actualDim1 =
-					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-			long actualDim2 =
-					(var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
-			read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
-					DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2,
-					var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
-			read.setParseInfo(var);
-		} else {
-			throw new ParseException("variable " + preDVarName + " not live variable for dIter after");
+		String[] dVarNames = dwst.getDVarNames();
+		for (String dVarName : dVarNames) {
+			String preDVarName = DWhileStatement.getDVarPreName(dVarName);
+			DataIdentifier var = dwsb._updated.getVariables().get(preDVarName);
+			try {
+				ids.put(preDVarName, constructReadOpforVar(var));
+			} catch (ParseException e) {
+				throw new ParseException("variable " + preDVarName + " not live variable for dIter after");
+			}
 		}
-		ids.put(preDVarName, read);
 
 		// 打印
 		// TODO added by czh 暂时实现打印旧值
-		PrintStatement aPrint = (PrintStatement) dwst.getDIterAfterByIndex(0);
+		ArrayList<Hop> after = new ArrayList<>();
 
-		DataIdentifier target = createTarget();
-		target.setDataType(DataType.SCALAR);
-		target.setValueType(ValueType.STRING);
-		target.setParseInfo(dwsb);
+		for (Statement stmt : dwst.getDIterAfter()) {
+			PrintStatement print = (PrintStatement) stmt;
 
-		OpOp1 op = OpOp1.PRINT;
-		Expression source = aPrint.getExpressions().get(0);
-		Hop ae = processExpression(source, target, ids);
-		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
-		printHop.setParseInfo(dwsb);
+			DataIdentifier target = createTarget();
+			target.setDataType(DataType.SCALAR);
+			target.setValueType(ValueType.STRING);
+			target.setParseInfo(dwsb);
 
-		dwsb.setDIterAfterHops(printHop);
+			Expression source = print.getExpressions().get(0);
+			Hop ae = processExpression(source, target, ids);
+			Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp1.PRINT, ae);
+			printHop.setParseInfo(dwsb);
+
+			after.add(printHop);
+		}
+
+		dwsb.setDIterAfterHops(after);
+	}
+
+
+	private DataOp constructReadOpforVar(DataIdentifier var) {
+		if (var == null) {
+			throw new ParseException();
+		}
+
+		long dim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
+		long dim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
+		DataOp read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
+				DataOpTypes.TRANSIENTREAD, null, dim1, dim2,
+				var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+		read.setParseInfo(var);
+
+		return read;
 	}
 
 

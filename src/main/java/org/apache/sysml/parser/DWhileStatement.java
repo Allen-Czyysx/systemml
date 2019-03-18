@@ -4,18 +4,18 @@ import java.util.ArrayList;
 
 public class DWhileStatement extends WhileStatement {
 
-	private String _dVarName;
+	private String[] _dVarNames;
 
 	private ArrayList<Statement> _dIterBefore;
 
 	private ArrayList<Statement> _dIterAfter;
 
-	public String getDVarName() {
-		return _dVarName;
+	public String[] getDVarNames() {
+		return _dVarNames;
 	}
 
-	public void setDVarName(String dVarName) {
-		_dVarName = dVarName;
+	public void setDVarNames(String[] dVarName) {
+		_dVarNames = dVarName;
 	}
 
 	public ArrayList<Statement> getDIterBefore() {

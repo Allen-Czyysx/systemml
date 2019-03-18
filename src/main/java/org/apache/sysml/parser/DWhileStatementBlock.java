@@ -5,47 +5,48 @@ import org.apache.sysml.hops.Hop;
 import org.apache.sysml.hops.recompile.Recompiler;
 import org.apache.sysml.lops.Lop;
 
+import java.util.ArrayList;
+
 public class DWhileStatementBlock extends WhileStatementBlock {
 
-	// TODO added by czh 应该是ArrayList<Hop>
-	private Hop _dIterBeForeHops;
-	private Hop _dIterAfterHops;
+	private ArrayList<Hop> _dIterBeForeHops;
+	private ArrayList<Hop> _dIterAfterHops;
 
-	private Lop _dIterBeforeLops;
-	private Lop _dIterAfterLops;
+	private ArrayList<Lop> _dIterBeforeLops;
+	private ArrayList<Lop> _dIterAfterLops;
 
 	private boolean _requiresDIterBeginRecompile = false;
 	private boolean _requiresDIterAfterRecompile = false;
 
-	public Hop getDIterBeforeHops() {
+	public ArrayList<Hop> getDIterBeforeHops() {
 		return _dIterBeForeHops;
 	}
 
-	public Hop getDIterAfterHops() {
+	public ArrayList<Hop> getDIterAfterHops() {
 		return _dIterAfterHops;
 	}
 
-	public void setDIterBeforeHops(Hop dIterBeforeHops) {
+	public void setDIterBeforeHops(ArrayList<Hop> dIterBeforeHops) {
 		_dIterBeForeHops = dIterBeforeHops;
 	}
 
-	public void setDIterAfterHops(Hop dIterAfterHops) {
+	public void setDIterAfterHops(ArrayList<Hop> dIterAfterHops) {
 		_dIterAfterHops = dIterAfterHops;
 	}
 
-	public Lop getDIterBeforeLops() {
+	public ArrayList<Lop> getDIterBeforeLops() {
 		return _dIterBeforeLops;
 	}
 
-	public Lop getDIterAfterLops() {
+	public ArrayList<Lop> getDIterAfterLops() {
 		return _dIterAfterLops;
 	}
 
-	public void setDIterBeforeLops(Lop dIterBeforeLops) {
+	public void setDIterBeforeLops(ArrayList<Lop> dIterBeforeLops) {
 		_dIterBeforeLops = dIterBeforeLops;
 	}
 
-	public void setDIterAfterLops(Lop dIterAfterLops) {
+	public void setDIterAfterLops(ArrayList<Lop> dIterAfterLops) {
 		_dIterAfterLops = dIterAfterLops;
 	}
 
@@ -59,7 +60,7 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 				ConfigurationManager.isDynamicRecompilation() && Recompiler.requiresRecompilation(getDIterAfterHops()));
 	}
 
-	public boolean requiresDIterBeginRecompilation() {
+	public boolean requiresDIterBeforeRecompilation() {
 		return _requiresDIterBeginRecompile;
 	}
 

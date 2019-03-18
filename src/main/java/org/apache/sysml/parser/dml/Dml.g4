@@ -79,7 +79,7 @@ statement returns [ org.apache.sysml.parser.common.StatementInfo info ]
     // Convert strictParameterizedExpression to HashMap<String, String> for parForParams
     | 'parfor' '(' iterVar=ID 'in' iterPred=iterablePredicate (',' parForParams+=strictParameterizedExpression)* ')' (body+=statement ';'* | '{' (body+=statement ';'*)*  '}')  # ParForStatement
     | 'while' '(' predicate=expression ')' (body+=statement ';'* | '{' (body+=statement ';'*)* '}')  # WhileStatement
-    | 'dwhile' '(' predicate=expression '@' dVar=ID ')' (body+=statement ';'* | '{' (body+=statement ';'*)* '}')  # DWhileStatement
+    | 'dwhile' '(' predicate=expression '@' dVarList=STRING ')' (body+=statement ';'* | '{' (body+=statement ';'*)* '}')  # DWhileStatement
     // ------------------------------------------
 ;
 
