@@ -474,7 +474,7 @@ public class DMLScript
 		DMLTranslator dmlt = new DMLTranslator(prog);
 		dmlt.liveVariableAnalysis(prog);
 		dmlt.validateParseTree(prog);
-		dmlt.constructHops(prog);
+		dmlt.constructHops(prog, null);
 
 		//Step 4: rewrite HOP DAGs (incl IPA and memory estimates)
 		dmlt.rewriteHopsDAG(prog);

@@ -19,12 +19,7 @@
 
 package org.apache.sysml.api;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.sysml.api.jmlc.JMLCUtils;
 import org.apache.sysml.api.mlcontext.MLContextUtil;
@@ -34,12 +29,7 @@ import org.apache.sysml.conf.DMLConfig;
 import org.apache.sysml.hops.codegen.SpoofCompiler;
 import org.apache.sysml.hops.rewrite.ProgramRewriter;
 import org.apache.sysml.hops.rewrite.RewriteRemovePersistentReadWrite;
-import org.apache.sysml.parser.DMLProgram;
-import org.apache.sysml.parser.DMLTranslator;
-import org.apache.sysml.parser.LanguageException;
-import org.apache.sysml.parser.ParseException;
-import org.apache.sysml.parser.ParserFactory;
-import org.apache.sysml.parser.ParserWrapper;
+import org.apache.sysml.parser.*;
 import org.apache.sysml.runtime.controlprogram.LocalVariableMap;
 import org.apache.sysml.runtime.controlprogram.Program;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
@@ -155,9 +145,10 @@ public class ScriptExecutorUtils {
 
 			//Step 3: construct HOP DAGs (incl LVA, validate, and setup)
 			DMLTranslator dmlt = new DMLTranslator(prog);
+			ArrayList<DWhileStatementBlock> dwstList = new ArrayList<>();
 			dmlt.liveVariableAnalysis(prog);
 			dmlt.validateParseTree(prog);
-			dmlt.constructHops(prog);
+			dmlt.constructHops(prog, dwstList);
 
 			//init working directories (before usage by following compilation steps)
 			if(api != SystemMLAPI.JMLC)
@@ -182,6 +173,13 @@ public class ScriptExecutorUtils {
 				ProgramRewriter rewriter2 = new ProgramRewriter(rewrite);
 				rewriter2.rewriteProgramHopDAGs(prog);
 			}
+
+			// Additional step for dwhile
+			for (DWhileStatementBlock dwsb : dwstList) {
+				// 记录旧值
+				dmlt.addWriteHopsForDWhileBody(dwsb);
+			}
+
 
 			//Step 6: construct lops (incl exec type and op selection)
 			dmlt.constructLops(prog);

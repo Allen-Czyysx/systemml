@@ -20,6 +20,8 @@
 package org.apache.sysml.parser;
 
 
+import org.apache.sysml.hops.Hop;
+
 public class DataIdentifier extends Identifier
 {
 	protected String _name;
@@ -40,6 +42,17 @@ public class DataIdentifier extends Identifier
 		String newIdName = prefix + _name;
 		newId.setName(newIdName);
 		return newId;
+	}
+
+	public DataIdentifier(Hop hop) {
+		_name = hop.getName();
+		_dataType = hop.getDataType();
+		_valueType = hop.getValueType();
+		_dim1 = hop.getDim1();
+		_dim2 = hop.getDim2();
+		_rows_in_block = hop.getRowsInBlock();
+		_columns_in_block = hop.getColsInBlock();
+		_nnz = hop.getNnz();
 	}
 	
 	public DataIdentifier(String name){

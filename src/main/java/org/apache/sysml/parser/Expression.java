@@ -664,7 +664,9 @@ public abstract class Expression implements ParseInfo
 	 *            the filename (if it exists)
 	 */
 	public void setCtxValuesAndFilename(ParserRuleContext ctx, String filename) {
-		setCtxValues(ctx);
+		if (ctx != null) {
+			setCtxValues(ctx);
+		}
 		setFilename(filename);
 	}
 

@@ -3,7 +3,6 @@ package org.apache.sysml.runtime.controlprogram;
 import org.apache.sysml.api.DMLScript;
 import org.apache.sysml.hops.Hop;
 import org.apache.sysml.parser.DWhileStatementBlock;
-import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.DMLScriptException;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;

@@ -1,5 +1,7 @@
 package org.apache.sysml.parser;
 
+import org.apache.sysml.hops.Hop;
+
 import java.util.ArrayList;
 
 public class DWhileStatement extends WhileStatement {
@@ -51,11 +53,15 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static String getDVarPreName(String dVarName) {
-		return "systemml_pre_" + dVarName;
+		return "systemml_d_pre_" + dVarName;
 	}
 
-	public static String getDVarDName(String dVarName) {
-		return "systemml_d_" + dVarName;
+	public static String getDVarDeltaName(String dVarName) {
+		return "systemml_d_delta" + dVarName;
+	}
+
+	public static String getVarPreName(Hop hop) {
+		return "systemml_hop_pre_" + hop.getHopID();
 	}
 
 	@Override

@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.sysml.api.DMLScript;
@@ -92,6 +93,8 @@ import org.apache.sysml.runtime.controlprogram.Program;
 import org.apache.sysml.runtime.controlprogram.ProgramBlock;
 import org.apache.sysml.runtime.controlprogram.WhileProgramBlock;
 import org.apache.sysml.runtime.instructions.Instruction;
+
+import static org.apache.sysml.parser.ParameterizedBuiltinFunctionExpression.getParamBuiltinFunctionExpression;
 
 
 public class DMLTranslator {
@@ -231,18 +234,18 @@ public class DMLTranslator {
 		}
 	}
 
-	public void constructHops(DMLProgram dmlp) {
-		constructHops(dmlp, true);
+	public void constructHops(DMLProgram dmlp, ArrayList<DWhileStatementBlock> dwstList) {
+		constructHops(dmlp, true, dwstList);
 	}
 
-	public void constructHops(DMLProgram dmlp, boolean inclFuns) {
+	public void constructHops(DMLProgram dmlp, boolean inclFuns, ArrayList<DWhileStatementBlock> dwstList) {
 		// Step 1: construct hops for all functions
 		if (inclFuns) {
 			// for each namespace, handle function program blocks
 			for (String namespaceKey : dmlp.getNamespaces().keySet()) {
 				for (String fname : dmlp.getFunctionStatementBlocks(namespaceKey).keySet()) {
 					FunctionStatementBlock current = dmlp.getFunctionStatementBlock(namespaceKey, fname);
-					constructHops(current);
+					constructHops(current, dwstList);
 				}
 			}
 		}
@@ -251,7 +254,7 @@ public class DMLTranslator {
 		// handle regular program blocks
 		for (int i = 0; i < dmlp.getNumStatementBlocks(); i++) {
 			StatementBlock current = dmlp.getStatementBlock(i);
-			constructHops(current);
+			constructHops(current, dwstList);
 		}
 	}
 
@@ -1097,29 +1100,31 @@ public class DMLTranslator {
 	}
 
 
-	public void constructHops(StatementBlock sb) {
+	private void constructHops(StatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
 		if (sb instanceof DWhileStatementBlock) {
-			constructHopsForDWhileControlBlock((DWhileStatementBlock) sb);
+			DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
+			constructHopsForDWhileControlBlock(dwsb, dwstList);
+			dwstList.add(dwsb);
 			return;
 		}
 
 		if (sb instanceof WhileStatementBlock) {
-			constructHopsForWhileControlBlock((WhileStatementBlock) sb);
+			constructHopsForWhileControlBlock((WhileStatementBlock) sb, dwstList);
 			return;
 		}
 
 		if (sb instanceof IfStatementBlock) {
-			constructHopsForIfControlBlock((IfStatementBlock) sb);
+			constructHopsForIfControlBlock((IfStatementBlock) sb, dwstList);
 			return;
 		}
 
 		if (sb instanceof ForStatementBlock) { //incl ParForStatementBlock
-			constructHopsForForControlBlock((ForStatementBlock) sb);
+			constructHopsForForControlBlock((ForStatementBlock) sb, dwstList);
 			return;
 		}
 
 		if (sb instanceof FunctionStatementBlock) {
-			constructHopsForFunctionControlBlock((FunctionStatementBlock) sb);
+			constructHopsForFunctionControlBlock((FunctionStatementBlock) sb, dwstList);
 			return;
 		}
 
@@ -1459,7 +1464,7 @@ public class DMLTranslator {
 		}
 	}
 
-	public void constructHopsForIfControlBlock(IfStatementBlock sb) {
+	public void constructHopsForIfControlBlock(IfStatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
 		IfStatement ifsb = (IfStatement) sb.getStatement(0);
 		ArrayList<StatementBlock> ifBody = ifsb.getIfBody();
 		ArrayList<StatementBlock> elseBody = ifsb.getElseBody();
@@ -1469,12 +1474,12 @@ public class DMLTranslator {
 
 		// handle if statement body
 		for (StatementBlock current : ifBody) {
-			constructHops(current);
+			constructHops(current, dwstList);
 		}
 
 		// handle else stmt body
 		for (StatementBlock current : elseBody) {
-			constructHops(current);
+			constructHops(current, dwstList);
 		}
 	}
 
@@ -1483,28 +1488,28 @@ public class DMLTranslator {
 	 *
 	 * @param sb for statement block
 	 */
-	public void constructHopsForForControlBlock(ForStatementBlock sb) {
+	public void constructHopsForForControlBlock(ForStatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
 		ForStatement fs = (ForStatement) sb.getStatement(0);
 		ArrayList<StatementBlock> body = fs.getBody();
 		constructHopsForIterablePredicate(sb);
 		for (StatementBlock current : body)
-			constructHops(current);
+			constructHops(current, dwstList);
 	}
 
-	public void constructHopsForFunctionControlBlock(FunctionStatementBlock fsb) {
+	public void constructHopsForFunctionControlBlock(FunctionStatementBlock fsb, ArrayList<DWhileStatementBlock> dwstList) {
 		ArrayList<StatementBlock> body = ((FunctionStatement) fsb.getStatement(0)).getBody();
 		for (StatementBlock current : body)
-			constructHops(current);
+			constructHops(current, dwstList);
 	}
 
-	public void constructHopsForWhileControlBlock(WhileStatementBlock sb) {
+	public void constructHopsForWhileControlBlock(WhileStatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
 		ArrayList<StatementBlock> body = ((WhileStatement) sb.getStatement(0)).getBody();
 		constructHopsForConditionalPredicate(sb);
 		for (StatementBlock current : body)
-			constructHops(current);
+			constructHops(current, dwstList);
 	}
 
-	public void constructHopsForDWhileControlBlock(DWhileStatementBlock sb) {
+	private void constructHopsForDWhileControlBlock(DWhileStatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
 		// 循环条件
 		constructHopsForConditionalPredicate(sb);
 
@@ -1513,7 +1518,7 @@ public class DMLTranslator {
 
 		// 循环体内
 		ArrayList<StatementBlock> body = ((DWhileStatement) sb.getStatement(0)).getBody();
-		constructHops(body.get(0));
+		constructHops(body.get(0), dwstList);
 
 		// 增量迭代After
 		constructHopsForDIterAfter(sb);
@@ -1544,8 +1549,12 @@ public class DMLTranslator {
 			Hop assignHops = processExpression(source, target, ids);
 			target.setProperties(source.getOutput());
 
+			if (assignHops == null) {
+				throw new NullPointerException("return null when getting hop from expression " + source.getText());
+			}
+
 			DataOp write = new DataOp(target.getName(), target.getDataType(), target.getValueType(),
-					assignHops, DataOpTypes.TRANSIENTWRITE, null);
+					assignHops, DataOpTypes.TRANSIENTWRITE, assign.getFilename());
 			write.setOutputParams(assignHops.getDim1(), assignHops.getDim2(), assignHops.getNnz(),
 					assignHops.getUpdateType(), assignHops.getRowsInBlock(), assignHops.getColsInBlock());
 			write.setParseInfo(target);
@@ -1555,7 +1564,6 @@ public class DMLTranslator {
 
 		dwsb.setDIterBeforeHops(before);
 	}
-
 
 	private void constructHopsForDIterAfter(DWhileStatementBlock dwsb) {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
@@ -1572,6 +1580,7 @@ public class DMLTranslator {
 				throw new ParseException("variable " + preDVarName + " not live variable for dIter after");
 			}
 		}
+//		ids.put("systemml_hop_pre_40", constructReadOpforVar(dwsb._updated.getVariables().get("systemml_hop_pre_40")));
 
 		// 打印
 		// TODO added by czh 暂时实现打印旧值
@@ -1596,7 +1605,6 @@ public class DMLTranslator {
 		dwsb.setDIterAfterHops(after);
 	}
 
-
 	private DataOp constructReadOpforVar(DataIdentifier var) {
 		if (var == null) {
 			throw new ParseException();
@@ -1605,13 +1613,82 @@ public class DMLTranslator {
 		long dim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
 		long dim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
 		DataOp read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
-				DataOpTypes.TRANSIENTREAD, null, dim1, dim2,
+				DataOpTypes.TRANSIENTREAD, var.getFilename(), dim1, dim2,
 				var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
 		read.setParseInfo(var);
 
 		return read;
 	}
 
+	public void addWriteHopsForDWhileBody(DWhileStatementBlock dwsb) {
+		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
+		// TODO added by czh 记录旧值的逻辑先放在body里, 不知合不合理
+		ArrayList<Hop> bodyHops = ((DWhileStatement) dwsb.getStatement(0)).getBody().get(0).getHops();
+		ArrayList<Hop> newHops = new ArrayList<>();
+		VariableSet updated = dwsb.variablesUpdated();
+
+		for (Hop hop : bodyHops) {
+			recordPreVarForEachHop(hop, newHops, updated);
+		}
+
+		bodyHops.addAll(newHops);
+
+		// TODO added by czh 暂时在dwhile after打印, 看下能否读到
+//		String varName = "systemml_hop_pre_35";
+//		DataIdentifier var = dwsb._updated.getVariables().get(varName);
+//		HashMap<String, Hop> ids = new HashMap<>();
+//		ids.put(varName, constructReadOpforVar(var));
+//
+//		DataIdentifier target = createTarget();
+//		target.setDataType(DataType.SCALAR);
+//		target.setValueType(ValueType.STRING);
+//		target.setParseInfo(dwsb);
+//
+//		ArrayList<ParameterExpression> paramExprs = new ArrayList<>();
+//		ParameterExpression source = new ParameterExpression("target", var);
+//		paramExprs.add(source);
+//		ParameterizedBuiltinFunctionExpression toString
+//				= getParamBuiltinFunctionExpression(null, "toString", paramExprs, dwsb.getFilename());
+//		Hop ae = processExpression(toString, target, ids);
+//		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp1.PRINT, ae);
+//		printHop.setParseInfo(dwsb);
+//		dwsb.getDIterAfterHops().add(printHop);
+	}
+
+	private void recordPreVarForEachHop(Hop hop, ArrayList<Hop> newHops, VariableSet updated) {
+		// 如果已访问过, 跳过
+		String varName = DWhileStatement.getVarPreName(hop);
+		if (updated.containsVariable(varName)) {
+			return;
+		}
+
+		// 递归遍历子算子
+		for (Hop op : hop.getInput()) {
+			recordPreVarForEachHop(op, newHops, updated);
+		}
+
+		// TODO added by czh 之后可能要增加忽略的算子
+		if ((hop instanceof DataOp
+				&& (((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTREAD
+				|| ((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTWRITE))) {
+			return;
+		} else if (hop instanceof LiteralOp) {
+			return;
+		}
+
+		// 记录当前算子的结果
+		DataOp write = new DataOp(varName, hop.getDataType(), hop.getValueType(),
+				hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
+		write.setOutputParams(hop.getDim1(), hop.getDim2(), hop.getNnz(),
+				hop.getUpdateType(), hop.getRowsInBlock(), hop.getColsInBlock());
+		write.setParseInfo(hop);
+		newHops.add(write);
+
+		// 添加变量到updated
+		DataIdentifier var = new DataIdentifier(hop);
+		var.setName(varName);
+		updated.addVariable(varName, var);
+	}
 
 	public void constructHopsForConditionalPredicate(StatementBlock passedSB) {
 

@@ -606,7 +606,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
 		dWhileStatement.setPredicate(predicate);
 
-
 		// 2. 增量迭代Before
 		ArrayList<Statement> before = new ArrayList<>();
 
@@ -626,7 +625,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 		dWhileStatement.setDIterBefore(before);
 
-
 		// 3. 循环体内部
 		if (ctx.body.size() > 0) {
 			for (StatementContext stmtCtx : ctx.body) {
@@ -634,7 +632,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			}
 			dWhileStatement.mergeStatementBlocks();
 		}
-
 
 		// 4. 增量迭代After
 		ArrayList<Statement> after = new ArrayList<>();
@@ -656,7 +653,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		}
 
 		dWhileStatement.setDIterAfter(after);
-
 
 		ctx.info.stmt = dWhileStatement;
 		setFileLineColumn(ctx.info.stmt, ctx);
