@@ -610,8 +610,8 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		// 2. 增量迭代Before
 		ArrayList<Statement> before = new ArrayList<>();
 
-		// 记录旧值
-		// TODO added by czh 不应该每次都记录
+		// 记录input旧值
+		// TODO added by czh 暂时每次都记录
 		String names = ctx.dVarList.getText();
 		names = names.substring(1, names.length() - 1);
 		String[] dVarNames = names.split(",");
@@ -639,6 +639,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		// 4. 增量迭代After
 		ArrayList<Statement> after = new ArrayList<>();
 
+		// 计算input增量, 为下一次迭代做准备
 		// TODO added by czh 暂时先打印 preDVar
 		for (String dVarName : dVarNames) {
 			String preDVarName = DWhileStatement.getDVarPreName(dVarName);
@@ -646,8 +647,8 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			ArrayList<ParameterExpression> paramExprs = new ArrayList<>();
 			ParameterExpression paramExpr = new ParameterExpression("target", preDVar);
 			paramExprs.add(paramExpr);
-			ParameterizedBuiltinFunctionExpression toString =
-					getParamBuiltinFunctionExpression(ctx, "toString", paramExprs, currentFile);
+			ParameterizedBuiltinFunctionExpression toString
+					= getParamBuiltinFunctionExpression(ctx, "toString", paramExprs, currentFile);
 			List<Expression> expList = new ArrayList<>();
 			expList.add(toString);
 			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);
