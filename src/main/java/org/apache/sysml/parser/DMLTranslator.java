@@ -28,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.antlr.v4.runtime.ParserRuleContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.sysml.api.DMLScript;
@@ -82,19 +81,8 @@ import org.apache.sysml.parser.Expression.ParameterizedBuiltinFunctionOp;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.parser.PrintStatement.PRINTTYPE;
 import org.apache.sysml.runtime.DMLRuntimeException;
-import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
-import org.apache.sysml.runtime.controlprogram.ExternalFunctionProgramBlock;
-import org.apache.sysml.runtime.controlprogram.ExternalFunctionProgramBlockCP;
-import org.apache.sysml.runtime.controlprogram.ForProgramBlock;
-import org.apache.sysml.runtime.controlprogram.FunctionProgramBlock;
-import org.apache.sysml.runtime.controlprogram.IfProgramBlock;
-import org.apache.sysml.runtime.controlprogram.ParForProgramBlock;
-import org.apache.sysml.runtime.controlprogram.Program;
-import org.apache.sysml.runtime.controlprogram.ProgramBlock;
-import org.apache.sysml.runtime.controlprogram.WhileProgramBlock;
+import org.apache.sysml.runtime.controlprogram.*;
 import org.apache.sysml.runtime.instructions.Instruction;
-
-import static org.apache.sysml.parser.ParameterizedBuiltinFunctionExpression.getParamBuiltinFunctionExpression;
 
 
 public class DMLTranslator {
@@ -322,7 +310,35 @@ public class DMLTranslator {
 	public boolean constructLops(StatementBlock sb) {
 		boolean ret = false;
 
-		if (sb instanceof WhileStatementBlock) {
+		if (sb instanceof DWhileStatementBlock) {
+			DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
+			DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
+
+			// init
+			for (StatementBlock stmtBlock : dwst.getDIterInit()) {
+				ret |= constructLops(stmtBlock);
+			}
+
+			// before
+			for (StatementBlock stmtBlock : dwst.getDIterBefore()) {
+				ret |= constructLops(stmtBlock);
+			}
+
+			// body
+			for (StatementBlock stmtBlock : dwst.getBody()) {
+				ret |= constructLops(stmtBlock);
+			}
+
+			// after
+			for (StatementBlock stmtBlock : dwst.getDIterAfter()) {
+				ret |= constructLops(stmtBlock);
+			}
+
+			// 循环条件
+			Lop l = dwsb.getPredicateHops().constructLops();
+			dwsb.setPredicateLops(l);
+			ret |= dwsb.updatePredicateRecompilationFlag();
+		} else if (sb instanceof WhileStatementBlock) {
 			WhileStatementBlock wsb = (WhileStatementBlock) sb;
 			WhileStatement whileStmt = (WhileStatement) wsb.getStatement(0);
 			ArrayList<StatementBlock> body = whileStmt.getBody();
@@ -335,24 +351,6 @@ public class DMLTranslator {
 			Lop l = wsb.getPredicateHops().constructLops();
 			wsb.setPredicateLops(l);
 			ret |= wsb.updatePredicateRecompilationFlag();
-			if (sb instanceof DWhileStatementBlock) {
-				DWhileStatementBlock dwsb = (DWhileStatementBlock) sb;
-
-				ArrayList<Lop> before = new ArrayList<>();
-				for (Hop hop : dwsb.getDIterBeforeHops()) {
-					before.add(hop.constructLops());
-				}
-				dwsb.setDIterBeforeLops(before);
-
-				ArrayList<Lop> after = new ArrayList<>();
-				for (Hop hop : dwsb.getDIterAfterHops()) {
-					after.add(hop.constructLops());
-				}
-				dwsb.setDIterAfterLops(after);
-
-				ret |= dwsb.updateDIterBeginRecompilationFlag();
-				ret |= dwsb.updateDIterAfterRecompilationFlag();
-			}
 		} else if (sb instanceof IfStatementBlock) {
 			IfStatementBlock isb = (IfStatementBlock) sb;
 			IfStatement ifStmt = (IfStatement) isb.getStatement(0);
@@ -474,31 +472,32 @@ public class DMLTranslator {
 			dwsb.getPredicateLops().addToDag(pred_dag);
 			pred_instruct = pred_dag.getJobs(null, config);
 
-			// dBegin指令
-			Dag<Lop> dBefore_dag = new Dag<>();
-			for (Lop lop : dwsb.getDIterBeforeLops()) {
-				lop.addToDag(dBefore_dag);
+			DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
+			DWhileProgramBlock rtpb = new DWhileProgramBlock(prog, pred_instruct);
+
+			// init指令
+			for (StatementBlock block : dwst.getDIterInit()) {
+				ProgramBlock pb = createRuntimeProgramBlock(prog, block, config);
+				rtpb.addDIterInit(pb);
 			}
-			ArrayList<Instruction> dBefore_instruct = dBefore_dag.getJobs(null, config);
 
-			// create dwhile program block
-			DWhileProgramBlock rtpb = new DWhileProgramBlock(prog, pred_instruct, dBefore_instruct, null);
+			// begin指令
+			for (StatementBlock block : dwst.getDIterBefore()) {
+				ProgramBlock pb = createRuntimeProgramBlock(prog, block, config);
+				rtpb.addDIterBefore(pb);
+			}
 
-			// process the body of the dwhile statement block
-			DWhileStatement dwstmt = (DWhileStatement) dwsb.getStatement(0);
-			for (StatementBlock sblock : dwstmt.getBody()) {
-				// process the body
+			// body指令
+			for (StatementBlock sblock : dwst.getBody()) {
 				ProgramBlock childBlock = createRuntimeProgramBlock(prog, sblock, config);
 				rtpb.addProgramBlock(childBlock);
 			}
 
-			// dAfter指令
-			Dag<Lop> dAfter_dag = new Dag<>();
-			for (Lop lop : dwsb.getDIterAfterLops()) {
-				lop.addToDag(dAfter_dag);
+			// after指令
+			for (StatementBlock block : dwst.getDIterAfter()) {
+				ProgramBlock pb = createRuntimeProgramBlock(prog, block, config);
+				rtpb.addDIterAfter(pb);
 			}
-			ArrayList<Instruction> dAfter_instruct = dAfter_dag.getJobs(null, config);
-			rtpb.setDIterAfter(dAfter_instruct);
 
 			retPB = rtpb;
 
@@ -1146,17 +1145,31 @@ public class DMLTranslator {
 				AssignmentStatement as = (AssignmentStatement) current;
 				DataIdentifier target = as.getTarget();
 				if (target != null) {
-					if (liveOut.containsVariable(target.getName())) {
-						liveOutToTemp.put(target.getName(), Integer.valueOf(i));
+					String targetName = target.getName();
+					if (liveOut.containsVariable(targetName)) {
+						liveOutToTemp.put(targetName, i);
+					}
+
+					// dwhile中产生的变量
+					// TODO added by czh 暂时
+					if (DWhileStatement.isDWhileTmpVar(targetName)) {
+						liveOutToTemp.put(targetName, i);
 					}
 				}
-			}
-			if (current instanceof MultiAssignmentStatement) {
+			} else if (current instanceof MultiAssignmentStatement) {
 				MultiAssignmentStatement mas = (MultiAssignmentStatement) current;
 
 				for (DataIdentifier target : mas.getTargetList()) {
-					if (liveOut.containsVariable(target.getName())) {
-						liveOutToTemp.put(target.getName(), Integer.valueOf(i));
+					String targetName = target.getName();
+
+					if (liveOut.containsVariable(targetName)) {
+						liveOutToTemp.put(targetName, i);
+					}
+
+					// dwhile中产生的变量
+					// TODO added by czh 暂时
+					if (DWhileStatement.isDWhileTmpVar(targetName)) {
+						liveOutToTemp.put(targetName, i);
 					}
 				}
 			}
@@ -1509,100 +1522,23 @@ public class DMLTranslator {
 			constructHops(current, dwstList);
 	}
 
-	private void constructHopsForDWhileControlBlock(DWhileStatementBlock sb, ArrayList<DWhileStatementBlock> dwstList) {
+	private void constructHopsForDWhileControlBlock(DWhileStatementBlock dwsb, ArrayList<DWhileStatementBlock> dwstList) {
 		// 循环条件
-		constructHopsForConditionalPredicate(sb);
+		constructHopsForConditionalPredicate(dwsb);
 
-		// 增量迭代Before
-		constructHopsForDIterBefore(sb);
-
-		// 循环体内
-		ArrayList<StatementBlock> body = ((DWhileStatement) sb.getStatement(0)).getBody();
-		constructHops(body.get(0), dwstList);
-
-		// 增量迭代After
-		constructHopsForDIterAfter(sb);
-	}
-
-	private void constructHopsForDIterBefore(DWhileStatementBlock dwsb) {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
-		// 读数据
-		HashMap<String, Hop> ids = new HashMap<>();
+		// init
+		constructHops(dwst.getDIterInitByIndex(0), dwstList);
 
-		for (String dVarName : dwst.getDVarNames()) {
-			DataIdentifier var = dwsb.liveIn().getVariables().get(dVarName);
-			try {
-				ids.put(dVarName, constructReadOpforVar(var));
-			} catch (ParseException e) {
-				throw new ParseException("variable " + dVarName + " not live variable for dIter before");
-			}
-		}
+		// before
+		constructHops(dwst.getDIterBeforeByIndex(0), dwstList);
 
-		// 记录旧值
-		ArrayList<Hop> before = new ArrayList<>();
+		// body
+		constructHops(dwst.getBody().get(0), dwstList);
 
-		for (Statement stmt : dwst.getDIterBefore()) {
-			AssignmentStatement assign = (AssignmentStatement) stmt;
-			DataIdentifier target = assign.getTarget();
-			Expression source = assign.getSource();
-			Hop assignHops = processExpression(source, target, ids);
-			target.setProperties(source.getOutput());
-
-			if (assignHops == null) {
-				throw new NullPointerException("return null when getting hop from expression " + source.getText());
-			}
-
-			DataOp write = new DataOp(target.getName(), target.getDataType(), target.getValueType(),
-					assignHops, DataOpTypes.TRANSIENTWRITE, assign.getFilename());
-			write.setOutputParams(assignHops.getDim1(), assignHops.getDim2(), assignHops.getNnz(),
-					assignHops.getUpdateType(), assignHops.getRowsInBlock(), assignHops.getColsInBlock());
-			write.setParseInfo(target);
-
-			before.add(write);
-		}
-
-		dwsb.setDIterBeforeHops(before);
-	}
-
-	private void constructHopsForDIterAfter(DWhileStatementBlock dwsb) {
-		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
-
-		// 读数据
-		HashMap<String, Hop> ids = new HashMap<>();
-		String[] dVarNames = dwst.getDVarNames();
-		for (String dVarName : dVarNames) {
-			String preDVarName = DWhileStatement.getDVarPreName(dVarName);
-			DataIdentifier var = dwsb._updated.getVariables().get(preDVarName);
-			try {
-				ids.put(preDVarName, constructReadOpforVar(var));
-			} catch (ParseException e) {
-				throw new ParseException("variable " + preDVarName + " not live variable for dIter after");
-			}
-		}
-//		ids.put("systemml_hop_pre_40", constructReadOpforVar(dwsb._updated.getVariables().get("systemml_hop_pre_40")));
-
-		// 打印
-		// TODO added by czh 暂时实现打印旧值
-		ArrayList<Hop> after = new ArrayList<>();
-
-		for (Statement stmt : dwst.getDIterAfter()) {
-			PrintStatement print = (PrintStatement) stmt;
-
-			DataIdentifier target = createTarget();
-			target.setDataType(DataType.SCALAR);
-			target.setValueType(ValueType.STRING);
-			target.setParseInfo(dwsb);
-
-			Expression source = print.getExpressions().get(0);
-			Hop ae = processExpression(source, target, ids);
-			Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp1.PRINT, ae);
-			printHop.setParseInfo(dwsb);
-
-			after.add(printHop);
-		}
-
-		dwsb.setDIterAfterHops(after);
+		// after
+		constructHops(dwst.getDIterAfterByIndex(0), dwstList);
 	}
 
 	private DataOp constructReadOpforVar(DataIdentifier var) {
@@ -1620,6 +1556,7 @@ public class DMLTranslator {
 		return read;
 	}
 
+
 	public void addWriteHopsForDWhileBody(DWhileStatementBlock dwsb) {
 		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
 		// TODO added by czh 记录旧值的逻辑先放在body里, 不知合不合理
@@ -1634,7 +1571,7 @@ public class DMLTranslator {
 		bodyHops.addAll(newHops);
 
 		// TODO added by czh 暂时在dwhile after打印, 看下能否读到
-//		String varName = "systemml_hop_pre_35";
+//		String varName = "5_preOutput_hop_41";
 //		DataIdentifier var = dwsb._updated.getVariables().get(varName);
 //		HashMap<String, Hop> ids = new HashMap<>();
 //		ids.put(varName, constructReadOpforVar(var));
@@ -1647,17 +1584,17 @@ public class DMLTranslator {
 //		ArrayList<ParameterExpression> paramExprs = new ArrayList<>();
 //		ParameterExpression source = new ParameterExpression("target", var);
 //		paramExprs.add(source);
-//		ParameterizedBuiltinFunctionExpression toString
-//				= getParamBuiltinFunctionExpression(null, "toString", paramExprs, dwsb.getFilename());
+//		ParameterizedBuiltinFunctionExpression toString = ParameterizedBuiltinFunctionExpression
+//				.getParamBuiltinFunctionExpression(null, "toString", paramExprs, dwsb.getFilename());
 //		Hop ae = processExpression(toString, target, ids);
 //		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp1.PRINT, ae);
 //		printHop.setParseInfo(dwsb);
-//		dwsb.getDIterAfterHops().add(printHop);
+//		((DWhileStatement) dwsb.getStatement(0)).getDIterAfterByIndex(0).getHops().add(printHop);
 	}
 
 	private void recordPreVarForEachHop(Hop hop, ArrayList<Hop> newHops, VariableSet updated) {
 		// 如果已访问过, 跳过
-		String varName = DWhileStatement.getVarPreName(hop);
+		String varName = DWhileStatement.getPreOutputNameOfHop(hop);
 		if (updated.containsVariable(varName)) {
 			return;
 		}
@@ -1685,8 +1622,7 @@ public class DMLTranslator {
 		newHops.add(write);
 
 		// 添加变量到updated
-		DataIdentifier var = new DataIdentifier(hop);
-		var.setName(varName);
+		PreDataIdentifier var = new PreDataIdentifier(hop);
 		updated.addVariable(varName, var);
 	}
 

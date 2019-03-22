@@ -1,78 +1,63 @@
 package org.apache.sysml.runtime.controlprogram;
 
-import org.apache.sysml.api.DMLScript;
-import org.apache.sysml.hops.Hop;
-import org.apache.sysml.parser.DWhileStatementBlock;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.DMLScriptException;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
-import org.apache.sysml.yarn.DMLAppMasterUtils;
 
 import java.util.ArrayList;
 
+// TODO added by czh 退出dwhile时要删除多余变量
 public class DWhileProgramBlock extends WhileProgramBlock {
 
-	private ArrayList<Instruction> _dIterBefore;
+	private ArrayList<ProgramBlock> _dIterInit;
 
-	private ArrayList<Instruction> _dIterAfter;
+	private ArrayList<ProgramBlock> _dIterBefore;
 
-	public DWhileProgramBlock(Program prog,
-							  ArrayList<Instruction> predicate,
-							  ArrayList<Instruction> dIterBefore,
-							  ArrayList<Instruction> dIterAfter) {
+	private ArrayList<ProgramBlock> _dIterAfter;
+
+	public DWhileProgramBlock(Program prog, ArrayList<Instruction> predicate) {
 		super(prog, predicate);
-		_dIterBefore = dIterBefore;
-		_dIterAfter = dIterAfter;
+		_dIterInit = new ArrayList<>();
+		_dIterBefore = new ArrayList<>();
+		_dIterAfter = new ArrayList<>();
 	}
 
-	public ArrayList<Instruction> getDIterBefore() {
+	public ArrayList<ProgramBlock> getDIterInit() {
+		return _dIterInit;
+	}
+
+	public ArrayList<ProgramBlock> getDIterBefore() {
 		return _dIterBefore;
 	}
 
-	public void setDIterBefore(ArrayList<Instruction> dIterBefore) {
-		_dIterBefore = dIterBefore;
-	}
-
-	public ArrayList<Instruction> getDIterAfter() {
+	public ArrayList<ProgramBlock> getDIterAfter() {
 		return _dIterAfter;
 	}
 
-	public void setDIterAfter(ArrayList<Instruction> dIterAfter) {
+	public void setDIterInit(ArrayList<ProgramBlock> dIterInit) {
+		_dIterInit = dIterInit;
+	}
+
+	public void setDIterBefore(ArrayList<ProgramBlock> dIterBefore) {
+		_dIterBefore = dIterBefore;
+	}
+
+	public void setDIterAfter(ArrayList<ProgramBlock> dIterAfter) {
 		_dIterAfter = dIterAfter;
 	}
 
-	private void executeDIterBefore(ExecutionContext ec) {
-		try {
-			// set program block specific remote memory
-			if (DMLScript.isActiveAM()) {
-				DMLAppMasterUtils.setupProgramBlockRemoteMaxMemory(this);
-			}
-
-			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
-			ArrayList<Hop> hops = dwsb.getDIterBeforeHops();
-			boolean recompile = dwsb.requiresDIterBeforeRecompilation();
-			executeDWhile(getDIterBefore(), hops, recompile, ec);
-		} catch (Exception e) {
-			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
-		}
+	public void addDIterInit(ProgramBlock pb) {
+		_dIterInit.add(pb);
 	}
 
-	private void executeDIterAfter(ExecutionContext ec) {
-		try {
-			// set program block specific remote memory
-			if (DMLScript.isActiveAM()) {
-				DMLAppMasterUtils.setupProgramBlockRemoteMaxMemory(this);
-			}
+	public void addDIterBefore(ProgramBlock pb) {
+		_dIterBefore.add(pb);
+	}
 
-			DWhileStatementBlock dwsb = (DWhileStatementBlock) _sb;
-			ArrayList<Hop> hops = dwsb.getDIterAfterHops();
-			boolean recompile = dwsb.requiresDIterAfterRecompilation();
-			executeDWhile(getDIterAfter(), hops, recompile, ec);
-		} catch (Exception e) {
-			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Failed to evaluate the while predicate.", e);
-		}
+	public void addDIterAfter(ProgramBlock pb) {
+		_dIterAfter.add(pb);
 	}
 
 	@Override
@@ -82,10 +67,17 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			// prepare update in-place variables
 			MatrixObject.UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 
+			// 执行init
+			for (ProgramBlock pb : _dIterInit) {
+				pb.execute(ec);
+			}
+
 			// run loop body until predicate becomes false
 			while (executePredicate(ec).getBooleanValue()) {
-				// 执行dBefore
-				executeDIterBefore(ec);
+				// 执行before
+				for (ProgramBlock pb : _dIterBefore) {
+					pb.execute(ec);
+				}
 
 				// execute all child blocks
 				for (int i = 0; i < _childBlocks.size(); i++) {
@@ -93,8 +85,10 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 					_childBlocks.get(i).execute(ec);
 				}
 
-				// 执行dAfter
-				executeDIterAfter(ec);
+				// 执行after
+				for (ProgramBlock pb : _dIterAfter) {
+					pb.execute(ec);
+				}
 			}
 
 			// reset update-in-place variables

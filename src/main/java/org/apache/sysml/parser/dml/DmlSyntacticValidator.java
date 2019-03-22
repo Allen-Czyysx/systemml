@@ -19,12 +19,7 @@
 
 package org.apache.sysml.parser.dml;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -91,8 +86,6 @@ import org.apache.sysml.parser.dml.DmlParser.UnaryExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ValueTypeContext;
 import org.apache.sysml.parser.dml.DmlParser.WhileStatementContext;
 import org.apache.sysml.runtime.util.UtilFunctions;
-
-import static org.apache.sysml.parser.ParameterizedBuiltinFunctionExpression.getParamBuiltinFunctionExpression;
 
 
 public class DmlSyntacticValidator extends CommonSyntacticValidator implements DmlListener {
@@ -599,62 +592,116 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitDWhileStatement(DWhileStatementContext ctx) {
-		DWhileStatement dWhileStatement = new DWhileStatement();
-		dWhileStatement.setCtxValuesAndFilename(ctx, currentFile);
+		DWhileStatement dwst = new DWhileStatement();
+		dwst.setCtxValuesAndFilename(ctx, currentFile);
 
-		// 1. 循环条件
+		// 循环条件
 		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
-		dWhileStatement.setPredicate(predicate);
+		dwst.setPredicate(predicate);
 
-		// 2. 增量迭代Before
-		ArrayList<Statement> before = new ArrayList<>();
-
-		// 记录input旧值
-		// TODO added by czh 暂时每次都记录
+		// 获得dVarName
 		String names = ctx.dVarList.getText();
 		names = names.substring(1, names.length() - 1);
 		String[] dVarNames = names.split(",");
-		dWhileStatement.setDVarNames(dVarNames);
-		for (String dVarName : dVarNames) {
-			String preDVarName = DWhileStatement.getDVarPreName(dVarName);
-			DataIdentifier dVar = new DataIdentifier(dVarName);
-			DataIdentifier preDVar = new DataIdentifier(preDVarName);
-			AssignmentStatement assignPreDVar = new AssignmentStatement(ctx, preDVar, dVar);
-			before.add(assignPreDVar);
+		dwst.setDVarNames(dVarNames);
+
+		// Init, before, after部分
+		ArrayList<StatementBlock> init = new ArrayList<>();
+		ArrayList<StatementBlock> before = new ArrayList<>();
+		ArrayList<StatementBlock> after = new ArrayList<>();
+
+		for (String varName : dVarNames) {
+			String preVarName = DWhileStatement.getPreVarName(varName);
+			DataIdentifier var = new DataIdentifier(varName);
+			PreDataIdentifier preVar = new PreDataIdentifier(preVarName, varName);
+
+			// Init: 创建useDelta变量
+			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(varName));
+			AssignmentStatement disableUseDelta = new AssignmentStatement(ctx, useDelta,
+					new BooleanIdentifier(ctx, false, currentFile));
+			init.add(getStatementBlock(disableUseDelta));
+
+			// Before: 记录input旧值
+			// TODO added by czh 暂时每次都记录
+			AssignmentStatement assignPreDVar = new AssignmentStatement(ctx, preVar, var);
+			before.add(getStatementBlock(assignPreDVar));
+
+			// After: 计算input增量, 为下一次迭代做准备
+			// delta = var - preVar
+			BinaryExpression delta = new BinaryExpression(Expression.BinaryOp.MINUS, dwst);
+			delta.setLeft(var);
+			delta.setRight(preVar);
+
+			// abs = abs(delta)
+			Expression[] absExps = {delta};
+			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
+
+			// max = max(abs)
+			Expression[] maxArgs = {abs};
+			BuiltinFunctionExpression max = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
+
+			// bound = max * ratio
+			// TODO added by czh ratio = 0.001
+			double ratio = 0.001;
+			BinaryExpression bound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+			bound.setLeft(max);
+			bound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
+
+			// select = (abs >= bound)
+			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+			select.setLeft(abs);
+			select.setRight(bound);
+
+			// lightDelta = removeEmpty(delta, rows, f, true)
+			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
+			lightDeltaParams.put("target", delta);
+			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
+			lightDeltaParams.put("select", select);
+			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, true, currentFile));
+			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
+					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
+			);
+
+			// 记录select, lightDelta
+			DataIdentifier sl = new DataIdentifier(DWhileStatement.getSelectName(varName));
+			DataIdentifier ld = new DataIdentifier(DWhileStatement.getDeltaName(varName));
+			AssignmentStatement assignSelect = new AssignmentStatement(ctx, sl, select);
+			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, ld, lightDelta);
+			after.add(getStatementBlock(assignSelect));
+			after.add(getStatementBlock(assignLightDelta));
+
+			// 开启增量迭代
+			// TODO added by czh 从第二次迭代开始一直使用增量迭代
+			AssignmentStatement enableUseDelta = new AssignmentStatement(ctx, useDelta,
+					new BooleanIdentifier(ctx, true, currentFile));
+			after.add(getStatementBlock(enableUseDelta));
+
+			// TODO added by czh 暂时先打印lightDelta
+//			LinkedHashMap<String, Expression> printParams = new LinkedHashMap<>();
+//			printParams.put("target", lightDelta);
+//			ParameterizedBuiltinFunctionExpression toString = new ParameterizedBuiltinFunctionExpression(
+//					ctx, Expression.ParameterizedBuiltinFunctionOp.TOSTRING, printParams, currentFile);
+//			List<Expression> expList = new ArrayList<>();
+//			expList.add(toString);
+//			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);
+//			after.add(getStatementBlock(print));
 		}
 
-		dWhileStatement.setDIterBefore(before);
+		dwst.setDIterInit(StatementBlock.mergeStatementBlocks(init));
+		dwst.setDIterBefore(StatementBlock.mergeStatementBlocks(before));
+		dwst.setDIterAfter(StatementBlock.mergeStatementBlocks(after));
 
-		// 3. 循环体内部
 		if (ctx.body.size() > 0) {
 			for (StatementContext stmtCtx : ctx.body) {
-				dWhileStatement.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
+				dwst.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
 			}
-			dWhileStatement.mergeStatementBlocks();
+
+			dwst.mergeStatementBlocks();
 		}
 
-		// 4. 增量迭代After
-		ArrayList<Statement> after = new ArrayList<>();
-
-		// 计算input增量, 为下一次迭代做准备
-		// TODO added by czh 暂时先打印 preDVar
-		for (String dVarName : dVarNames) {
-			String preDVarName = DWhileStatement.getDVarPreName(dVarName);
-			DataIdentifier preDVar = new DataIdentifier(preDVarName);
-			ArrayList<ParameterExpression> paramExprs = new ArrayList<>();
-			ParameterExpression paramExpr = new ParameterExpression("target", preDVar);
-			paramExprs.add(paramExpr);
-			ParameterizedBuiltinFunctionExpression toString
-					= getParamBuiltinFunctionExpression(ctx, "toString", paramExprs, currentFile);
-			List<Expression> expList = new ArrayList<>();
-			expList.add(toString);
-			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);
-			after.add(print);
-		}
-
-		dWhileStatement.setDIterAfter(after);
-
-		ctx.info.stmt = dWhileStatement;
+		ctx.info.stmt = dwst;
 		setFileLineColumn(ctx.info.stmt, ctx);
 	}
 

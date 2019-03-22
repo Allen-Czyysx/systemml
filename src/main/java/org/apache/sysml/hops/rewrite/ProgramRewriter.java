@@ -236,12 +236,13 @@ public class ProgramRewriter
 		}
 		else if (current instanceof DWhileStatementBlock) {
 			DWhileStatementBlock dwsb = (DWhileStatementBlock) current;
-			DWhileStatement dwstmt = (DWhileStatement)dwsb.getStatement(0);
+			DWhileStatement dwst = (DWhileStatement)dwsb.getStatement(0);
+
 			dwsb.setPredicateHops(rewriteHopDAG(dwsb.getPredicateHops(), state));
-			dwsb.setDIterBeforeHops(rewriteHopDAG(dwsb.getDIterBeforeHops(), state));
-			dwsb.setDIterAfterHops(rewriteHopDAG(dwsb.getDIterAfterHops(), state));
-			for (StatementBlock sb : dwstmt.getBody())
-				rRewriteStatementBlockHopDAGs(sb, state);
+			rRewriteStatementBlockHopDAGs(dwst.getDIterInitByIndex(0), state);
+			rRewriteStatementBlockHopDAGs(dwst.getDIterBeforeByIndex(0), state);
+			rRewriteStatementBlockHopDAGs(dwst.getBody().get(0), state);
+			rRewriteStatementBlockHopDAGs(dwst.getDIterAfterByIndex(0), state);
 		}
 		else if (current instanceof WhileStatementBlock)
 		{

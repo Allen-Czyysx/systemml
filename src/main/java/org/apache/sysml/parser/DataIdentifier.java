@@ -20,13 +20,12 @@
 package org.apache.sysml.parser;
 
 
-import org.apache.sysml.hops.Hop;
-
 public class DataIdentifier extends Identifier
 {
 	protected String _name;
 	protected String _valueTypeString;
-	
+
+
 	public DataIdentifier(DataIdentifier passed){
 		setProperties(passed);
 		_name = passed.getName();
@@ -42,17 +41,6 @@ public class DataIdentifier extends Identifier
 		String newIdName = prefix + _name;
 		newId.setName(newIdName);
 		return newId;
-	}
-
-	public DataIdentifier(Hop hop) {
-		_name = hop.getName();
-		_dataType = hop.getDataType();
-		_valueType = hop.getValueType();
-		_dim1 = hop.getDim1();
-		_dim2 = hop.getDim2();
-		_rows_in_block = hop.getRowsInBlock();
-		_columns_in_block = hop.getColsInBlock();
-		_nnz = hop.getNnz();
 	}
 	
 	public DataIdentifier(String name){
@@ -71,7 +59,7 @@ public class DataIdentifier extends Identifier
 	public void setName(String name){
 		_name = name;
 	}
-	
+
 	@Override
 	public String toString() {
 		return _name;
@@ -88,7 +76,7 @@ public class DataIdentifier extends Identifier
 	public VariableSet variablesUpdated() {
 		return null;
 	}
-	
+
 	/**
 	 * Method to specify if an expression returns multiple outputs.
 	 * This method must be overridden by all child classes.
