@@ -12,7 +12,7 @@ public class PreDataIdentifier extends DataIdentifier {
 	}
 
 	public PreDataIdentifier(Hop hop) {
-		_name = DWhileStatement.getPreOutputNameOfHop(hop);
+		_name = DWhileStatement.getPreOutputNameFromHop(hop);
 		_originName = hop.getName();
 		_dataType = hop.getDataType();
 		_valueType = hop.getValueType();

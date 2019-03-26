@@ -217,15 +217,6 @@ public class DataOp extends Hop
 	{
 		_dataop = type;
 	}
-	
-	public void setOutputParams(long dim1, long dim2, long nnz, UpdateType update, int rowsPerBlock, int colsPerBlock) {
-		setDim1(dim1);
-		setDim2(dim2);
-		setNnz(nnz);
-		setUpdateType(update);
-		setRowsInBlock(rowsPerBlock);
-		setColsInBlock(colsPerBlock);
-	}
 
 	public void setFileName(String fn) {
 		_fileName = fn;

@@ -81,8 +81,9 @@ public class DWhileStatement extends WhileStatement {
 		return "4_delta_" + varName;
 	}
 
-	public static String getPreOutputNameOfHop(Hop hop) {
-		return "5_preOutput_hop_" + hop.getHopID();
+	public static String getPreOutputNameFromHop(Hop hop) {
+		return "5_preOutput_hop_" + hop.getName() + "_" + hop.getOpString() + "_" + hop.getBeginLine() +
+				"_" + hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn();
 	}
 
 	@Override

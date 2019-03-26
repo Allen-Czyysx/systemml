@@ -107,6 +107,14 @@ public class BinaryOp extends MultiThreadedHop
 		refreshSizeInformation();
 	}
 
+	public BinaryOp(String name, DataType dt, ValueType vt, Hop.OpOp2 o, Hop inp1, Hop inp2, boolean t ) {
+		this(name, dt, vt, o, inp1, inp2);
+
+
+
+
+	}
+
 	@Override
 	public void checkArity() {
 		HopsException.check(_input.size() == 2, this, "should have arity 2 but has arity %d", _input.size());

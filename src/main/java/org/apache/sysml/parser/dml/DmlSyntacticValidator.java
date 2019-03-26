@@ -605,7 +605,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		String[] dVarNames = names.split(",");
 		dwst.setDVarNames(dVarNames);
 
-		// Init, before, after部分
+		// init, before, after
 		ArrayList<StatementBlock> init = new ArrayList<>();
 		ArrayList<StatementBlock> before = new ArrayList<>();
 		ArrayList<StatementBlock> after = new ArrayList<>();
@@ -643,8 +643,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
 
 			// bound = max * ratio
-			// TODO added by czh ratio = 0.001
-			double ratio = 0.001;
+			double ratio = Double.parseDouble(ctx.ratio.getText());
 			BinaryExpression bound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
 			bound.setLeft(max);
 			bound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
@@ -654,15 +653,22 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			select.setLeft(abs);
 			select.setRight(bound);
 
-			// lightDelta = removeEmpty(delta, rows, f, true)
-			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
-			lightDeltaParams.put("target", delta);
-			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
-			lightDeltaParams.put("select", select);
-			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, true, currentFile));
-			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
-					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
-			);
+			// TODO added by czh 暂时改为替换为0, 不remove, 之后要还原
+//			// lightDelta = removeEmpty(delta, rows, select, true)
+//			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
+//			lightDeltaParams.put("target", delta);
+//			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
+//			lightDeltaParams.put("select", select);
+//			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, true, currentFile));
+//			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
+//					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
+//			);
+
+			// TODO added by czh 删
+			// lightDelta = delta * select
+			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+			lightDelta.setLeft(delta);
+			lightDelta.setRight(select);
 
 			// 记录select, lightDelta
 			DataIdentifier sl = new DataIdentifier(DWhileStatement.getSelectName(varName));
@@ -693,11 +699,11 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		dwst.setDIterBefore(StatementBlock.mergeStatementBlocks(before));
 		dwst.setDIterAfter(StatementBlock.mergeStatementBlocks(after));
 
+		// body
 		if (ctx.body.size() > 0) {
-			for (StatementContext stmtCtx : ctx.body) {
-				dwst.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
+			for (StatementContext stCtx : ctx.body) {
+				dwst.addStatementBlock(getStatementBlock(stCtx.info.stmt));
 			}
-
 			dwst.mergeStatementBlocks();
 		}
 

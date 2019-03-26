@@ -1,5 +1,6 @@
 package org.apache.sysml.parser;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 
 public class DWhileStatementBlock extends WhileStatementBlock {
@@ -118,8 +119,8 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 		_warnSet = finalWarnSet;
 
 		for (String varName : _warnSet.getVariableNames()) {
-			LOG.warn(_warnSet.getVariable(varName).printWarningLocation() + "Initialization of " + varName
-					+ " depends on dwhile execution");
+			LOG.warn(_warnSet.getVariable(varName).printWarningLocation() + "Initialization of " + varName +
+					" depends on dwhile execution");
 		}
 
 		_liveIn = new VariableSet();
@@ -140,10 +141,10 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 
 		DWhileStatement dwst = (DWhileStatement) _statements.get(0);
 		ConditionalPredicate predicate = dwst.getConditionalPredicate();
-		StatementBlock init = dwst.getDIterInitByIndex(0);
-		StatementBlock before = dwst.getDIterBeforeByIndex(0);
-		StatementBlock body = dwst.getBody().get(0);
-		StatementBlock after = dwst.getDIterAfterByIndex(0);
+		ArrayList<StatementBlock> init = dwst.getDIterInit();
+		ArrayList<StatementBlock> before = dwst.getDIterBefore();
+		ArrayList<StatementBlock> body = dwst.getBody();
+		ArrayList<StatementBlock> after = dwst.getDIterAfter();
 
 		_dmlProg = dmlProg;
 
@@ -159,21 +160,28 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 		///////////////////////////////////////////////////////////////////////////////
 
 		for (String var : _updated.getVariableNames()) {
-			if (constVars.containsKey(var)) {
-				constVars.remove(var);
-			}
+			constVars.remove(var);
 		}
 
 		predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
 
-		ids = init.validate(dmlProg, ids, constVars, true);
-		ids = before.validate(dmlProg, ids, constVars, true);
-		ids = body.validate(dmlProg, ids, constVars, true);
-		ids = after.validate(dmlProg, ids, constVars, true);
-		constVars = body.getConstOut();
-
-		_constVarsIn.putAll(body.getConstIn());
-		_constVarsOut.putAll(body.getConstOut());
+		for (StatementBlock block : init) {
+			ids = block.validate(dmlProg, ids, constVars, true);
+		}
+		for (StatementBlock block : before) {
+			ids = block.validate(dmlProg, ids, constVars, true);
+		}
+		for (StatementBlock block : body) {
+			ids = block.validate(dmlProg, ids, constVars, true);
+			constVars = block.getConstOut();
+		}
+		for (StatementBlock block : after) {
+			ids = block.validate(dmlProg, ids, constVars, true);
+		}
+		if (!body.isEmpty()) {
+			_constVarsIn.putAll(body.get(0).getConstIn());
+			_constVarsOut.putAll(body.get(body.size()-1).getConstOut());
+		}
 
 		boolean revalidationRequired = false;
 		for (String key : _updated.getVariableNames()) {
@@ -197,17 +205,13 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 
 				boolean sizeUnchanged = ((startVersionDim1 == endVersionDim1) && (startVersionDim2 == endVersionDim2));
 
-				boolean nnzUnchanged = false;
-
-				if (!sizeUnchanged || !nnzUnchanged) {
-					revalidationRequired = true;
-					DataIdentifier recVersion = new DataIdentifier(endVersion);
-					if (!sizeUnchanged)
-						recVersion.setDimensions(-1, -1);
-					if (!nnzUnchanged)
-						recVersion.setNnz(-1);
-					origVarsBeforeBody.addVariable(key, recVersion);
+				revalidationRequired = true;
+				DataIdentifier recVersion = new DataIdentifier(endVersion);
+				if (!sizeUnchanged) {
+					recVersion.setDimensions(-1, -1);
 				}
+				recVersion.setNnz(-1);
+				origVarsBeforeBody.addVariable(key, recVersion);
 			}
 		}
 
@@ -221,20 +225,28 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 			///////////////////////////////////////////////////////////////////////////////
 
 			for (String var : _updated.getVariableNames()) {
-				if (constVars.containsKey(var)) {
-					constVars.remove(var);
-				}
+				constVars.remove(var);
 			}
 
 			predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
 
-			ids = init.validate(dmlProg, ids, constVars, true);
-			ids = before.validate(dmlProg, ids, constVars, true);
-			ids = body.validate(dmlProg, ids, constVars, true);
-			ids = after.validate(dmlProg, ids, constVars, true);
-
-			_constVarsIn.putAll(body.getConstIn());
-			_constVarsOut.putAll(body.getConstOut());
+			for (StatementBlock block : init) {
+				ids = block.validate(dmlProg, ids, constVars, true);
+			}
+			for (StatementBlock block : before) {
+				ids = block.validate(dmlProg, ids, constVars, true);
+			}
+			for (StatementBlock block : body) {
+				ids = block.validate(dmlProg, ids, constVars, true);
+				constVars = block.getConstOut();
+			}
+			for (StatementBlock block : after) {
+				ids = block.validate(dmlProg, ids, constVars, true);
+			}
+			if (!body.isEmpty()) {
+				_constVarsIn.putAll(body.get(0).getConstIn());
+				_constVarsOut.putAll(body.get(body.size()-1).getConstOut());
+			}
 		}
 
 		// 为hop输出旧值设置统计信息

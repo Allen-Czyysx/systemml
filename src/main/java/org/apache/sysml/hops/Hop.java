@@ -113,6 +113,8 @@ public abstract class Hop implements ParseInfo
 	// indicates if the output of this hops needs to contain materialized empty blocks 
 	// if those exists; otherwise only blocks w/ non-zero values are materialized
 	protected boolean _outputEmptyBlocks = true;
+
+	protected boolean _needRecord = true;
 	
 	private Lop _lops = null;
 	
@@ -128,7 +130,14 @@ public abstract class Hop implements ParseInfo
 		setValueType(vt);
 	}
 
-	
+	public boolean needRecord() {
+		return _needRecord;
+	}
+
+	public void setNeedRecord(boolean needRecord) {
+		_needRecord = needRecord;
+	}
+
 	private static long getNextHopID() {
 		return _seqHopID.getNextID();
 	}
@@ -808,6 +817,24 @@ public abstract class Hop implements ParseInfo
 	protected abstract ExecType optFindExecType();
 	
 	public abstract String getOpString();
+
+	public void setOutputParams(long dim1, long dim2, long nnz, UpdateType update, int rowsPerBlock, int colsPerBlock) {
+		setDim1(dim1);
+		setDim2(dim2);
+		setNnz(nnz);
+		setUpdateType(update);
+		setRowsInBlock(rowsPerBlock);
+		setColsInBlock(colsPerBlock);
+	}
+
+	public void setOutputParams(Hop hop) {
+		setDim1(hop._dim1);
+		setDim2(hop._dim2);
+		setNnz(hop._nnz);
+		setUpdateType(hop._updateType);
+		setRowsInBlock(hop._rows_in_block);
+		setColsInBlock(hop._cols_in_block);
+	}
 
 	// ========================================================================================
 	// Design doc: Memory estimation of GPU
@@ -1945,8 +1972,6 @@ public abstract class Hop implements ParseInfo
 	 *            parse information, such as beginning line position, beginning
 	 *            column position, ending line position, ending column position,
 	 *            text, and filename
-	 * @param filename
-	 *            the DML/PYDML filename (if it exists)
 	 */
 	public void setParseInfo(ParseInfo parseInfo) {
 		_beginLine = parseInfo.getBeginLine();

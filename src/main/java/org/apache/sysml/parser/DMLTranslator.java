@@ -20,12 +20,7 @@
 package org.apache.sysml.parser;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.apache.commons.logging.Log;
@@ -1529,16 +1524,24 @@ public class DMLTranslator {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
 		// init
-		constructHops(dwst.getDIterInitByIndex(0), dwstList);
+		for (StatementBlock block : dwst.getDIterInit()) {
+			constructHops(block, dwstList);
+		}
 
 		// before
-		constructHops(dwst.getDIterBeforeByIndex(0), dwstList);
+		for (StatementBlock block : dwst.getDIterBefore()) {
+			constructHops(block, dwstList);
+		}
 
 		// body
-		constructHops(dwst.getBody().get(0), dwstList);
+		for (StatementBlock block : dwst.getBody()) {
+			constructHops(block, dwstList);
+		}
 
 		// after
-		constructHops(dwst.getDIterAfterByIndex(0), dwstList);
+		for (StatementBlock block : dwst.getDIterAfter()) {
+			constructHops(block, dwstList);
+		}
 	}
 
 	private DataOp constructReadOpforVar(DataIdentifier var) {
@@ -1556,19 +1559,60 @@ public class DMLTranslator {
 		return read;
 	}
 
+	public void addDIterHops(DWhileStatementBlock dwsb) throws Exception {
+		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 
-	public void addWriteHopsForDWhileBody(DWhileStatementBlock dwsb) {
-		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
-		// TODO added by czh 记录旧值的逻辑先放在body里, 不知合不合理
-		ArrayList<Hop> bodyHops = ((DWhileStatement) dwsb.getStatement(0)).getBody().get(0).getHops();
-		ArrayList<Hop> newHops = new ArrayList<>();
+		// TODO added by czh 暂没考虑if等情况
+		StatementBlock bodyBlock = dwst.getBody().get(0);
+		ArrayList<Hop> bodyHops = bodyBlock.getHops();
 		VariableSet updated = dwsb.variablesUpdated();
 
-		for (Hop hop : bodyHops) {
-			recordPreVarForEachHop(hop, newHops, updated);
-		}
+		ArrayList<StatementBlock> newBody = new ArrayList<>();
 
-		bodyHops.addAll(newHops);
+		// 记录旧值
+//		StatementBlock record = new StatementBlock(dwsb);
+//		record.setLiveVariables(dwsb);
+//		record.setHops(recordHops);
+
+		// if包装
+		IfStatement ifst = new IfStatement();
+
+		// else 原计划
+		ArrayList<Hop> recordElseHops = new ArrayList<>();
+		for (StatementBlock sb : dwst.getBody()) {
+			ifst.addStatementBlockElseBody(sb);
+			for (Hop hop : sb.getHops()) {
+				recordPreVarForEachHop(hop, recordElseHops, updated);
+			}
+		}
+		ifst.getElseBody().get(ifst.getElseBody().size() - 1).getHops().addAll(recordElseHops);
+
+		// if 增量迭代计划
+		StatementBlock ifPart = new StatementBlock(dwsb);
+		ifPart.setLiveVariables(dwsb);
+		ArrayList<Hop> dHops = new ArrayList<>();
+		ArrayList<Hop> recordIfHops = new ArrayList<>();
+		for (Hop hop : bodyHops) {
+			Hop dHop = dIterForEachHop(hop, false, dwsb).get(0);
+			dHops.add(dHop);
+			recordPreVarForEachHop(dHop, recordIfHops, updated);
+		}
+		dHops.addAll(recordIfHops);
+		ifPart.setHops(dHops);
+		ifst.addStatementBlockIfBody(ifPart);
+
+		// if条件
+		// TODO added by czh 添加if statement, 先针对一个变量
+		String dVarName = dwst.getDVarNames()[0];
+		DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(dVarName));
+		ConditionalPredicate ifPredicate = new ConditionalPredicate(useDelta);
+		ifst.setConditionalPredicate(ifPredicate);
+		StatementBlock ifsb = ParserWrapper.getStatementBlock(ifst);
+		ifsb.setLiveVariables(dwsb);
+		constructHopsForConditionalPredicate(ifsb);
+
+		newBody.add(ifsb);
+		dwst.setBody(newBody);
 
 		// TODO added by czh 暂时在dwhile after打印, 看下能否读到
 //		String varName = "5_preOutput_hop_41";
@@ -1592,38 +1636,234 @@ public class DMLTranslator {
 //		((DWhileStatement) dwsb.getStatement(0)).getDIterAfterByIndex(0).getHops().add(printHop);
 	}
 
-	private void recordPreVarForEachHop(Hop hop, ArrayList<Hop> newHops, VariableSet updated) {
+	private void recordPreVarForEachHop(Hop hop, ArrayList<Hop> recordHops, VariableSet updated) {
 		// 如果已访问过, 跳过
-		String varName = DWhileStatement.getPreOutputNameOfHop(hop);
-		if (updated.containsVariable(varName)) {
+		if (!hop.needRecord()) {
 			return;
 		}
 
+		hop.setNeedRecord(false);
+		String preOutputName = DWhileStatement.getPreOutputNameFromHop(hop);
+
 		// 递归遍历子算子
 		for (Hop op : hop.getInput()) {
-			recordPreVarForEachHop(op, newHops, updated);
+			recordPreVarForEachHop(op, recordHops, updated);
 		}
 
+		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
 		// TODO added by czh 之后可能要增加忽略的算子
-		if ((hop instanceof DataOp
-				&& (((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTREAD
-				|| ((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTWRITE))) {
+		if ((hop instanceof DataOp && (((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTREAD ||
+				((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTWRITE))) {
 			return;
 		} else if (hop instanceof LiteralOp) {
 			return;
 		}
 
 		// 记录当前算子的结果
-		DataOp write = new DataOp(varName, hop.getDataType(), hop.getValueType(),
+		DataOp write = new DataOp(preOutputName, hop.getDataType(), hop.getValueType(),
 				hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
-		write.setOutputParams(hop.getDim1(), hop.getDim2(), hop.getNnz(),
-				hop.getUpdateType(), hop.getRowsInBlock(), hop.getColsInBlock());
+		write.setOutputParams(hop);
 		write.setParseInfo(hop);
-		newHops.add(write);
+		recordHops.add(write);
 
 		// 添加变量到updated
-		PreDataIdentifier var = new PreDataIdentifier(hop);
-		updated.addVariable(varName, var);
+		if (!updated.containsVariable(preOutputName)) {
+			PreDataIdentifier var = new PreDataIdentifier(hop);
+			updated.addVariable(preOutputName, var);
+		}
+	}
+
+	private ArrayList<Hop> dIterForEachHop(Hop hop, boolean needDelta, DWhileStatementBlock dwsb) throws Exception {
+		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
+		VariableSet updated = dwsb.variablesUpdated();
+
+		// 若返回1个, 表示新值; 若返回3个, 分别表示pre, delta, select
+		ArrayList<Hop> dHops = new ArrayList<>(3);
+
+		// TODO added by czh 之后增加支持的算子
+
+		// 常值
+		if (hop instanceof LiteralOp) {
+			dHops.add(hop);
+			return dHops;
+		}
+
+		// 读写操作
+		if (hop instanceof DataOp) {
+			DataOp dataHop = (DataOp) hop;
+			DataOpTypes opType = dataHop.getDataOpType();
+			String varName = dataHop.getName();
+
+			if (opType == DataOpTypes.TRANSIENTWRITE) {
+				Hop input = dIterForEachHop(dataHop.getInput().get(0), false, dwsb).get(0);
+				DataOp newHop = new DataOp(varName, dataHop.getDataType(), dataHop.getValueType(), input,
+						DataOpTypes.TRANSIENTWRITE, dataHop.getFileName());
+				newHop.setOutputParams(dataHop);
+				dHops.add(newHop);
+				return dHops;
+			}
+
+			if (opType == DataOpTypes.TRANSIENTREAD) {
+				// TODO added by czh 这里要求增量迭代的变量名不能在更新后出现
+				if (needDelta && varName.equals(dwst.getDVarNames()[0])) {
+					// 增量计划
+					// TODO added by czh 先支持一个增量
+					ArrayList<String> nameList = new ArrayList<>();
+					nameList.add(DWhileStatement.getPreVarName(varName));
+					nameList.add(DWhileStatement.getDeltaName(varName));
+					nameList.add(DWhileStatement.getSelectName(varName));
+					for (String name : nameList) {
+						DataIdentifier var = updated.getVariable(name);
+						dHops.add(constructReadOpforVar(var));
+					}
+				} else {
+					// 原计划
+					dHops.add(dataHop);
+				}
+
+				return dHops;
+			}
+
+		}
+
+		// 二元按位操作
+		if (hop instanceof BinaryOp) {
+			BinaryOp bHop = (BinaryOp) hop;
+			OpOp2 opType = bHop.getOp();
+
+			if (opType == OpOp2.DIV || opType == OpOp2.PLUS) {
+				if (needDelta) {
+					// 增量计划 TODO added by czh
+					throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+				} else {
+					// 原计划
+					Hop left = dIterForEachHop(bHop.getInput().get(0), false, dwsb).get(0);
+					Hop right = dIterForEachHop(bHop.getInput().get(1), false, dwsb).get(0);
+					BinaryOp newHop = new BinaryOp(bHop.getName(), bHop.getDataType(),
+							bHop.getValueType(), opType, left, right);
+					newHop.setOutputParams(bHop);
+					newHop.setParseInfo(bHop);
+					newHop.setNeedRecord(true);
+					dHops.add(newHop);
+				}
+
+				return dHops;
+			}
+		}
+
+		// 一元聚合操作
+		if (hop instanceof AggUnaryOp) {
+			AggUnaryOp aggUHop = (AggUnaryOp) hop;
+			AggOp opType = aggUHop.getOp();
+
+			if (opType == AggOp.MAX) {
+				if (needDelta) {
+					// 增量计划 TODO added by czh
+					throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+				} else {
+					// 原计划
+					Hop input = dIterForEachHop(aggUHop.getInput().get(0), false, dwsb).get(0);
+					AggUnaryOp newHop = new AggUnaryOp(aggUHop.getName(), aggUHop.getDataType(),
+							aggUHop.getValueType(), AggOp.MAX, Direction.RowCol, input);
+					newHop.setParseInfo(aggUHop);
+					newHop.setNeedRecord(true);
+					dHops.add(newHop);
+				}
+
+				return dHops;
+			}
+		}
+
+		// 二元聚合操作
+		if (hop instanceof AggBinaryOp) {
+			AggBinaryOp aggBHop = (AggBinaryOp) hop;
+			Hop originLeft = aggBHop.getInput().get(0);
+			Hop originRight = aggBHop.getInput().get(1);
+			String leftName = originLeft.getName();
+			String rightName = originRight.getName();
+
+			if (aggBHop.isMatrixMultiply()) {
+				if (!updated.containsVariable(leftName)) {
+					ArrayList<Hop> right = dIterForEachHop(originRight, true, dwsb);
+					if (right.size() == 1) {
+						// 原计划
+						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(0));
+						newHop.setOutputParams(aggBHop);
+						newHop.setParseInfo(aggBHop);
+						newHop.setNeedRecord(true);
+						dHops.add(newHop);
+
+					} else {
+						// 增量计划 TODO added by czh lightDelta改回来后需要新建DeltaHop类, 在Lop层解决
+						// delta = left %*% right.delta
+						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(1));
+						delta.setOutputParams(aggBHop);
+
+						// pre
+						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
+						DataIdentifier preVar = updated.getVariable(preVarName);
+						DataOp pre = constructReadOpforVar(preVar);
+
+						if (needDelta) {
+							// TODO added by czh
+							throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+						} else {
+							// newHop = pre + delta
+							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+							newHop.setParseInfo(aggBHop);
+							newHop.setNeedRecord(true);
+							dHops.add(newHop);
+						}
+					}
+
+					return dHops;
+				}
+
+				if (!updated.containsVariable(rightName)) {
+					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb);
+					if (left.size() == 1) {
+						// 原计划
+						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(0), originRight);
+						newHop.setOutputParams(aggBHop);
+						newHop.setParseInfo(aggBHop);
+						newHop.setNeedRecord(true);
+						dHops.add(newHop);
+
+					} else {
+						// 增量计划
+						// delta = left.delta %*% right
+						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(1), originRight);
+						delta.setOutputParams(aggBHop);
+
+						// pre
+						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
+						DataIdentifier preVar = updated.getVariable(preVarName);
+						DataOp pre = constructReadOpforVar(preVar);
+
+						if (needDelta) {
+							// TODO added by czh
+							throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+						} else {
+							// newHop = pre + delta
+							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+							newHop.setParseInfo(aggBHop);
+							newHop.setNeedRecord(true);
+							dHops.add(newHop);
+						}
+					}
+
+					return dHops;
+				}
+			}
+		}
+
+		throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 	}
 
 	public void constructHopsForConditionalPredicate(StatementBlock passedSB) {
@@ -1648,7 +1888,12 @@ public class DMLTranslator {
 		for (String varName : varsRead.getVariables().keySet()) {
 
 			// creating transient read for live in variables
-			DataIdentifier var = passedSB.liveIn().getVariables().get(varName);
+			DataIdentifier var;
+			if (DWhileStatement.isDWhileTmpVar(varName)) {
+				var = passedSB.variablesUpdated().getVariable(varName);
+			} else {
+				var = passedSB.liveIn().getVariable(varName);
+			}
 
 			DataOp read = null;
 

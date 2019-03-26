@@ -78,6 +78,19 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 		_dmlProg = sb._dmlProg;
 	}
 
+	public void setLiveVariables(StatementBlock sb) {
+		_read = sb._read;
+		_updated = sb._updated;
+		_gen = sb._gen;
+		_kill = sb._kill;
+		_liveIn = sb._liveIn;
+		_liveOut = sb._liveOut;
+		_warnSet = sb._warnSet;
+		_constVarsIn = sb._constVarsIn;
+		_constVarsOut = sb._constVarsOut;
+		_updateInPlaceVars = sb._updateInPlaceVars;
+	}
+
 	public void setDMLProg(DMLProgram dmlProg){
 		_dmlProg = dmlProg;
 	}

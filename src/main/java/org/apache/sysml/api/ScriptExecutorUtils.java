@@ -177,9 +177,8 @@ public class ScriptExecutorUtils {
 			// Additional step for dwhile
 			for (DWhileStatementBlock dwsb : dwstList) {
 				// 记录旧值
-				dmlt.addWriteHopsForDWhileBody(dwsb);
+				dmlt.addDIterHops(dwsb);
 			}
-
 
 			//Step 6: construct lops (incl exec type and op selection)
 			dmlt.constructLops(prog);
