@@ -145,10 +145,10 @@ public class ScriptExecutorUtils {
 
 			//Step 3: construct HOP DAGs (incl LVA, validate, and setup)
 			DMLTranslator dmlt = new DMLTranslator(prog);
-			ArrayList<DWhileStatementBlock> dwstList = new ArrayList<>();
+			ArrayList<DWhileStatementBlock> dwsbList = new ArrayList<>();
 			dmlt.liveVariableAnalysis(prog);
 			dmlt.validateParseTree(prog);
-			dmlt.constructHops(prog, dwstList);
+			dmlt.constructHops(prog, dwsbList);
 
 			//init working directories (before usage by following compilation steps)
 			if(api != SystemMLAPI.JMLC)
@@ -175,9 +175,14 @@ public class ScriptExecutorUtils {
 			}
 
 			// Additional step for dwhile
-			for (DWhileStatementBlock dwsb : dwstList) {
-				// 记录旧值
+			for (DWhileStatementBlock dwsb : dwsbList) {
+				// 记录旧值, 增量迭代逻辑
 				dmlt.addDIterHops(dwsb);
+			}
+			// 再次重写HOP
+			// TODO added by czh 只要重写部分
+			if (performHOPRewrites) {
+				dmlt.rewriteHopsDAG(prog);
 			}
 
 			//Step 6: construct lops (incl exec type and op selection)

@@ -1565,14 +1565,8 @@ public class DMLTranslator {
 		// TODO added by czh 暂没考虑if等情况
 		StatementBlock bodyBlock = dwst.getBody().get(0);
 		ArrayList<Hop> bodyHops = bodyBlock.getHops();
-		VariableSet updated = dwsb.variablesUpdated();
 
 		ArrayList<StatementBlock> newBody = new ArrayList<>();
-
-		// 记录旧值
-//		StatementBlock record = new StatementBlock(dwsb);
-//		record.setLiveVariables(dwsb);
-//		record.setHops(recordHops);
 
 		// if包装
 		IfStatement ifst = new IfStatement();
@@ -1582,10 +1576,9 @@ public class DMLTranslator {
 		for (StatementBlock sb : dwst.getBody()) {
 			ifst.addStatementBlockElseBody(sb);
 			for (Hop hop : sb.getHops()) {
-				recordPreVarForEachHop(hop, recordElseHops, updated);
+				recordPreVarForEachHop(hop, recordElseHops, dwsb);
 			}
 		}
-		ifst.getElseBody().get(ifst.getElseBody().size() - 1).getHops().addAll(recordElseHops);
 
 		// if 增量迭代计划
 		StatementBlock ifPart = new StatementBlock(dwsb);
@@ -1595,11 +1588,13 @@ public class DMLTranslator {
 		for (Hop hop : bodyHops) {
 			Hop dHop = dIterForEachHop(hop, false, dwsb).get(0);
 			dHops.add(dHop);
-			recordPreVarForEachHop(dHop, recordIfHops, updated);
+			recordPreVarForEachHop(dHop, recordIfHops, dwsb);
 		}
 		dHops.addAll(recordIfHops);
 		ifPart.setHops(dHops);
+
 		ifst.addStatementBlockIfBody(ifPart);
+		ifst.getElseBody().get(ifst.getElseBody().size() - 1).getHops().addAll(recordElseHops);
 
 		// if条件
 		// TODO added by czh 添加if statement, 先针对一个变量
@@ -1613,53 +1608,58 @@ public class DMLTranslator {
 
 		newBody.add(ifsb);
 		dwst.setBody(newBody);
-
-		// TODO added by czh 暂时在dwhile after打印, 看下能否读到
-//		String varName = "5_preOutput_hop_41";
-//		DataIdentifier var = dwsb._updated.getVariables().get(varName);
-//		HashMap<String, Hop> ids = new HashMap<>();
-//		ids.put(varName, constructReadOpforVar(var));
-//
-//		DataIdentifier target = createTarget();
-//		target.setDataType(DataType.SCALAR);
-//		target.setValueType(ValueType.STRING);
-//		target.setParseInfo(dwsb);
-//
-//		ArrayList<ParameterExpression> paramExprs = new ArrayList<>();
-//		ParameterExpression source = new ParameterExpression("target", var);
-//		paramExprs.add(source);
-//		ParameterizedBuiltinFunctionExpression toString = ParameterizedBuiltinFunctionExpression
-//				.getParamBuiltinFunctionExpression(null, "toString", paramExprs, dwsb.getFilename());
-//		Hop ae = processExpression(toString, target, ids);
-//		Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp1.PRINT, ae);
-//		printHop.setParseInfo(dwsb);
-//		((DWhileStatement) dwsb.getStatement(0)).getDIterAfterByIndex(0).getHops().add(printHop);
 	}
 
-	private void recordPreVarForEachHop(Hop hop, ArrayList<Hop> recordHops, VariableSet updated) {
+	/**
+	 * 遍历hop树, 添加逻辑至recordHops: 记录与dVar相关的算子结果
+	 *
+	 * @return 当前hop是否记录
+	 */
+	private boolean recordPreVarForEachHop(Hop hop, ArrayList<Hop> recordHops, DWhileStatementBlock dwsb) {
 		// 如果已访问过, 跳过
-		if (!hop.needRecord()) {
-			return;
+		if (hop.isRecorded()) {
+			return true;
 		}
 
-		hop.setNeedRecord(false);
-		String preOutputName = DWhileStatement.getPreOutputNameFromHop(hop);
+		VariableSet updated = dwsb.variablesUpdated();
+		boolean needRecord = false;
 
 		// 递归遍历子算子
 		for (Hop op : hop.getInput()) {
-			recordPreVarForEachHop(op, recordHops, updated);
+			needRecord |= recordPreVarForEachHop(op, recordHops, dwsb);
 		}
 
 		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
-		// TODO added by czh 之后可能要增加忽略的算子
-		if ((hop instanceof DataOp && (((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTREAD ||
-				((DataOp) hop).getDataOpType() == DataOpTypes.TRANSIENTWRITE))) {
-			return;
-		} else if (hop instanceof LiteralOp) {
-			return;
+		// TODO added by czh 之后要增加忽略的算子
+		if (hop instanceof DataOp) {
+			DataOp dataOp = (DataOp) hop;
+			if (dataOp.getDataOpType() == DataOpTypes.TRANSIENTREAD) {
+				String[] dVarNames = ((DWhileStatement) dwsb.getStatement(0)).getDVarNames();
+				for (String dVarName : dVarNames) {
+					if (dataOp.getName().equals(dVarName)) {
+						return true;
+					}
+				}
+				return false;
+			}
+
+			if (dataOp.getDataOpType() == DataOpTypes.TRANSIENTWRITE) {
+				return false;
+			}
 		}
 
-		// 记录当前算子的结果
+		if (hop instanceof LiteralOp) {
+			return false;
+		}
+
+		// 不需要记录
+		if (!needRecord && !hop.needRecord() || hop.isRecordDisabled()) {
+			return false;
+		}
+
+		// 需要记录, 记录当前hop的结果
+		hop.setRecorded();
+		String preOutputName = DWhileStatement.getPreOutputNameFromHop(hop);
 		DataOp write = new DataOp(preOutputName, hop.getDataType(), hop.getValueType(),
 				hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
 		write.setOutputParams(hop);
@@ -1671,6 +1671,8 @@ public class DMLTranslator {
 			PreDataIdentifier var = new PreDataIdentifier(hop);
 			updated.addVariable(preOutputName, var);
 		}
+
+		return true;
 	}
 
 	private ArrayList<Hop> dIterForEachHop(Hop hop, boolean needDelta, DWhileStatementBlock dwsb) throws Exception {
@@ -1698,7 +1700,7 @@ public class DMLTranslator {
 				Hop input = dIterForEachHop(dataHop.getInput().get(0), false, dwsb).get(0);
 				DataOp newHop = new DataOp(varName, dataHop.getDataType(), dataHop.getValueType(), input,
 						DataOpTypes.TRANSIENTWRITE, dataHop.getFileName());
-				newHop.setOutputParams(dataHop);
+				newHop.setBlockInfo(dataHop);
 				dHops.add(newHop);
 				return dHops;
 			}
@@ -1741,9 +1743,8 @@ public class DMLTranslator {
 					Hop right = dIterForEachHop(bHop.getInput().get(1), false, dwsb).get(0);
 					BinaryOp newHop = new BinaryOp(bHop.getName(), bHop.getDataType(),
 							bHop.getValueType(), opType, left, right);
-					newHop.setOutputParams(bHop);
+					newHop.setBlockInfo(bHop);
 					newHop.setParseInfo(bHop);
-					newHop.setNeedRecord(true);
 					dHops.add(newHop);
 				}
 
@@ -1765,8 +1766,8 @@ public class DMLTranslator {
 					Hop input = dIterForEachHop(aggUHop.getInput().get(0), false, dwsb).get(0);
 					AggUnaryOp newHop = new AggUnaryOp(aggUHop.getName(), aggUHop.getDataType(),
 							aggUHop.getValueType(), AggOp.MAX, Direction.RowCol, input);
+					newHop.setBlockInfo(aggUHop);
 					newHop.setParseInfo(aggUHop);
-					newHop.setNeedRecord(true);
 					dHops.add(newHop);
 				}
 
@@ -1789,17 +1790,37 @@ public class DMLTranslator {
 						// 原计划
 						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
 								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(0));
-						newHop.setOutputParams(aggBHop);
+						newHop.setBlockInfo(aggBHop);
 						newHop.setParseInfo(aggBHop);
-						newHop.setNeedRecord(true);
 						dHops.add(newHop);
 
 					} else {
-						// 增量计划 TODO added by czh lightDelta改回来后需要新建DeltaHop类, 在Lop层解决
-						// delta = left %*% right.delta
+						// 增量计划
+						// tSelect = t(select)
+						Hop select = right.get(2);
+						ReorgOp tSelect = new ReorgOp(select.getName(), select.getDataType(),
+								select.getValueType(),ReOrgOp.TRANS, select);
+						tSelect.setBlockInfo(select);
+						tSelect.setDisableRecord(true);
+
+						// lightLeft = removeEmpty(left, cols, tSelect, false)
+						LinkedHashMap<String, Hop> lightLeftParams = new LinkedHashMap<>();
+						lightLeftParams.put("target", originLeft);
+						lightLeftParams.put("margin", new LiteralOp("cols"));
+						lightLeftParams.put("select", tSelect);
+						lightLeftParams.put("empty.return", new LiteralOp(false));
+						ParameterizedBuiltinOp lightLeft = new ParameterizedBuiltinOp(
+								leftName, originLeft.getDataType(), originLeft.getValueType(),
+								ParamBuiltinOp.RMEMPTY, lightLeftParams
+						);
+						lightLeft.setBlockInfo(originLeft);
+						lightLeft.setDisableRecord(true);
+
+						// delta = lightLeft %*% deltaRight
 						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(1));
-						delta.setOutputParams(aggBHop);
+								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, lightLeft, right.get(1));
+						delta.setBlockInfo(aggBHop);
+						delta.setDisableRecord(true);
 
 						// pre
 						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
@@ -1813,6 +1834,7 @@ public class DMLTranslator {
 							// newHop = pre + delta
 							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
 									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
 							newHop.setNeedRecord(true);
 							dHops.add(newHop);
@@ -1823,42 +1845,44 @@ public class DMLTranslator {
 				}
 
 				if (!updated.containsVariable(rightName)) {
-					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb);
-					if (left.size() == 1) {
-						// 原计划
-						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(0), originRight);
-						newHop.setOutputParams(aggBHop);
-						newHop.setParseInfo(aggBHop);
-						newHop.setNeedRecord(true);
-						dHops.add(newHop);
-
-					} else {
-						// 增量计划
-						// delta = left.delta %*% right
-						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(1), originRight);
-						delta.setOutputParams(aggBHop);
-
-						// pre
-						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
-						DataIdentifier preVar = updated.getVariable(preVarName);
-						DataOp pre = constructReadOpforVar(preVar);
-
-						if (needDelta) {
-							// TODO added by czh
-							throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
-						} else {
-							// newHop = pre + delta
-							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
-							newHop.setParseInfo(aggBHop);
-							newHop.setNeedRecord(true);
-							dHops.add(newHop);
-						}
-					}
-
-					return dHops;
+					// TODO added by czh 暂时不需要跑到这里
+					throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+//					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb);
+//					if (left.size() == 1) {
+//						// 原计划
+//						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+//								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(0), originRight);
+//						newHop.setBlockInfo(aggBHop);
+//						newHop.setParseInfo(aggBHop);
+//						newHop.setRecorded(true);
+//						dHops.add(newHop);
+//
+//					} else {
+//						// 增量计划
+//						// delta = left.delta %*% right
+//						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+//								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, left.get(1), originRight);
+//						delta.setBlockInfo(aggBHop);
+//
+//						// pre
+//						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
+//						DataIdentifier preVar = updated.getVariable(preVarName);
+//						DataOp pre = constructReadOpforVar(preVar);
+//
+//						if (needDelta) {
+//							// TODO added by czh
+//							throw new Exception("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+//						} else {
+//							// newHop = pre + delta
+//							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+//									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+//							newHop.setParseInfo(aggBHop);
+//							newHop.setRecorded(true);
+//							dHops.add(newHop);
+//						}
+//					}
+//
+//					return dHops;
 				}
 			}
 		}

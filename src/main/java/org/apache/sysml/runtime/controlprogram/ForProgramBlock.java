@@ -123,13 +123,19 @@ public class ForProgramBlock extends ProgramBlock
 			for( IntObject iterVar : seqIter ) 
 			{
 				//set iteration variable
-				ec.setVariable(_iterPredVar, iterVar); 
+				ec.setVariable(_iterPredVar, iterVar);
+
+				// TODO added by czh 删
+				System.out.println("for\t" + System.currentTimeMillis());
 				
 				//execute all child blocks
 				for(int i=0 ; i < this._childBlocks.size() ; i++) {
 					ec.updateDebugState( i );
 					_childBlocks.get(i).execute(ec);
 				}
+
+				// TODO added by czh 删
+				System.out.println("rof\t" + System.currentTimeMillis());
 			}
 			
 			// reset update-in-place variables

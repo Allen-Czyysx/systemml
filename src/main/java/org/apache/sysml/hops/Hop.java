@@ -114,8 +114,11 @@ public abstract class Hop implements ParseInfo
 	// if those exists; otherwise only blocks w/ non-zero values are materialized
 	protected boolean _outputEmptyBlocks = true;
 
-	protected boolean _needRecord = true;
-	
+	// 供dwhile记录旧值用
+	protected boolean _isRecorded = false;
+	protected boolean _needRecord = false;
+	protected boolean _disableRecord = false;
+
 	private Lop _lops = null;
 	
 	protected Hop(){
@@ -130,12 +133,28 @@ public abstract class Hop implements ParseInfo
 		setValueType(vt);
 	}
 
+	public boolean isRecorded() {
+		return _isRecorded;
+	}
+
+	public void setRecorded() {
+		_isRecorded = true;
+	}
+
 	public boolean needRecord() {
 		return _needRecord;
 	}
 
 	public void setNeedRecord(boolean needRecord) {
 		_needRecord = needRecord;
+	}
+
+	public boolean isRecordDisabled() {
+		return _disableRecord;
+	}
+
+	public void setDisableRecord(boolean disableRecord) {
+		_disableRecord = disableRecord;
 	}
 
 	private static long getNextHopID() {
@@ -832,6 +851,10 @@ public abstract class Hop implements ParseInfo
 		setDim2(hop._dim2);
 		setNnz(hop._nnz);
 		setUpdateType(hop._updateType);
+		setBlockInfo(hop);
+	}
+
+	public void setBlockInfo(Hop hop) {
 		setRowsInBlock(hop._rows_in_block);
 		setColsInBlock(hop._cols_in_block);
 	}

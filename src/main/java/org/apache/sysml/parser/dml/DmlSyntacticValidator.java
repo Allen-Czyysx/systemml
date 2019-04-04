@@ -653,22 +653,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			select.setLeft(abs);
 			select.setRight(bound);
 
-			// TODO added by czh 暂时改为替换为0, 不remove, 之后要还原
-//			// lightDelta = removeEmpty(delta, rows, select, true)
-//			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
-//			lightDeltaParams.put("target", delta);
-//			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
-//			lightDeltaParams.put("select", select);
-//			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, true, currentFile));
-//			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
-//					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
-//			);
-
-			// TODO added by czh 删
-			// lightDelta = delta * select
-			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
-			lightDelta.setLeft(delta);
-			lightDelta.setRight(select);
+			// lightDelta = removeEmpty(delta, rows, select, false)
+			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
+			lightDeltaParams.put("target", delta);
+			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
+			lightDeltaParams.put("select", select);
+			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, false, currentFile));
+			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
+					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
+			);
 
 			// 记录select, lightDelta
 			DataIdentifier sl = new DataIdentifier(DWhileStatement.getSelectName(varName));

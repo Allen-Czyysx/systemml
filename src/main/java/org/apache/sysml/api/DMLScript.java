@@ -131,7 +131,8 @@ public class DMLScript
 	public static ScriptType        SCRIPT_TYPE         = DMLOptions.defaultOptions.scriptType;
 	
 	public static boolean _suppressPrint2Stdout = false;  // flag that indicates whether or not to suppress any prints to stdout
-	public static boolean USE_LOCAL_SPARK_CONFIG = false; //set default local spark configuration - used for local testing
+	public static boolean USE_LOCAL_SPARK_CONFIG = true; // TODO added by czh 删
+//	public static boolean USE_LOCAL_SPARK_CONFIG = false; //set default local spark configuration - used for local testing
 	public static boolean _activeAM = false;
 	/**
 	 * If true, allow DMLProgram to be generated while not halting due to validation errors/warnings

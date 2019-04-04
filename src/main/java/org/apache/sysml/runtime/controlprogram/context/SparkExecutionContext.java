@@ -225,6 +225,7 @@ public class SparkExecutionContext extends ExecutionContext
 				_spctx = new JavaSparkContext(conf);
 			}
 
+			_spctx.setLogLevel("warn");
 			_parRDDs.clear();
 		}
 

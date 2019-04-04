@@ -423,7 +423,7 @@ public class GPUObject {
 	 * Convert sparse to dense (Performs transpose, use sparseToColumnMajorDense if the kernel can deal with column major format)
 	 * Also records per instruction invokation of sparseToDense.
 	 *
-	 * @param instructionName Name of the instruction for which statistics are recorded in {@link GPUStatistics}
+	 * @param instructionName Name of the instruction for which statistics are _isRecorded in {@link GPUStatistics}
 	 */
 	public void sparseToDense(String instructionName) {
 		if(LOG.isTraceEnabled()) {
