@@ -29,6 +29,7 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.api.java.function.PairFunction;
 
+import org.apache.sysml.runtime.instructions.spark.functions.ExamSparsityFunction;
 import scala.Tuple2;
 
 import org.apache.sysml.hops.AggBinaryOp.SparkAggType;
@@ -56,6 +57,10 @@ import org.apache.sysml.runtime.matrix.operators.AggregateOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 
 public class MapmmSPInstruction extends BinarySPInstruction {
+
+	// TODO added by czh 暂时, 实现的时候要删
+	private static boolean isFirst = true;
+
 	private CacheType _type = null;
 	private boolean _outputEmpty = true;
 	private SparkAggType _aggtype;
@@ -158,12 +163,20 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 				out = in1.mapToPair( new RDDMapMMFunction(type, in2) );
 			
 			//empty output block filter
-			if( !_outputEmpty )
+			// TODO added by czh 固定过滤, 减少网络IO
+//			if( !_outputEmpty )
 				out = out.filter(new FilterNonEmptyBlocksFunction());
-			
-			if( _aggtype == SparkAggType.MULTI_BLOCK )
+
+			// TODO added by czh 只取x一个块时不需要求和
+//			if( _aggtype == SparkAggType.MULTI_BLOCK )
+//				out = RDDAggregateUtils.sumByKeyStable(out, false);
+			if (isFirst && _aggtype == SparkAggType.MULTI_BLOCK) {
 				out = RDDAggregateUtils.sumByKeyStable(out, false);
-		
+				isFirst = false;
+			} else {
+				out = out.mapValues(new ExamSparsityFunction());
+			}
+
 			//put output RDD handle into symbol table
 			sec.setRDDHandleForVariable(output.getName(), out);
 			sec.addLineageRDD(output.getName(), rddVar);
@@ -265,6 +278,11 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		{
 			MatrixIndexes ixIn = arg0._1();
 			MatrixBlock blkIn = arg0._2();
+
+			// TODO added by czh 测试在这过滤, 删
+			if (ixIn.getColumnIndex() != 1) {
+				return new Tuple2<>(new MatrixIndexes(), new MatrixBlock());
+			}
 
 			MatrixIndexes ixOut = new MatrixIndexes();
 			MatrixBlock blkOut = new MatrixBlock();

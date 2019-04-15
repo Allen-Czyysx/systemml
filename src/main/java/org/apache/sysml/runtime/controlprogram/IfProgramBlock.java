@@ -123,7 +123,7 @@ public class IfProgramBlock extends ProgramBlock
 		else
 		{
 			// TODO added by czh 删
-			System.out.println("else\t" + System.currentTimeMillis());
+			System.out.println("el\t" + System.currentTimeMillis());
 			try 
 			{	
 				for (int i=0 ; i < _childBlocksElseBody.size() ; i++) {

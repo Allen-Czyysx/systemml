@@ -20,6 +20,7 @@
 package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.sysml.hops.Hop;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.BinaryM.VectorType;
 import org.apache.sysml.parser.Expression.DataType;
@@ -31,11 +32,7 @@ import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.cp.ScalarObject;
 import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
-import org.apache.sysml.runtime.instructions.spark.functions.MatrixMatrixBinaryOpFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.MatrixScalarUnaryFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.MatrixVectorBinaryOpPartitionFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.OuterVectorBinaryOpFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.ReplicateVectorFunction;
+import org.apache.sysml.runtime.instructions.spark.functions.*;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
@@ -43,6 +40,8 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
+
+import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
@@ -188,6 +187,22 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 			//alternative: out = in1.mapToPair(new MatrixVectorBinaryOpFunction(bop, in2, vtype));
 			out = in1.mapPartitionsToPair(
 					new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
+
+//			// TODO added by czh 固定过滤, 减少网络IO
+//			Hop.OpOp2 opType = bop.getBinaryOperatorOpOp2();
+//			if (opType == Hop.OpOp2.MULT || opType == Hop.OpOp2.GREATEREQUAL) {
+//				out = in1.filter(new FilterFirstBlockFunction());
+//				MatrixCharacteristics mcOut = sec.getMatrixCharacteristics(output.getName());
+//				mcOut.setNonZeros(DEFAULT_BLOCKSIZE);
+//			} else {
+//				//note: we use mappartition in order to preserve partitioning information for
+//				//binary mv operations where the keys are guaranteed not to change, the reason
+//				//why we cannot use mapValues is the need for broadcast key lookups.
+//				//alternative: out = in1.mapToPair(new MatrixVectorBinaryOpFunction(bop, in2, vtype));
+//				out = in1.mapPartitionsToPair(
+//						new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
+//			}
+
 		}
 		
 		//set output RDD

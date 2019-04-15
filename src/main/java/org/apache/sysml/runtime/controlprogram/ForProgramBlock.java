@@ -126,7 +126,7 @@ public class ForProgramBlock extends ProgramBlock
 				ec.setVariable(_iterPredVar, iterVar);
 
 				// TODO added by czh 删
-				System.out.println("for\t" + System.currentTimeMillis());
+				System.out.println("fo\t" + System.currentTimeMillis());
 				
 				//execute all child blocks
 				for(int i=0 ; i < this._childBlocks.size() ; i++) {
@@ -135,7 +135,7 @@ public class ForProgramBlock extends ProgramBlock
 				}
 
 				// TODO added by czh 删
-				System.out.println("rof\t" + System.currentTimeMillis());
+				System.out.println("ro\t" + System.currentTimeMillis());
 			}
 			
 			// reset update-in-place variables
