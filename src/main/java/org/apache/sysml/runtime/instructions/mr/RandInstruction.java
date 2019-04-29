@@ -74,7 +74,6 @@ public class RandInstruction extends DataGenMRInstruction {
 
 	public static RandInstruction parseInstruction(String str)
 	{
-		InstructionUtils.checkNumFields ( str, 13 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		Operator op = null;
 		byte input = Byte.parseByte(parts[1]);

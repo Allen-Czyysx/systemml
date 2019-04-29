@@ -19,6 +19,7 @@
 
 package org.apache.sysml.hops;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.rewrite.HopRewriteUtils;
 import org.apache.sysml.lops.Aggregate;
@@ -99,6 +100,8 @@ public class BinaryOp extends MultiThreadedHop
 		op = o;
 		getInput().add(0, inp1);
 		getInput().add(1, inp2);
+
+		_dVarNames = (String[]) ArrayUtils.addAll(inp1._dVarNames, inp2._dVarNames);
 
 		inp1.getParent().add(this);
 		inp2.getParent().add(this);
@@ -630,6 +633,8 @@ public class BinaryOp extends MultiThreadedHop
 			setOutputDimensions(unary1);
 			setLineNumbers(unary1);
 			setLops(unary1);
+
+			setCacheInfoToLop();
 		} 
 		else 
 		{
@@ -700,6 +705,8 @@ public class BinaryOp extends MultiThreadedHop
 				setOutputDimensions(binary);
 				setLineNumbers(binary);
 				setLops(binary);
+
+				setCacheInfoToLop();
 			}
 			else //MR
 			{

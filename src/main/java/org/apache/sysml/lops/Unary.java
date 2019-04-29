@@ -396,7 +396,12 @@ public class Unary extends Lop
 		
 		sb.append( OPERAND_DELIMITOR );
 		sb.append( this.prepOutputOperand(output));
-		
+
+		if (getExecType() == ExecType.SPARK &&
+				(operation == OperationTypes.GREATER_THAN_OR_EQUALS || operation == OperationTypes.MAX)) {
+			setCacheInfoToInst(sb);
+		}
+
 		return sb.toString();
 	}
 	

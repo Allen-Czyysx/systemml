@@ -45,7 +45,6 @@ public class MMTSJMRInstruction extends UnaryInstruction {
 	}
 
 	public static MMTSJMRInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts(str);
 		String opcode = parts[0];
 		byte in = Byte.parseByte(parts[1]);

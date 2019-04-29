@@ -43,6 +43,11 @@ public abstract class SPInstruction extends Instruction {
 	protected final Operator _optr;
 	protected final boolean _requiresLabelUpdate;
 
+	boolean _needCache = false;
+
+	String _preOutputName = null;
+	String[] _dVarNames = null;
+
 	protected SPInstruction(SPType type, String opcode, String istr) {
 		this(type, null, opcode, istr);
 	}

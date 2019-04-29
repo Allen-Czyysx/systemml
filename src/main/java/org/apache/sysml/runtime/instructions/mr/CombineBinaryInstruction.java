@@ -39,7 +39,6 @@ public class CombineBinaryInstruction extends BinaryMRInstructionBase {
 	}
 
 	public static CombineBinaryInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 4 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in1, in2, out;
 		String opcode = parts[0];

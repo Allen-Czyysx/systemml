@@ -103,9 +103,7 @@ public class IfProgramBlock extends ProgramBlock
 		//execute if statement
 		if(predResult.getBooleanValue())
 		{
-			// TODO added by czh 删
-			System.out.println("if\t" + System.currentTimeMillis());
-			try 
+			try
 			{	
 				for (int i=0 ; i < _childBlocksIfBody.size() ; i++) {
 					ec.updateDebugState(i);
@@ -122,9 +120,7 @@ public class IfProgramBlock extends ProgramBlock
 		}
 		else
 		{
-			// TODO added by czh 删
-			System.out.println("el\t" + System.currentTimeMillis());
-			try 
+			try
 			{	
 				for (int i=0 ; i < _childBlocksElseBody.size() ; i++) {
 					ec.updateDebugState(i);
@@ -151,8 +147,6 @@ public class IfProgramBlock extends ProgramBlock
 			
 			throw new DMLRuntimeException(this.printBlockErrorLocation() + "Error evaluating if exit instructions ", e);
 		}
-		// TODO added by czh 删
-		System.out.println("fi\t" + System.currentTimeMillis());
 	}
 
 	private BooleanObject executePredicate(ExecutionContext ec) 

@@ -52,7 +52,6 @@ public class PickByCountInstruction extends MRInstruction {
 	}
 
 	public static PickByCountInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 5 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		OperationTypes ptype = OperationTypes.valueOf(parts[4]);
 		if ( ptype == OperationTypes.VALUEPICK ) {

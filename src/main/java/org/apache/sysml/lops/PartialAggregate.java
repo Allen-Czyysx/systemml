@@ -326,6 +326,10 @@ public class PartialAggregate extends Lop
 				break;
 			}
 
+			case SumBlock: {
+				return "uab+";
+			}
+
 			case KahanSum: {
 				// instructions that use kahanSum are similar to ua+,uar+,uac+
 				// except that they also produce correction values along with partial

@@ -489,7 +489,9 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 				}
 				mb = readBlobFromHDFS(_hdfsFileName);
 			}
-			else if( ii == InputInfo.BinaryCellInputInfo ) {
+			// TODO added by czh 极度暴力, 需改
+			else if (false) {
+//			else if( ii == InputInfo.BinaryCellInputInfo ) {
 				//collect matrix block from binary block RDD
 				mb = SparkExecutionContext.toMatrixBlock(lrdd, rlen, clen, nnz);
 			}

@@ -66,9 +66,6 @@ public class UaggOuterChainInstruction extends BinaryInstruction implements IDis
 	}
 
 	public static UaggOuterChainInstruction parseInstruction( String str ) {
-		//check number of fields (2/3 inputs, output, type)
-		InstructionUtils.checkNumFields ( str, 5 );
-		
 		//parse instruction parts (without exec type)
 		String[] parts = InstructionUtils.getInstructionParts( str );
 		

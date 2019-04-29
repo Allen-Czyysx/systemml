@@ -74,10 +74,16 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 
 			// run loop body until predicate becomes false
 			while (executePredicate(ec).getBooleanValue()) {
+				// TODO added by czh 删
+				long t1 = System.currentTimeMillis();
+
 				// 执行before
 				for (ProgramBlock pb : _dIterBefore) {
 					pb.execute(ec);
 				}
+
+				// TODO added by czh 删
+				long t2 = System.currentTimeMillis();
 
 				// execute all child blocks
 				for (int i = 0; i < _childBlocks.size(); i++) {
@@ -85,10 +91,20 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 					_childBlocks.get(i).execute(ec);
 				}
 
+				// TODO added by czh 删
+				long t3 = System.currentTimeMillis();
+
 				// 执行after
 				for (ProgramBlock pb : _dIterAfter) {
 					pb.execute(ec);
 				}
+
+				// TODO added by czh 删
+				long t4 = System.currentTimeMillis();
+				System.out.println("before\t" + (t2 - t1) / 1000.0);
+				System.out.println("child \t" + (t3 - t2) / 1000.0);
+				System.out.println("after \t" + (t4 - t3) / 1000.0);
+				System.out.println("dwhile\t" + (t4 - t1) / 1000.0);
 			}
 
 			// reset update-in-place variables

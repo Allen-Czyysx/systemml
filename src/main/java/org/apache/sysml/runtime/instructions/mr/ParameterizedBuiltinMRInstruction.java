@@ -91,8 +91,7 @@ public class ParameterizedBuiltinMRInstruction extends UnaryInstruction {
 		
 		if( opcode.equalsIgnoreCase("replace") )
 		{
-			InstructionUtils.checkNumFields ( str, 4 );
-			
+
 			byte in = Byte.parseByte(parts[1]);
 			double pattern = Double.parseDouble(parts[2]);
 			double replace = Double.parseDouble(parts[3]);
@@ -102,8 +101,7 @@ public class ParameterizedBuiltinMRInstruction extends UnaryInstruction {
 		}
 		else if( opcode.equalsIgnoreCase("rexpand") )
 		{
-			InstructionUtils.checkNumFields ( str, 6 );
-			
+
 			byte in = Byte.parseByte(parts[1]);
 			double max = Double.parseDouble(parts[2]);
 			boolean dirRows = parts[3].equals("rows");

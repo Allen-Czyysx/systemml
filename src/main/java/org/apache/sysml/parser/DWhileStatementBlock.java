@@ -2,6 +2,8 @@ package org.apache.sysml.parser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 
 public class DWhileStatementBlock extends WhileStatementBlock {
 
@@ -60,21 +62,25 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 		lo.addVariables(loPassed);
 
 		// init
+		fixDTmpVarInLiveOut(lo);
 		for (int i = dwst.getDIterInit().size() - 1; i >= 0; i--) {
 			lo = dwst.getDIterInitByIndex(i).analyze(lo);
 		}
 
 		// before
+		fixDTmpVarInLiveOut(lo);
 		for (int i = dwst.getDIterBefore().size() - 1; i >= 0; i--) {
 			lo = dwst.getDIterBeforeByIndex(i).analyze(lo);
 		}
 
 		// body
+		fixDTmpVarInLiveOut(lo);
 		for (int i = dwst.getBody().size() - 1; i >= 0; i--) {
 			lo = dwst.getBody().get(i).analyze(lo);
 		}
 
 		// after
+		fixDTmpVarInLiveOut(lo);
 		for (int i = dwst.getDIterAfter().size() - 1; i >= 0; i--) {
 			lo = dwst.getDIterAfterByIndex(i).analyze(lo);
 		}
@@ -278,6 +284,15 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 		}
 
 		return current;
+	}
+
+	// TODO added by czh 暴力解决会移除 dwhileTmpVar 的现象, 之后需改
+	private void fixDTmpVarInLiveOut(VariableSet lo) {
+		for (Map.Entry<String, DataIdentifier> varEntry : _updated.getVariables().entrySet()) {
+			if (DWhileStatement.isDWhileTmpVar(varEntry.getKey())) {
+				lo.addVariable(varEntry.getKey(), varEntry.getValue());
+			}
+		}
 	}
 
 }

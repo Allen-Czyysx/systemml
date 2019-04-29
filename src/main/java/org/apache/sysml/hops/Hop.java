@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -30,21 +30,8 @@ import org.apache.sysml.api.DMLScript;
 import org.apache.sysml.api.DMLScript.RUNTIME_PLATFORM;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.recompile.Recompiler.ResetType;
-import org.apache.sysml.lops.Binary;
-import org.apache.sysml.lops.BinaryScalar;
-import org.apache.sysml.lops.CSVReBlock;
-import org.apache.sysml.lops.Checkpoint;
-import org.apache.sysml.lops.Compression;
-import org.apache.sysml.lops.Data;
-import org.apache.sysml.lops.Lop;
+import org.apache.sysml.lops.*;
 import org.apache.sysml.lops.LopProperties.ExecType;
-import org.apache.sysml.lops.LopsException;
-import org.apache.sysml.lops.Nary;
-import org.apache.sysml.lops.ReBlock;
-import org.apache.sysml.lops.Ternary;
-import org.apache.sysml.lops.Unary;
-import org.apache.sysml.lops.UnaryCP;
-import org.apache.sysml.lops.ParameterizedBuiltin;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.parser.ParseInfo;
@@ -61,12 +48,12 @@ import org.apache.sysml.runtime.util.UtilFunctions;
 public abstract class Hop implements ParseInfo
 {
 	protected static final Log LOG =  LogFactory.getLog(Hop.class.getName());
-	
+
 	public static final long CPThreshold = 2000;
 
 	// static variable to assign an unique ID to every hop that is created
 	private static IDSequence _seqHopID = new IDSequence();
-	
+
 	protected final long _ID;
 	protected String _name;
 	protected DataType _dataType;
@@ -84,53 +71,93 @@ public abstract class Hop implements ParseInfo
 
 	protected ExecType _etype = null; //currently used exec type
 	protected ExecType _etypeForced = null; //exec type forced via platform or external optimizer
-	
+
 	// Estimated size for the output produced from this Hop
 	protected double _outputMemEstimate = OptimizerUtils.INVALID_SIZE;
-	
+
 	// Estimated size for the entire operation represented by this Hop
 	// It includes the memory required for all inputs as well as the output 
 	protected double _memEstimate = OptimizerUtils.INVALID_SIZE;
 	protected double _processingMemEstimate = 0;
 	protected double _spBroadcastMemEstimate = 0;
-	
+
 	// indicates if there are unknowns during compilation 
 	// (in that case re-complication ensures robustness and efficiency)
 	protected boolean _requiresRecompile = false;
-	
+
 	// indicates if the output of this hop needs to be reblocked
 	// (usually this happens on persistent reads dataops)
 	protected boolean _requiresReblock = false;
-	
+
 	// indicates if the output of this hop needs to be compressed
 	// (this happens on persistent reads after reblock but before checkpoint)
 	protected boolean _requiresCompression = false;
-	
+
 	// indicates if the output of this hop needs to be checkpointed (cached)
 	// (the default storage level for caching is not yet exposed here)
 	protected boolean _requiresCheckpoint = false;
-	
+
 	// indicates if the output of this hops needs to contain materialized empty blocks 
 	// if those exists; otherwise only blocks w/ non-zero values are materialized
 	protected boolean _outputEmptyBlocks = true;
+	boolean _disableOutputEmpty = false;
 
 	// 供dwhile记录旧值用
-	protected boolean _isRecorded = false;
-	protected boolean _needRecord = false;
-	protected boolean _disableRecord = false;
+	boolean _isRecorded = false;
+	boolean _needRecord = false;
+	boolean _disableRecord = false;
+
+	// 针对SP, 末尾cache RDD
+	boolean _needCache = false;
+
+	// 用于增量迭代
+	String _preOutputName = null;
+	String[] _dVarNames = null;
 
 	private Lop _lops = null;
-	
+
 	protected Hop(){
 		//default constructor for clone
 		_ID = getNextHopID();
 	}
-		
+
 	public Hop(String l, DataType dt, ValueType vt) {
 		this();
 		setName(l);
 		setDataType(dt);
 		setValueType(vt);
+	}
+
+	public String getPreOutputName() {
+		return _preOutputName;
+	}
+
+	public void setPreOutputName(String preOutputName) {
+		_preOutputName = preOutputName;
+	}
+
+	public String[] getDVarNames() {
+		return _dVarNames;
+	}
+
+	public void setDVarNames(String[] dVarNames) {
+		_dVarNames = dVarNames;
+	}
+
+	public boolean isOutputEmptyDisabled() {
+		return _disableOutputEmpty;
+	}
+
+	public void setDisableOutputEmpty(boolean disableOutputEmpty) {
+		_disableOutputEmpty = disableOutputEmpty;
+	}
+
+	public boolean needCache() {
+		return _needCache;
+	}
+
+	public void setNeedCache(boolean needCache) {
+		_needCache = needCache;
 	}
 
 	public boolean isRecorded() {
@@ -160,7 +187,7 @@ public abstract class Hop implements ParseInfo
 	private static long getNextHopID() {
 		return _seqHopID.getNextID();
 	}
-	
+
 	public long getHopID() {
 		return _ID;
 	}
@@ -175,12 +202,12 @@ public abstract class Hop implements ParseInfo
 	 *
 	 */
 	public abstract void checkArity();
-	
+
 	public ExecType getExecType()
 	{
 		return _etype;
 	}
-	
+
 	public void resetExecType()
 	{
 		_etype = null;
@@ -197,7 +224,7 @@ public abstract class Hop implements ParseInfo
 	}
 
 	public abstract boolean allowsAllExecTypes();
-	
+
 	/**
 	 * Defines if this operation is transpose-safe, which means that
 	 * the result of op(input) is equivalent to op(t(input)).
@@ -205,8 +232,8 @@ public abstract class Hop implements ParseInfo
 	 * dimension. Finally, this information is very useful in order to
 	 * safely optimize the plan for sparse vectors, which otherwise
 	 * would be (currently) always represented dense.
-	 * 
-	 * 
+	 *
+	 *
 	 * @return always returns false
 	 */
 	public boolean isTransposeSafe()
@@ -214,7 +241,7 @@ public abstract class Hop implements ParseInfo
 		//by default: its conservatively define as unsafe
 		return false;
 	}
-	
+
 	public void checkAndSetForcedPlatform()
 	{
 		if(ConfigurationManager.isGPU() && ConfigurationManager.isForcedGPU() && isGPUEnabled())
@@ -228,7 +255,7 @@ public abstract class Hop implements ParseInfo
 			}
 			else {
 				// enabled with -exec singlenode option
-				_etypeForced = ExecType.CP;  
+				_etypeForced = ExecType.CP;
 			}
 		}
 		else if ( ConfigurationManager.getExecutionMode() == RUNTIME_PLATFORM.HADOOP )
@@ -236,15 +263,15 @@ public abstract class Hop implements ParseInfo
 		else if ( ConfigurationManager.getExecutionMode() == RUNTIME_PLATFORM.SPARK )
 			_etypeForced = ExecType.SPARK; // enabled with -exec spark option
 	}
-	
+
 	public void checkAndSetInvalidCPDimsAndSize()
 	{
 		if( _etype == ExecType.CP || _etype == ExecType.GPU ) {
 			//check dimensions of output and all inputs (INTEGER)
 			boolean invalid = !hasValidCPDimsAndSize();
-			
+
 			//force exec type mr if necessary
-			if( invalid ) { 
+			if( invalid ) {
 				if( ConfigurationManager.getExecutionMode() == RUNTIME_PLATFORM.HYBRID )
 					_etype = ExecType.MR;
 				else if( ConfigurationManager.getExecutionMode() == RUNTIME_PLATFORM.HYBRID_SPARK )
@@ -252,7 +279,7 @@ public abstract class Hop implements ParseInfo
 			}
 		}
 	}
-	
+
 	public boolean hasValidCPDimsAndSize() {
 		boolean invalid = !OptimizerUtils.isValidCPDimensions(_dim1, _dim2);
 		for( Hop in : getInput() )
@@ -270,55 +297,55 @@ public abstract class Hop implements ParseInfo
 				return true;
 			}
 		}
-		
+
 		return false;
 	}
-	
+
 	public void setOutputBlocksizes(int brlen, int bclen) {
 		setRowsInBlock( brlen );
 		setColsInBlock( bclen );
 	}
-	
+
 	public void setRequiresReblock(boolean flag) {
 		_requiresReblock = flag;
 	}
-	
+
 	public boolean requiresReblock() {
 		return _requiresReblock;
 	}
-	
+
 	public void setRequiresCheckpoint(boolean flag) {
 		_requiresCheckpoint = flag;
 	}
-	
+
 	public boolean requiresCheckpoint() {
 		return _requiresCheckpoint;
 	}
-	
+
 	public void setRequiresCompression(boolean flag) {
 		_requiresCompression = flag;
 	}
-	
+
 	public boolean requiresCompression() {
 		return _requiresCompression;
 	}
-	
+
 	public void constructAndSetLopsDataFlowProperties() {
 		//Step 1: construct reblock lop if required (output of hop)
 		constructAndSetReblockLopIfRequired();
-		
+
 		//Step 2: construct compression lop if required
 		constructAndSetCompressionLopIfRequired();
-		
+
 		//Step 3: construct checkpoint lop if required (output of hop or reblock)
 		constructAndSetCheckpointLopIfRequired();
 	}
 
-	private void constructAndSetReblockLopIfRequired() 
+	private void constructAndSetReblockLopIfRequired()
 	{
 		//determine execution type
 		ExecType et = ExecType.CP;
-		if( ConfigurationManager.getExecutionMode() != RUNTIME_PLATFORM.SINGLE_NODE 
+		if( ConfigurationManager.getExecutionMode() != RUNTIME_PLATFORM.SINGLE_NODE
 			&& !(getDataType()==DataType.SCALAR) )
 		{
 			et = OptimizerUtils.isSparkExecutionMode() ? ExecType.SPARK : ExecType.MR;
@@ -329,26 +356,26 @@ public abstract class Hop implements ParseInfo
 		{
 			Lop input = getLops();
 			Lop reblock = null;
-			
+
 			try
 			{
 				if( this instanceof DataOp  // CSV
 					&& ((DataOp)this).getDataOpType() == DataOpTypes.PERSISTENTREAD
 					&& ((DataOp)this).getInputFormatType() == FileFormatTypes.CSV  )
 				{
-					reblock = new CSVReBlock( input, getRowsInBlock(), getColsInBlock(), 
+					reblock = new CSVReBlock( input, getRowsInBlock(), getColsInBlock(),
 						getDataType(), getValueType(), et);
 				}
 				else //TEXT / MM / BINARYBLOCK / BINARYCELL
 				{
-					reblock = new ReBlock( input, getRowsInBlock(), getColsInBlock(), 
+					reblock = new ReBlock( input, getRowsInBlock(), getColsInBlock(),
 						getDataType(), getValueType(), _outputEmptyBlocks, et);
 				}
 			}
 			catch( LopsException ex ) {
 				throw new HopsException(ex);
 			}
-		
+
 			setOutputDimensions( reblock );
 			setLineNumbers( reblock );
 			setLops( reblock );
@@ -358,7 +385,7 @@ public abstract class Hop implements ParseInfo
 	private void constructAndSetCheckpointLopIfRequired() {
 		//determine execution type
 		ExecType et = ExecType.CP;
-		if( OptimizerUtils.isSparkExecutionMode() 
+		if( OptimizerUtils.isSparkExecutionMode()
 			&& getDataType()!=DataType.SCALAR )
 		{
 			//conditional checkpoint based on memory estimate in order to 
@@ -388,20 +415,20 @@ public abstract class Hop implements ParseInfo
 					double matrixPSize = OptimizerUtils.estimatePartitionedSizeExactSparsity(_dim1, _dim2, _rows_in_block, _cols_in_block, _nnz);
 					double dataCache = SparkExecutionContext.getDataMemoryBudget(true, true);
 					serializedStorage = MatrixBlock.evalSparseFormatInMemory(_dim1, _dim2, _nnz)
-						&& matrixPSize > dataCache //sparse in-memory does not fit in agg mem 
+						&& matrixPSize > dataCache //sparse in-memory does not fit in agg mem
 						&& (OptimizerUtils.getSparsity(_dim1, _dim2, _nnz) < MatrixBlock.ULTRA_SPARSITY_TURN_POINT
 							|| !Checkpoint.CHECKPOINT_SPARSE_CSR ); //ultra-sparse or sparse w/o csr
 				}
 				else if( !dimsKnown(true) ) {
 					setRequiresRecompile();
 				}
-			
+
 				//construct checkpoint w/ right storage level
 				Lop input = getLops();
-				Lop chkpoint = new Checkpoint(input, getDataType(), getValueType(), 
+				Lop chkpoint = new Checkpoint(input, getDataType(), getValueType(),
 						serializedStorage ? Checkpoint.getSerializeStorageLevelString() :
 						Checkpoint.getDefaultStorageLevelString() );
-				
+
 				setOutputDimensions( chkpoint );
 				setLineNumbers( chkpoint );
 				setLops( chkpoint );
@@ -409,19 +436,19 @@ public abstract class Hop implements ParseInfo
 			catch( LopsException ex ) {
 				throw new HopsException(ex);
 			}
-		}	
+		}
 	}
 
-	private void constructAndSetCompressionLopIfRequired() 
+	private void constructAndSetCompressionLopIfRequired()
 	{
 		//determine execution type
 		ExecType et = ExecType.CP;
-		if( OptimizerUtils.isSparkExecutionMode() 
+		if( OptimizerUtils.isSparkExecutionMode()
 			&& getDataType()!=DataType.SCALAR )
 		{
 			//conditional checkpoint based on memory estimate in order to avoid unnecessary 
 			//persist and unpersist calls (4x the memory budget is conservative)
-			if(    OptimizerUtils.isHybridExecutionMode() 
+			if(    OptimizerUtils.isHybridExecutionMode()
 				&& 2*_outputMemEstimate < OptimizerUtils.getLocalMemBudget()
 				|| _etypeForced == ExecType.CP )
 			{
@@ -449,10 +476,10 @@ public abstract class Hop implements ParseInfo
 		}
 	}
 
-	public static Lop createOffsetLop( Hop hop, boolean repCols ) 
+	public static Lop createOffsetLop( Hop hop, boolean repCols )
 	{
 		Lop offset = null;
-		
+
 		if( ConfigurationManager.isDynamicRecompilation() && hop.dimsKnown() )
 		{
 			// If dynamic recompilation is enabled and dims are known, we can replace the ncol with 
@@ -462,50 +489,50 @@ public abstract class Hop implements ParseInfo
 		}
 		else
 		{
-			offset = new UnaryCP(hop.constructLops(), 
-					      repCols ? UnaryCP.OperationTypes.NCOL : UnaryCP.OperationTypes.NROW, 
+			offset = new UnaryCP(hop.constructLops(),
+					      repCols ? UnaryCP.OperationTypes.NCOL : UnaryCP.OperationTypes.NROW,
 					      DataType.SCALAR, ValueType.INT);
 		}
-		
+
 		offset.getOutputParameters().setDimensions(0, 0, 0, 0, -1);
 		offset.setAllPositions(hop.getFilename(), hop.getBeginLine(), hop.getBeginColumn(), hop.getEndLine(), hop.getEndColumn());
-		
+
 		return offset;
 	}
-	
+
 	public void setOutputEmptyBlocks(boolean flag) {
 		_outputEmptyBlocks = flag;
 	}
-	
+
 	public boolean isOutputEmptyBlocks() {
 		return _outputEmptyBlocks;
 	}
-	
+
 
 	protected double getInputOutputSize() {
 		return _outputMemEstimate
 			+ _processingMemEstimate
 			+ getInputSize();
 	}
-	
+
 	public double getInputOutputSize(Collection<String> exclVars) {
 		return _outputMemEstimate
 			+ _processingMemEstimate
 			+ getInputSize(exclVars);
 	}
-	
+
 	/**
 	 * Returns the memory estimate for the output produced from this Hop.
-	 * It must be invoked only within Hops. From outside Hops, one must 
-	 * only use getMemEstimate(), which gives memory required to store 
+	 * It must be invoked only within Hops. From outside Hops, one must
+	 * only use getMemEstimate(), which gives memory required to store
 	 * all inputs and the output.
-	 * 
+	 *
 	 * @return output size memory estimate
 	 */
 	protected double getOutputSize() {
 		return _outputMemEstimate;
 	}
-	
+
 	protected double getInputSize() {
 		return getInputSize(null);
 	}
@@ -529,7 +556,7 @@ public abstract class Hop implements ParseInfo
 			}
 			sum += hmout;
 		}
-		
+
 		return sum;
 	}
 
@@ -539,11 +566,11 @@ public abstract class Hop implements ParseInfo
 			ret = _input.get(pos)._outputMemEstimate;
 		return ret;
 	}
-	
+
 	protected double getIntermediateSize() {
 		return _processingMemEstimate;
 	}
-	
+
 	/**
 	 * NOTES:
 	 * * Purpose: Whenever the output dimensions / sparsity of a hop are unknown, this hop
@@ -551,7 +578,7 @@ public abstract class Hop implements ParseInfo
 	 *   hops can then
 	 * * Invocation: Intended to be called for ALL root nodes of one Hops DAG with the same
 	 *   (initially empty) memo table.
-	 * 
+	 *
 	 * @return memory estimate
 	 */
 	public double getMemEstimate()
@@ -559,7 +586,7 @@ public abstract class Hop implements ParseInfo
 		if ( OptimizerUtils.isMemoryBasedOptLevel() ) {
 			if ( ! isMemEstimated() ) {
 				//LOG.warn("Nonexisting memory estimate - reestimating w/o memo table.");
-				computeMemEstimate( new MemoTable() ); 
+				computeMemEstimate( new MemoTable() );
 			}
 			return _memEstimate;
 		}
@@ -567,34 +594,34 @@ public abstract class Hop implements ParseInfo
 			return OptimizerUtils.INVALID_SIZE;
 		}
 	}
-	
+
 	/**
 	 * Sets memory estimate in bytes
-	 * 
+	 *
 	 * @param mem memory estimate
 	 */
 	public void setMemEstimate( double mem )
 	{
 		_memEstimate = mem;
 	}
-	
+
 	public void clearMemEstimate()
 	{
 		_memEstimate = OptimizerUtils.INVALID_SIZE;
 	}
 
-	public boolean isMemEstimated() 
+	public boolean isMemEstimated()
 	{
 		return (_memEstimate != OptimizerUtils.INVALID_SIZE);
 	}
 
 	//wrappers for meaningful public names to memory estimates.
-	
+
 	public double getInputMemEstimate()
 	{
 		return getInputSize();
 	}
-	
+
 	public double getOutputMemEstimate()
 	{
 		return getOutputSize();
@@ -604,31 +631,31 @@ public abstract class Hop implements ParseInfo
 	{
 		return getIntermediateSize();
 	}
-	
+
 	public double getSpBroadcastSize()
 	{
 		return _spBroadcastMemEstimate;
 	}
-	
+
 	/**
-	 * Computes the estimate of memory required to store the input/output of this hop in memory. 
-	 * This is the default implementation (orchestration of hop-specific implementation) 
+	 * Computes the estimate of memory required to store the input/output of this hop in memory.
+	 * This is the default implementation (orchestration of hop-specific implementation)
 	 * that should suffice for most hops. If a hop requires more control, this method should
 	 * be overwritten with awareness of (1) output estimates, and (2) propagation of worst-case
-	 * matrix characteristics (dimensions, sparsity).  
-	 * 
+	 * matrix characteristics (dimensions, sparsity).
+	 *
 	 * TODO remove memo table and, on constructor refresh, inference in refresh, single compute mem,
-	 * maybe general computeMemEstimate, flags to indicate if estimate or not. 
-	 * 
+	 * maybe general computeMemEstimate, flags to indicate if estimate or not.
+	 *
 	 * @param memo memory table
 	 */
 	public void computeMemEstimate( MemoTable memo )
 	{
-		long[] wstats = null; 
-		
+		long[] wstats = null;
+
 		////////
 		//Step 1) Compute hop output memory estimate (incl size inference) 
-		
+
 		switch( getDataType() )
 		{
 			case SCALAR: {
@@ -644,7 +671,7 @@ public abstract class Hop implements ParseInfo
 			case LIST:
 			{
 				//1a) mem estimate based on exactly known dimensions and sparsity
-				if( dimsKnown(true) ) { 
+				if( dimsKnown(true) ) {
 					//nnz always exactly known (see dimsKnown(true))
 					_outputMemEstimate = computeOutputMemEstimate( _dim1, _dim2, _nnz );
 				}
@@ -653,12 +680,12 @@ public abstract class Hop implements ParseInfo
 				{
 					//infer the output stats
 					wstats = inferOutputCharacteristics(memo);
-					
+
 					if( wstats != null && wstats[0] >= 0 && wstats[1] >= 0 ) {
 						//use worst case characteristics to estimate mem
 						long lnnz = ((wstats[2]>=0)?wstats[2]:wstats[0]*wstats[1]);
 						_outputMemEstimate = computeOutputMemEstimate( wstats[0], wstats[1], lnnz );
-						
+
 						//propagate worst-case estimate
 						memo.memoizeStatistics(getHopID(), wstats[0], wstats[1], wstats[2]);
 					}
@@ -683,7 +710,7 @@ public abstract class Hop implements ParseInfo
 				else {
 					_outputMemEstimate = OptimizerUtils.DEFAULT_SIZE;
 				}
-				
+
 				break;
 			}
 			case OBJECT:
@@ -693,12 +720,12 @@ public abstract class Hop implements ParseInfo
 				break;
 			}
 		}
-		
+
 		////////
 		//Step 2) Compute hop intermediate memory estimate  
-		
+
 		//note: ensure consistency w/ step 1 (for simplified debugging)	
-		
+
 		if( dimsKnown(true) ) { //incl scalar output
 			//nnz always exactly known (see dimsKnown(true))
 			_processingMemEstimate = computeIntermediateMemEstimate( _dim1, _dim2, _nnz );
@@ -713,28 +740,28 @@ public abstract class Hop implements ParseInfo
 			long lnnz = _dim1 * _dim2;
 			_processingMemEstimate = computeIntermediateMemEstimate(_dim1, _dim2, lnnz);
 		}
-		
-		
+
+
 		////////
 		//Step 3) Compute final hop memory estimate  
-		
+
 		//final estimate (sum of inputs/intermediates/output)
 		_memEstimate = getInputOutputSize();
 	}
-	
+
 	/**
 	 * Computes the output matrix characteristics (rows, cols, nnz) based on worst-case output
 	 * and/or input estimates. Should return null if dimensions are unknown.
-	 * 
+	 *
 	 * @param memo memory table
 	 * @return output characteristics as a long array
 	 */
 	protected abstract long[] inferOutputCharacteristics( MemoTable memo );
 
 	/**
-	 * Recursively computes memory estimates for all the Hops in the DAG rooted at the 
+	 * Recursively computes memory estimates for all the Hops in the DAG rooted at the
 	 * current hop pointed by <code>this</code>.
-	 * 
+	 *
 	 * @param memo memory table
 	 */
 	public void refreshMemEstimates( MemoTable memo ) {
@@ -747,15 +774,15 @@ public abstract class Hop implements ParseInfo
 	}
 
 	/**
-	 * This method determines the execution type (CP, MR) based ONLY on the 
-	 * estimated memory footprint required for this operation, which includes 
+	 * This method determines the execution type (CP, MR) based ONLY on the
+	 * estimated memory footprint required for this operation, which includes
 	 * memory for all inputs and the output represented by this Hop.
-	 * 
+	 *
 	 * It is used when <code>OptimizationType = MEMORY_BASED</code>.
-	 * This optimization schedules an operation to CP whenever inputs+output 
-	 * fit in memory -- note that this decision MAY NOT be optimal in terms of 
+	 * This optimization schedules an operation to CP whenever inputs+output
+	 * fit in memory -- note that this decision MAY NOT be optimal in terms of
 	 * execution time.
-	 * 
+	 *
 	 * @return execution type
 	 */
 	protected ExecType findExecTypeByMemEstimate() {
@@ -773,7 +800,7 @@ public abstract class Hop implements ParseInfo
 				et = ExecType.MR;
 			else if( ConfigurationManager.getExecutionMode() == DMLScript.RUNTIME_PLATFORM.HYBRID_SPARK )
 				et = ExecType.SPARK;
-			
+
 			c = '*';
 		}
 
@@ -782,7 +809,7 @@ public abstract class Hop implements ParseInfo
 			//System.out.println(s);
 			LOG.debug(s);
 		}
-		
+
 		return et;
 	}
 
@@ -793,7 +820,7 @@ public abstract class Hop implements ParseInfo
 	public ArrayList<Hop> getInput() {
 		return _input;
 	}
-	
+
 	public void addInput( Hop h ) {
 		_input.add(h);
 		h._parent.add(this);
@@ -818,7 +845,7 @@ public abstract class Hop implements ParseInfo
 	public void setNnz(long nnz){
 		_nnz = nnz;
 	}
-	
+
 	public long getNnz(){
 		return _nnz;
 	}
@@ -826,7 +853,7 @@ public abstract class Hop implements ParseInfo
 	public void setUpdateType(UpdateType update){
 		_updateType = update;
 	}
-	
+
 	public UpdateType getUpdateType(){
 		return _updateType;
 	}
@@ -834,7 +861,7 @@ public abstract class Hop implements ParseInfo
 	public abstract Lop constructLops();
 
 	protected abstract ExecType optFindExecType();
-	
+
 	public abstract String getOpString();
 
 	public void setOutputParams(long dim1, long dim2, long nnz, UpdateType update, int rowsPerBlock, int colsPerBlock) {
@@ -873,23 +900,23 @@ public abstract class Hop implements ParseInfo
 	// 6. The drawback of using maximum memory (mem = Math.max(mem_gpu, mem_gpu)) are:
 	// - GPU operator is not selected when mem_gpu < total memory available on GPU < mem
 	// - CP operator is not selected (i.e. distributed operator compiled) when mem_cpu < driver memory budget < mem
-	
+
 	/**
-	 * In memory-based optimizer mode (see OptimizerUtils.isMemoryBasedOptLevel()), 
-	 * the exectype is determined by checking this method as well as memory budget of this Hop. 
-	 * Please see findExecTypeByMemEstimate for more detail. 
-	 * 
+	 * In memory-based optimizer mode (see OptimizerUtils.isMemoryBasedOptLevel()),
+	 * the exectype is determined by checking this method as well as memory budget of this Hop.
+	 * Please see findExecTypeByMemEstimate for more detail.
+	 *
 	 * This method is necessary because not all operator are supported efficiently
-	 * on GPU (for example: operations on frames and scalar as well as operations such as table). 
-	 * 
+	 * on GPU (for example: operations on frames and scalar as well as operations such as table).
+	 *
 	 * @return true if the Hop is eligible for GPU Exectype.
 	 */
 	public abstract boolean isGPUEnabled();
-	
+
 	/**
 	 * Computes the hop-specific output memory estimate in bytes. Should be 0 if not
-	 * applicable. 
-	 * 
+	 * applicable.
+	 *
 	 * @param dim1 dimension 1
 	 * @param dim2 dimension 2
 	 * @param nnz number of non-zeros
@@ -900,31 +927,31 @@ public abstract class Hop implements ParseInfo
 	/**
 	 * Computes the hop-specific intermediate memory estimate in bytes. Should be 0 if not
 	 * applicable.
-	 * 
+	 *
 	 * @param dim1 dimension 1
 	 * @param dim2 dimension 2
 	 * @param nnz number of non-zeros
 	 * @return memory estimate
 	 */
 	protected abstract double computeIntermediateMemEstimate( long dim1, long dim2, long nnz );
-	
+
 	// ========================================================================================
 
-	
+
 	protected boolean isVector() {
 		return (dimsKnown() && (_dim1 == 1 || _dim2 == 1) );
 	}
-	
+
 	protected boolean areDimsBelowThreshold() {
 		return (dimsKnown() && _dim1 <= Hop.CPThreshold && _dim2 <= Hop.CPThreshold );
 	}
-	
+
 	public boolean dimsKnown() {
-		return ( _dataType == DataType.SCALAR 
-			|| ((_dataType==DataType.MATRIX || _dataType==DataType.FRAME) 
+		return ( _dataType == DataType.SCALAR
+			|| ((_dataType==DataType.MATRIX || _dataType==DataType.FRAME)
 				&& _dim1 >= 0 && _dim2 >= 0) );
 	}
-	
+
 	public boolean dimsKnown(boolean includeNnz) {
 		return rowsKnown() && colsKnown()
 			&& (_dataType.isScalar() || ((includeNnz) ? _nnz>=0 : true));
@@ -933,21 +960,21 @@ public abstract class Hop implements ParseInfo
 	public boolean dimsKnownAny() {
 		return rowsKnown() || colsKnown();
 	}
-	
+
 	public boolean rowsKnown() {
 		return _dataType.isScalar() || _dim1 >= 0;
 	}
-	
+
 	public boolean colsKnown() {
 		return _dataType.isScalar() || _dim2 >= 0;
 	}
-	
+
 	public static void resetVisitStatus( ArrayList<Hop> hops ) {
 		if( hops != null )
 			for( Hop hopRoot : hops )
 				hopRoot.resetVisitStatus();
 	}
-	
+
 	public static void resetVisitStatus( ArrayList<Hop> hops, boolean force ) {
 		if( !force )
 			resetVisitStatus(hops);
@@ -958,7 +985,7 @@ public abstract class Hop implements ParseInfo
 					hopRoot.resetVisitStatusForced(memo);
 		}
 	}
-	
+
 	public Hop resetVisitStatus()  {
 		if( !isVisited() )
 			return this;
@@ -967,7 +994,7 @@ public abstract class Hop implements ParseInfo
 		setVisited(false);
 		return this;
 	}
-	
+
 	public void resetVisitStatusForced(HashSet<Long> memo) {
 		if( memo.contains(getHopID()) )
 			return;
@@ -983,29 +1010,29 @@ public abstract class Hop implements ParseInfo
 		for( Hop hopRoot : hops )
 			hopRoot.resetRecompilationFlag( et, reset );
 	}
-	
+
 	public static void resetRecompilationFlag( Hop hops, ExecType et, ResetType reset )
 	{
 		hops.resetVisitStatus();
 		hops.resetRecompilationFlag( et, reset );
 	}
-	
-	private void resetRecompilationFlag( ExecType et, ResetType reset ) 
+
+	private void resetRecompilationFlag( ExecType et, ResetType reset )
 	{
 		if( isVisited() )
 			return;
-		
+
 		//process child hops
 		for (Hop h : getInput())
 			h.resetRecompilationFlag( et, reset );
-		
+
 		//reset recompile flag
 		if( (et == null || getExecType() == et || getExecType() == null)
 			&& (reset==ResetType.RESET || (reset==ResetType.RESET_KNOWN_DIMS && dimsKnown()))
 			&& !(_requiresCheckpoint && getLops() instanceof Checkpoint && !dimsKnown(true)) ) {
 			_requiresRecompile = false;
 		}
-		
+
 		setVisited();
 	}
 
@@ -1024,20 +1051,20 @@ public abstract class Hop implements ParseInfo
 	public void setDim2(long dim2) {
 		_dim2 = dim2;
 	}
-	
+
 	public long getLength() {
 		return _dim1 * _dim2;
 	}
-	
+
 	public double getSparsity() {
 		return OptimizerUtils.getSparsity(_dim1, _dim2, _nnz);
 	}
-	
+
 	protected void setOutputDimensions(Lop lop) {
 		lop.getOutputParameters().setDimensions(
-			getDim1(), getDim2(), getRowsInBlock(), getColsInBlock(), getNnz(), getUpdateType());	
+			getDim1(), getDim2(), getRowsInBlock(), getColsInBlock(), getNnz(), getUpdateType());
 	}
-	
+
 	public Lop getLops() {
 		return _lops;
 	}
@@ -1053,15 +1080,15 @@ public abstract class Hop implements ParseInfo
 	public DataType getDataType() {
 		return _dataType;
 	}
-	
+
 	public void setDataType( DataType dt ) {
 		_dataType = dt;
 	}
-	
+
 	public boolean isScalar() {
 		return _dataType.isScalar();
 	}
-	
+
 	public boolean isMatrix() {
 		return _dataType.isMatrix();
 	}
@@ -1069,7 +1096,7 @@ public abstract class Hop implements ParseInfo
 	public void setVisited() {
 		setVisited(true);
 	}
-	
+
 	public void setVisited(boolean flag) {
 		_visited = flag;
 	}
@@ -1085,13 +1112,13 @@ public abstract class Hop implements ParseInfo
 	public ValueType getValueType() {
 		return _valueType;
 	}
-	
+
 	public void setValueType(ValueType vt) {
 		_valueType = vt;
 	}
 
 	public enum OpOp1 {
-		NOT, ABS, SIN, COS, TAN, ASIN, ACOS, ATAN, SINH, COSH, TANH, SIGN, SQRT, LOG, EXP, 
+		NOT, ABS, SIN, COS, TAN, ASIN, ACOS, ATAN, SINH, COSH, TANH, SIGN, SQRT, LOG, EXP,
 		CAST_AS_SCALAR, CAST_AS_MATRIX, CAST_AS_FRAME, CAST_AS_DOUBLE, CAST_AS_INT, CAST_AS_BOOLEAN,
 		PRINT, ASSERT, EIGEN, NROW, NCOL, LENGTH, ROUND, IQM, STOP, CEIL, FLOOR, MEDIAN, INVERSE, CHOLESKY,
 		SVD, EXISTS,
@@ -1105,7 +1132,7 @@ public abstract class Hop implements ParseInfo
 
 	// Operations that require two operands
 	public enum OpOp2 {
-		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, LESS, LESSEQUAL, GREATER, GREATEREQUAL, EQUAL, NOTEQUAL, 
+		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, LESS, LESSEQUAL, GREATER, GREATEREQUAL, EQUAL, NOTEQUAL,
 		MIN, MAX, AND, OR, XOR, LOG, POW, PRINT, CONCAT, QUANTILE, INTERQUANTILE, IQM,
 		MOMENT, COV, CBIND, RBIND, SOLVE, MEDIAN, INVALID,
 		//fused ML-specific operators for performance
@@ -1119,7 +1146,7 @@ public abstract class Hop implements ParseInfo
 	public enum OpOp3 {
 		QUANTILE, INTERQUANTILE, CTABLE, MOMENT, COV, PLUS_MULT, MINUS_MULT, IFELSE
 	}
-	
+
 	// Operations that require 4 operands
 	public enum OpOp4 {
 		WSLOSS, //weighted sloss mm
@@ -1128,14 +1155,14 @@ public abstract class Hop implements ParseInfo
 		WCEMM, //weighted cross entropy mm
 		WUMM //weighted unary mm
 	}
-	
+
 	// Operations that require a variable number of operands
 	public enum OpOpN {
 		PRINTF, CBIND, RBIND, MIN, MAX, EVAL, LIST
 	}
-	
+
 	public enum AggOp {
-		SUM, SUM_SQ, MIN, MAX, TRACE, PROD, MEAN, VAR, MAXINDEX, MININDEX
+		SUM, SUMBLOCK, SUM_SQ, MIN, MAX, TRACE, PROD, MEAN, VAR, MAXINDEX, MININDEX
 	}
 
 	public enum ReOrgOp {
@@ -1145,7 +1172,7 @@ public abstract class Hop implements ParseInfo
 		//and rewrites but the final choice is made during runtime)
 		//DIAG_V2M, DIAG_M2V, 
 	}
-	
+
 	public enum OpOpDnn {
 		MAX_POOL, MAX_POOL_BACKWARD, AVG_POOL, AVG_POOL_BACKWARD,
 		CONV2D, CONV2D_BACKWARD_FILTER, CONV2D_BACKWARD_DATA,
@@ -1153,7 +1180,7 @@ public abstract class Hop implements ParseInfo
 		UPDATE_NESTEROV_X, RESHAPE_COLMEANS, UPDATE_EMA_VAR, UPDATE_EMA, INV_VAR,
 		BATCH_NORM2D_BACKWARD_DX, BATCH_NORM2D_BACKWARD_DGAMMA
 	}
-	
+
 	public enum DataGenMethod {
 		RAND, SEQ, SINIT, SAMPLE, INVALID
 	}
@@ -1190,6 +1217,7 @@ public abstract class Hop implements ParseInfo
 	static {
 		HopsAgg2Lops = new HashMap<>();
 		HopsAgg2Lops.put(AggOp.SUM, org.apache.sysml.lops.Aggregate.OperationTypes.KahanSum);
+		HopsAgg2Lops.put(AggOp.SUMBLOCK, Aggregate.OperationTypes.SumBlock);
 		HopsAgg2Lops.put(AggOp.SUM_SQ, org.apache.sysml.lops.Aggregate.OperationTypes.KahanSumSq);
 		HopsAgg2Lops.put(AggOp.TRACE, org.apache.sysml.lops.Aggregate.OperationTypes.KahanTrace);
 		HopsAgg2Lops.put(AggOp.MIN, org.apache.sysml.lops.Aggregate.OperationTypes.Min);
@@ -1211,7 +1239,7 @@ public abstract class Hop implements ParseInfo
 		HopsTransf2Lops.put(ReOrgOp.SORT, org.apache.sysml.lops.Transform.OperationTypes.Sort);
 
 	}
-	
+
 	protected static final HashMap<OpOpDnn, org.apache.sysml.lops.DnnTransform.OperationTypes> HopsConv2Lops;
 	static {
 		HopsConv2Lops = new HashMap<>();
@@ -1416,7 +1444,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp3Lops.put(OpOp3.MINUS_MULT, Ternary.OperationType.MINUS_MULT);
 		HopsOpOp3Lops.put(OpOp3.IFELSE, Ternary.OperationType.IFELSE);
 	}
-	
+
 	/**
 	 * Maps from a multiple (variable number of operands) Hop operation type to
 	 * the corresponding Lop operation type. This is called in the MultipleOp
@@ -1530,7 +1558,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2String.put(OpOp2.BITWSHIFTL, "bitwShiftL");
 		HopsOpOp2String.put(OpOp2.BITWSHIFTR, "bitwShiftR");
 	}
-	
+
 	public static String getBinaryOpCode(OpOp2 op) {
 		return HopsOpOp2String.get(op);
 	}
@@ -1547,7 +1575,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp3String.put(OpOp3.MINUS_MULT, "-*");
 		HopsOpOp3String.put(OpOp3.IFELSE, "ifelse");
 	}
-	
+
 	protected static final HashMap<Hop.OpOp4, String> HopsOpOp4String;
 	static {
 		HopsOpOp4String = new HashMap<>();
@@ -1600,7 +1628,7 @@ public abstract class Hop implements ParseInfo
 		HopsData2String.put(DataOpTypes.FUNCTIONOUTPUT, "FunOut");
 	}
 
-	public static OpOp2 getOpOp2ForOuterVectorOperation(String op) 
+	public static OpOp2 getOpOp2ForOuterVectorOperation(String op)
 	{
 		if( "+".equals(op) ) return OpOp2.PLUS;
 		else if( "-".equals(op) ) return OpOp2.MINUS;
@@ -1626,7 +1654,7 @@ public abstract class Hop implements ParseInfo
 		else if("bitwXor".equals(op) ) return OpOp2.BITWXOR;
 		else if("bitwShiftL".equals(op) ) return OpOp2.BITWSHIFTL;
 		else if("bitwShiftR".equals(op) ) return OpOp2.BITWSHIFTR;
-		
+
 		return null;
 	}
 
@@ -1635,31 +1663,31 @@ public abstract class Hop implements ParseInfo
 	/////////////////////////////////////
 
 	/**
-	 * Indicates if dynamic recompilation is required for this hop. 
-	 * 
+	 * Indicates if dynamic recompilation is required for this hop.
+	 *
 	 * @return true if dynamic recompilation required
 	 */
 	public boolean requiresRecompile() {
 		return _requiresRecompile;
 	}
-	
+
 	/**
-	 * Marks the hop for dynamic recompilation. 
+	 * Marks the hop for dynamic recompilation.
 	 */
 	public void setRequiresRecompile() {
 		_requiresRecompile = true;
 	}
-	
+
 	/**
-	 * Marks the hop for dynamic recompilation, if dynamic recompilation is 
+	 * Marks the hop for dynamic recompilation, if dynamic recompilation is
 	 * enabled and one of the three basic scenarios apply:
 	 * <ul>
-	 *  <li> The hop has unknown dimensions or sparsity and is scheduled for 
-	 *    remote execution, in which case the latency for distributed jobs easily 
+	 *  <li> The hop has unknown dimensions or sparsity and is scheduled for
+	 *    remote execution, in which case the latency for distributed jobs easily
 	 *    covers any recompilation overheads. </li>
-	 *  <li> The hop has unknown dimensions and is scheduled for local execution 
+	 *  <li> The hop has unknown dimensions and is scheduled for local execution
 	 *    due to forced single node execution type. </li>
-	 *  <li> The hop has unknown dimensions and is scheduled for local execution 
+	 *  <li> The hop has unknown dimensions and is scheduled for local execution
 	 *    due to good worst-case memory estimates but codegen is enabled, which
 	 *    requires (mostly) known sizes to validity conditions and cost estimation. </li>
 	 * <ul> <p>
@@ -1669,8 +1697,8 @@ public abstract class Hop implements ParseInfo
 		boolean caseRemote = (!dimsKnown(true) && _etype == REMOTE);
 		boolean caseLocal = (!dimsKnown() && _etypeForced == ExecType.CP);
 		boolean caseCodegen = (!dimsKnown() && ConfigurationManager.isCodegenEnabled());
-		
-		if( ConfigurationManager.isDynamicRecompilation() 
+
+		if( ConfigurationManager.isDynamicRecompilation()
 			&& (caseRemote || caseLocal || caseCodegen) )
 			setRequiresRecompile();
 	}
@@ -1679,31 +1707,31 @@ public abstract class Hop implements ParseInfo
 	 * Update the output size information for this hop.
 	 */
 	public abstract void refreshSizeInformation();
-	
+
 	/**
 	 * Util function for refreshing scalar rows input parameter.
-	 * 
+	 *
 	 * @param input high-level operator
 	 */
 	protected void refreshRowsParameterInformation( Hop input )
 	{
 		long size = computeSizeInformation(input);
-			
+
 		//always set the computed size not just if known (positive) in order to allow 
 		//recompile with unknowns to reset sizes (otherwise potential for incorrect results)
 		setDim1( size );
 	}
-	
-	
+
+
 	/**
 	 * Util function for refreshing scalar cols input parameter.
-	 * 
+	 *
 	 * @param input high-level operator
 	 */
 	protected void refreshColsParameterInformation( Hop input )
 	{
 		long size = computeSizeInformation(input);
-		
+
 		//always set the computed size not just if known (positive) in order to allow 
 		//recompile with unknowns to reset sizes (otherwise potential for incorrect results)
 		setDim2( size );
@@ -1712,8 +1740,8 @@ public abstract class Hop implements ParseInfo
 	public static long computeSizeInformation( Hop input )
 	{
 		long ret = -1;
-		
-		try 
+
+		try
 		{
 			long tmp = OptimizerUtils.rEvalSimpleLongExpression(input, new HashMap<Long,Long>());
 			if( tmp!=Long.MAX_VALUE )
@@ -1724,13 +1752,13 @@ public abstract class Hop implements ParseInfo
 			LOG.error("Failed to compute size information.", ex);
 			ret = -1;
 		}
-		
+
 		return ret;
 	}
-	
+
 	//always set the computed size not just if known (positive) in order to allow 
 	//recompile with unknowns to reset sizes (otherwise potential for incorrect results)
-	
+
 	public void refreshRowsParameterInformation( Hop input, LocalVariableMap vars ) {
 		setDim1(computeSizeInformation(input, vars));
 	}
@@ -1738,11 +1766,11 @@ public abstract class Hop implements ParseInfo
 	public void refreshRowsParameterInformation( Hop input, LocalVariableMap vars, HashMap<Long,Long> memo ) {
 		setDim1(computeSizeInformation(input, vars, memo));
 	}
-	
+
 	public void refreshColsParameterInformation( Hop input, LocalVariableMap vars ) {
 		setDim2(computeSizeInformation(input, vars));
 	}
-	
+
 	public void refreshColsParameterInformation( Hop input, LocalVariableMap vars, HashMap<Long,Long> memo ) {
 		setDim2(computeSizeInformation(input, vars, memo));
 	}
@@ -1750,7 +1778,7 @@ public abstract class Hop implements ParseInfo
 	public long computeSizeInformation( Hop input, LocalVariableMap vars ) {
 		return computeSizeInformation(input, vars, new HashMap<Long,Long>());
 	}
-	
+
 	public long computeSizeInformation( Hop input, LocalVariableMap vars, HashMap<Long,Long> memo )
 	{
 		long ret = -1;
@@ -1777,11 +1805,11 @@ public abstract class Hop implements ParseInfo
 		}
 		return ret;
 	}
-	
+
 	public final double computeBoundsInformation( Hop input, LocalVariableMap vars ) {
 		return computeBoundsInformation(input, vars, new HashMap<Long, Double>());
 	}
-	
+
 	public final double computeBoundsInformation( Hop input, LocalVariableMap vars, HashMap<Long, Double> memo ) {
 		double ret = Double.MAX_VALUE;
 		try {
@@ -1793,12 +1821,12 @@ public abstract class Hop implements ParseInfo
 		}
 		return ret;
 	}
-	
+
 	/**
 	 * Compute worst case estimate for size expression based on worst-case
 	 * statistics of inputs. Limited set of supported operations in comparison
 	 * to refresh rows/cols.
-	 * 
+	 *
 	 * @param input high-level operator
 	 * @param memo memory table
 	 * @return worst case estimate for size expression
@@ -1806,7 +1834,7 @@ public abstract class Hop implements ParseInfo
 	protected long computeDimParameterInformation( Hop input, MemoTable memo )
 	{
 		long ret = -1;
-		
+
 		if( input instanceof UnaryOp )
 		{
 			if( ((UnaryOp)input).getOp() == Hop.OpOp1.NROW ) {
@@ -1830,7 +1858,7 @@ public abstract class Hop implements ParseInfo
 			if( dim != Long.MAX_VALUE ) //if known
 				ret = dim ;
 		}
-		
+
 		return ret;
 	}
 
@@ -1839,9 +1867,9 @@ public abstract class Hop implements ParseInfo
 		//memoization (prevent redundant computation of common subexpr)
 		if( valMemo.containsKey(root.getHopID()) )
 			return valMemo.get(root.getHopID());
-		
+
 		long ret = Long.MAX_VALUE;
-		
+
 		if( root instanceof LiteralOp )
 		{
 			long dim = UtilFunctions.parseToLong(root.getName());
@@ -1866,7 +1894,7 @@ public abstract class Hop implements ParseInfo
 				ret = dim;
 		}
 		else if( root instanceof BinaryOp )
-		{ 
+		{
 			if( OptimizerUtils.ALLOW_WORSTCASE_SIZE_EXPRESSION_EVALUATION )
 			{
 				BinaryOp broot = (BinaryOp) root;
@@ -1891,24 +1919,24 @@ public abstract class Hop implements ParseInfo
 				}
 			}
 		}
-		
+
 		valMemo.put(root.getHopID(), ret);
 		return ret;
 	}
 
 	/**
 	 * Clones the attributes of that and copies it over to this.
-	 * 
+	 *
 	 * @param that high-level operator
 	 * @param withRefs true if with references
 	 * @throws CloneNotSupportedException if CloneNotSupportedException occurs
 	 */
-	protected void clone( Hop that, boolean withRefs ) 
-		throws CloneNotSupportedException 
+	protected void clone( Hop that, boolean withRefs )
+		throws CloneNotSupportedException
 	{
 		if( withRefs )
 			throw new CloneNotSupportedException( "Hops deep copy w/ lops/inputs/parents not supported." );
-		
+
 		_name = that._name;
 		_dataType = that._dataType;
 		_valueType = that._valueType;
@@ -1924,7 +1952,7 @@ public abstract class Hop implements ParseInfo
 		_parent = new ArrayList<>(_parent.size());
 		_input = new ArrayList<>(_input.size());
 		_lops = null;
-		
+
 		_etype = that._etype;
 		_etypeForced = that._etypeForced;
 		_outputMemEstimate = that._outputMemEstimate;
@@ -1935,20 +1963,30 @@ public abstract class Hop implements ParseInfo
 		_requiresCheckpoint = that._requiresCheckpoint;
 		_requiresCompression = that._requiresCompression;
 		_outputEmptyBlocks = that._outputEmptyBlocks;
-		
+		_disableOutputEmpty = that._disableOutputEmpty;
+
 		_beginLine = that._beginLine;
 		_beginColumn = that._beginColumn;
 		_endLine = that._endLine;
 		_endColumn = that._endColumn;
+
+		_isRecorded = that._isRecorded;
+		_needRecord = that._needRecord;
+		_disableRecord = that._disableRecord;
+
+		_needCache = that._needCache;
+
+		_preOutputName = that._preOutputName;
+		_dVarNames = that._dVarNames;
 	}
-	
+
 	@Override
 	public abstract Object clone() throws CloneNotSupportedException;
-	
+
 	public abstract boolean compare( Hop that );
-	
-	
-	
+
+
+
 	///////////////////////////////////////////////////////////////////////////
 	// store position information for Hops
 	///////////////////////////////////////////////////////////////////////////
@@ -1956,7 +1994,7 @@ public abstract class Hop implements ParseInfo
 	public int _endLine, _endColumn;
 	public String _filename;
 	public String _text;
-	
+
 	public void setBeginLine(int passed)    { _beginLine = passed;   }
 	public void setBeginColumn(int passed) 	{ _beginColumn = passed; }
 	public void setEndLine(int passed) 		{ _endLine = passed;   }
@@ -1970,7 +2008,7 @@ public abstract class Hop implements ParseInfo
 	public int getEndColumn()	{ return _endColumn; }
 	public String getFilename()	{ return _filename; }
 	public String getText() { return _text; }
-	
+
 	public String printErrorLocation(){
 		if(_filename != null)
 			return "ERROR: " + _filename + " line " + _beginLine + ", column " + _beginColumn + " -- ";
@@ -1980,7 +2018,7 @@ public abstract class Hop implements ParseInfo
 
 	/**
 	 * Sets the linenumbers of this hop to a given lop.
-	 * 
+	 *
 	 * @param lop low-level operator
 	 */
 	protected void setLineNumbers(Lop lop)
@@ -2003,6 +2041,22 @@ public abstract class Hop implements ParseInfo
 		_endColumn = parseInfo.getEndColumn();
 		_text = parseInfo.getText();
 		_filename = parseInfo.getFilename();
+	}
+
+	// TODO added by czh
+	//  目前支持MapMM
+
+	/**
+	 * 供增量迭代在SP环境中使用, 设置缓存所需信息
+	 * TODO added by czh 需要修改对应 Lop 的 getInstructions 和 SPInstruction 的 parseInstruction
+	 *  目前支持 mapmm, map+, >=, max
+	 */
+	public void setCacheInfoToLop() {
+		if (_needCache) {
+			_lops.setNeedCache(true);
+			_lops.setPreOutputName(_preOutputName);
+			_lops.setDVarNames(_dVarNames);
+		}
 	}
 
 } // end class

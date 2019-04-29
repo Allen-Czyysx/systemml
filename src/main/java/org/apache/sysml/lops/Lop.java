@@ -125,7 +125,12 @@ public abstract class Lop
 	protected OutputParameters outParams = null;
 
 	protected LopProperties lps = null;
-	
+
+	// 针对SP, 末尾cache RDD
+	boolean _needCache = false;
+
+	String _preOutputName = null;
+	String[] _dVarNames = null;
 
 	/**
 	 * Constructor to be invoked by base class.
@@ -143,7 +148,31 @@ public abstract class Lop
 		outParams = new OutputParameters();
 		lps = new LopProperties();
 	}
-	
+
+	public String[] getDVarNames() {
+		return _dVarNames;
+	}
+
+	public void setDVarNames(String[] dVarNames) {
+		_dVarNames = dVarNames;
+	}
+
+	public boolean needCache() {
+		return _needCache;
+	}
+
+	public void setNeedCache(boolean needCache) {
+		_needCache = needCache;
+	}
+
+	public String getPreOutputName() {
+		return _preOutputName;
+	}
+
+	public void setPreOutputName(String preOutputName) {
+		_preOutputName = preOutputName;
+	}
+
 	/**
 	 * get visit status of node
 	 * 
@@ -841,4 +870,29 @@ public abstract class Lop
 				return true;
 		return false;
 	}
+
+	public void setCacheInfoToInst(StringBuilder sb) {
+		if( getExecType() != ExecType.SPARK ) {
+			return;
+		}
+
+		sb.append(Lop.OPERAND_DELIMITOR);
+		sb.append(_needCache);
+
+		if (_needCache) {
+			sb.append(Lop.OPERAND_DELIMITOR);
+			sb.append(_preOutputName);
+
+			if (_dVarNames != null) {
+				sb.append(Lop.OPERAND_DELIMITOR);
+				sb.append(_dVarNames.length);
+
+				for (String dVarName : _dVarNames) {
+					sb.append(Lop.OPERAND_DELIMITOR);
+					sb.append(dVarName);
+				}
+			}
+		}
+	}
+
 }

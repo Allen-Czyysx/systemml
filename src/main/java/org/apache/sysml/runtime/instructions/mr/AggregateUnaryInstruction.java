@@ -43,8 +43,6 @@ public class AggregateUnaryInstruction extends UnaryMRInstructionBase {
 
 	public static AggregateUnaryInstruction parseInstruction ( String str ) {
 		
-		InstructionUtils.checkNumFields ( str, 3 );
-		
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		
 		String opcode = parts[0];

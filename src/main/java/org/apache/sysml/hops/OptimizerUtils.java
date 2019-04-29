@@ -480,8 +480,10 @@ public class OptimizerUtils
 	}
 	
 	public static boolean checkSparkCollectMemoryBudget( MatrixCharacteristics mc, long memPinned, boolean checkBP ) {
-		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
-			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
+		// TODO added by czh 暴力解决估计内存不够, 需要写HDFS
+		return true;
+//		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
+//			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
 	}
 	
 	private static boolean checkSparkCollectMemoryBudget( long rlen, long clen, int brlen, int bclen, long nnz, long memPinned, boolean checkBP ) {
@@ -935,6 +937,10 @@ public class OptimizerUtils
 	}
 
 	public static boolean allowsToFilterEmptyBlockOutputs( Hop hop ) {
+		if (hop.isOutputEmptyDisabled()) {
+			return true;
+		}
+
 		boolean ret = true;
 		for( Hop p : hop.getParent() ) {
 			p.optFindExecType(); //ensure exec type evaluated

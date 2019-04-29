@@ -34,7 +34,6 @@ public class CombineUnaryInstruction extends UnaryMRInstructionBase {
 	}
 
 	public static CombineUnaryInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 2 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in, out;
 		String opcode = parts[0];

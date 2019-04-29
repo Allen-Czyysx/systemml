@@ -115,7 +115,12 @@ public class SparkExecutionContext extends ExecutionContext
 	//pool of reused fair scheduler pool names (unset bits indicate availability)
 	private static boolean[] _poolBuff = FAIR_SCHEDULER_MODE ?
 		new boolean[InfrastructureAnalyzer.getLocalParallelism()] : null;
-	
+
+	// 每个算子对应2个槽位
+	private HashMap<String, JavaPairRDD> _persistRddMap = new HashMap<>();
+	// true表示最新的是槽位1, 否则是槽位2
+	private HashMap<String, Boolean> _presistRddFlag = new HashMap<>();
+
 	static {
 		// for internal debugging only
 		if( LDEBUG ) {
@@ -131,6 +136,23 @@ public class SparkExecutionContext extends ExecutionContext
 		//spark context creation via internal initializer
 		if( !LAZY_SPARKCTX_CREATION || ConfigurationManager.getExecutionMode()==RUNTIME_PLATFORM.SPARK ) {
 			initSparkContext();
+		}
+	}
+
+	public JavaPairRDD persistRdd(String key, JavaPairRDD rdd, StorageLevel level) {
+		if (_persistRddMap.containsKey(key)) {
+			// TODO added by czh 需要清除cache
+//			throw new DMLRuntimeException("Still has unpersist rdd of " + key + ".");
+		}
+		rdd = rdd.persist(level);
+		_persistRddMap.put(key, rdd);
+		return rdd;
+	}
+
+	public void unpersistRdd(String key) {
+		JavaPairRDD rdd = _persistRddMap.remove(key);
+		if (rdd != null) {
+			rdd.unpersist();
 		}
 	}
 

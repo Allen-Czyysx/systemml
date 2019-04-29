@@ -54,7 +54,6 @@ public class CumulativeOffsetInstruction extends BinaryInstruction {
 	}
 
 	public static CumulativeOffsetInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		String opcode = parts[0];
 		byte in1 = Byte.parseByte(parts[1]);

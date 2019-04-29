@@ -505,6 +505,7 @@ public class BuiltinFunctionExpression extends DataIdentifier
 			output.setValueType(id.getValueType());
 			break;
 		case SUM:
+		case SUMBLOCK:
 		case PROD:
 		case TRACE:
 		case SD:

@@ -123,12 +123,6 @@ public class QuaternaryInstruction extends MRInstruction implements IDistributed
 		{
 			boolean isRed = WeightedSquaredLossR.OPCODE.equalsIgnoreCase(opcode);
 			
-			//check number of fields (4 inputs, output, type)
-			if( isRed )
-				InstructionUtils.checkNumFields ( str, 8 );
-			else
-				InstructionUtils.checkNumFields ( str, 6 );
-				
 			//parse instruction parts (without exec type)
 			String[] parts = InstructionUtils.getInstructionParts(str);
 			
@@ -150,12 +144,6 @@ public class QuaternaryInstruction extends MRInstruction implements IDistributed
 		{
 			boolean isRed = WeightedUnaryMMR.OPCODE.equalsIgnoreCase(opcode);
 			
-			//check number of fields (4 inputs, output, type)
-			if( isRed )
-				InstructionUtils.checkNumFields ( str, 8 );
-			else
-				InstructionUtils.checkNumFields ( str, 6 );
-				
 			//parse instruction parts (without exec type)
 			String[] parts = InstructionUtils.getInstructionParts(str);
 			
@@ -177,12 +165,6 @@ public class QuaternaryInstruction extends MRInstruction implements IDistributed
 		{
 			boolean isRed = opcode.startsWith("red");
 			
-			//check number of fields (4 inputs, output, type)
-			if( isRed )
-				InstructionUtils.checkNumFields ( str, 8 );
-			else
-				InstructionUtils.checkNumFields ( str, 6 );
-				
 			//parse instruction parts (without exec type)
 			String[] parts = InstructionUtils.getInstructionParts(str);
 			
@@ -205,12 +187,6 @@ public class QuaternaryInstruction extends MRInstruction implements IDistributed
 			boolean isRed = opcode.startsWith("red");
 			int addInput4 = (opcode.endsWith("wcemm")) ? 1 : 0;
 			
-			//check number of fields (3 or 4 inputs, output, type)
-			if( isRed )
-				InstructionUtils.checkNumFields ( str, 7 + addInput4 );
-			else
-				InstructionUtils.checkNumFields ( str, 5 + addInput4 );
-				
 			//parse instruction parts (without exec type)
 			String[] parts = InstructionUtils.getInstructionParts(str);
 			

@@ -59,7 +59,6 @@ public abstract class BuiltinUnaryGPUInstruction extends GPUInstruction {
 		}
 		else //2+1, general case
 		{
-			InstructionUtils.checkNumFields(str, 2);
 			opcode = parts[0];
 			in.split(parts[1]);
 			out.split(parts[2]);

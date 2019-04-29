@@ -37,7 +37,6 @@ public class CompressionSPInstruction extends UnarySPInstruction {
 	}
 
 	public static CompressionSPInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields(str, 2);
 		String[] parts = InstructionUtils.getInstructionPartsWithValueType(str);
 		return new CompressionSPInstruction(null,
 			new CPOperand(parts[1]), new CPOperand(parts[2]), parts[0], str);

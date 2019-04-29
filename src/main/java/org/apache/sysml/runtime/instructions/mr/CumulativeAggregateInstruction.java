@@ -45,7 +45,6 @@ public class CumulativeAggregateInstruction extends AggregateUnaryInstruction {
 	}
 	
 	public static CumulativeAggregateInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 2 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		String opcode = parts[0];
 		byte in = Byte.parseByte(parts[1]);

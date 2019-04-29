@@ -104,9 +104,6 @@ public class CtableInstruction extends MRInstruction {
 
 	public static CtableInstruction parseInstruction ( String str ) 
 	{
-		//check number of fields
-		InstructionUtils.checkNumFields ( str, 6 );
-		
 		//common setup
 		byte in1, in2, in3, out;
 		String[] parts = InstructionUtils.getInstructionParts ( str );

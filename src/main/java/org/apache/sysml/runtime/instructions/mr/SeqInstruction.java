@@ -41,7 +41,6 @@ public class SeqInstruction extends DataGenMRInstruction {
 	}
 
 	public static SeqInstruction parseInstruction(String str) {
-		InstructionUtils.checkNumFields ( str, 10 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		Operator op = null;
 		byte input = Byte.parseByte(parts[1]);

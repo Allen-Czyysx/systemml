@@ -46,6 +46,11 @@ public class RelationalExpression extends Expression
 		setParseInfo(parseInfo);
 	}
 
+	public RelationalExpression(RelationalOp bop, ParseInfo parseInfo, boolean needCache) {
+		this(bop, parseInfo);
+		_needCache = needCache;
+	}
+
 	@Override
 	public Expression rewriteExpression(String prefix) {
 		RelationalExpression newExpr = new RelationalExpression(this._opcode, this);

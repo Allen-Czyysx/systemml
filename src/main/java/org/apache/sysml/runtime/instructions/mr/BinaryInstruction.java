@@ -36,7 +36,6 @@ public class BinaryInstruction extends BinaryMRInstructionBase {
 	}
 
 	public static BinaryInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in1, in2, out;
 		String opcode = parts[0];

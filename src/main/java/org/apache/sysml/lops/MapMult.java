@@ -168,7 +168,9 @@ public class MapMult extends Lop
 			sb.append(Lop.OPERAND_DELIMITOR);
 			sb.append(_aggtype.toString());
 		}
-		
+
+		setCacheInfoToInst(sb);
+
 		return sb.toString();
 	}
 

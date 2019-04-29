@@ -36,7 +36,7 @@ public class Aggregate extends Lop
 	/** Aggregate operation types **/
 	
 	public enum OperationTypes {
-		Sum, Product, SumProduct, Min, Max, Trace,
+		Sum, SumBlock, Product, SumProduct, Min, Max, Trace,
 		KahanSum, KahanSumSq, KahanTrace, Mean, Var, MaxIndex, MinIndex
 	}
 	OperationTypes operation;

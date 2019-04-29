@@ -63,7 +63,6 @@ public class RemoveEmptyMRInstruction extends BinaryInstruction {
 	}
 
 	public static RemoveEmptyMRInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields (str, 6);
 		String[] parts = InstructionUtils.getInstructionParts(str);
 		String opcode = parts[0];
 		if(!opcode.equalsIgnoreCase("rmempty"))

@@ -313,7 +313,6 @@ public class SortMR
 		if( otype != SortKeys.OperationTypes.Indexes )
 			return (MRInstruction) UnaryInstruction.parseInstruction(str);
 		else {
-			InstructionUtils.checkNumFields ( str, 4 );
 			String[] sparts = InstructionUtils.getInstructionParts ( str );
 			byte in = Byte.parseByte(sparts[1]);
 			byte out = Byte.parseByte(sparts[2]);

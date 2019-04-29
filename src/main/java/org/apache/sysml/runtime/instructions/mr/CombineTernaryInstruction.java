@@ -34,7 +34,6 @@ public class CombineTernaryInstruction extends CtableInstruction {
 
 	public static CombineTernaryInstruction parseInstruction ( String str ) {
 		// example instruction string - ctabletransform:::0:DOUBLE:::1:DOUBLE:::2:DOUBLE:::3:DOUBLE 
-		InstructionUtils.checkNumFields ( str, 4 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in1, in2, in3, out;
 		String opcode = parts[0];

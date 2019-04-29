@@ -49,8 +49,6 @@ public class ReplicateInstruction extends UnaryMRInstructionBase {
 	}
 
 	public static ReplicateInstruction parseInstruction ( String str ) {
-		//check instruction format
-		InstructionUtils.checkNumFields ( str, 4 );
 		//parse instruction
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in = Byte.parseByte(parts[1]);

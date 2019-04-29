@@ -19,6 +19,7 @@
 
 package org.apache.sysml.hops;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.sysml.api.DMLScript.RUNTIME_PLATFORM;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.rewrite.HopRewriteUtils;
@@ -51,6 +52,8 @@ import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.mapred.DistributedCacheInput;
 import org.apache.sysml.runtime.matrix.mapred.MMCJMRReducerWithAggregator;
 import org.apache.sysml.runtime.util.UtilFunctions;
+
+import static org.apache.sysml.parser.DWhileStatement.getPreOutputNameFromHop;
 
 
 /* Aggregate binary (cell operations): Sum (aij + bij)
@@ -108,6 +111,8 @@ public class AggBinaryOp extends MultiThreadedHop
 		getInput().add(1, in2);
 		in1.getParent().add(this);
 		in2.getParent().add(this);
+
+		_dVarNames = (String[]) ArrayUtils.addAll(in1._dVarNames, in2._dVarNames);
 		
 		//compute unknown dims and nnz
 		refreshSizeInformation();
@@ -248,6 +253,8 @@ public class AggBinaryOp extends MultiThreadedHop
 					default:
 						throw new HopsException(this.printErrorLocation() + "Invalid Matrix Mult Method (" + _method + ") while constructing SPARK lops.");	
 				}
+
+				setCacheInfoToLop();
 			}
 			else if( et == ExecType.MR ) 
 			{

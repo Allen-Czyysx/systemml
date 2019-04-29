@@ -1,10 +1,13 @@
 package org.apache.sysml.parser;
 
 import org.apache.sysml.hops.Hop;
+import org.apache.sysml.runtime.instructions.Instruction;
 
 import java.util.ArrayList;
 
 public class DWhileStatement extends WhileStatement {
+
+	public static final int CACHE_PERIOD = 8;
 
 	private String[] _dVarNames;
 
@@ -58,6 +61,15 @@ public class DWhileStatement extends WhileStatement {
 		_dIterAfter = dIterAfter;
 	}
 
+	public static boolean isDVar(String name, String[] curDVars) {
+		for (String curDVarName : curDVars) {
+			if (name.equals(curDVarName)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static boolean isDWhileTmpVar(String varName) {
 		if (varName == null) {
 			return false;
@@ -82,8 +94,17 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static String getPreOutputNameFromHop(Hop hop) {
-		return "5_preOutput_hop_" + hop.getName() + "_" + hop.getOpString() + "_" + hop.getBeginLine() +
-				"_" + hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn();
+		return "5_preOutput_hop_" + hop.getName() + "_" + hop.getOpString() + "_" + hop.getBeginLine() + "_"
+				+ hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn();
+	}
+
+	public static String getPreOutputNameFromInst(Instruction inst) {
+		return "6_preOutput_inst_" + inst.getOpcode() + "_" + inst.getBeginLine() + "_" + inst.getBeginColumn() + "_"
+				+ inst.getEndLine() + "_" + inst.getEndColumn();
+	}
+
+	public static String getVarUseDeltaCountName(String varName) {
+		return "6_useDeltaCount_" + varName;
 	}
 
 	@Override

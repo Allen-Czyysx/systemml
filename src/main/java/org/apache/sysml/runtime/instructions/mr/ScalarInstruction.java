@@ -37,7 +37,6 @@ public class ScalarInstruction extends UnaryMRInstructionBase {
 	}
 
 	public static ScalarInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		String opcode = parts[0];
 		boolean firstArgScalar = isFirstArgumentScalar(str);

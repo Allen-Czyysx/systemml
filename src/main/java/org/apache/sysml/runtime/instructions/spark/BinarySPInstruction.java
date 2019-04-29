@@ -20,9 +20,10 @@
 package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.sysml.hops.Hop;
+import org.apache.spark.api.java.StorageLevels;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.BinaryM.VectorType;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
@@ -41,35 +42,65 @@ import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
 
-import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
+import java.util.Arrays;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
-	protected BinarySPInstruction(SPType type, Operator op, CPOperand in1, CPOperand in2, CPOperand out, String opcode, String istr) {
+	protected BinarySPInstruction(SPType type, Operator op, CPOperand in1, CPOperand in2, CPOperand out, String opcode,
+								  String istr) {
 		super(type, op, in1, in2, out, opcode, istr);
+	}
+
+	protected BinarySPInstruction(SPType type, Operator op, CPOperand in1, CPOperand in2, CPOperand out, String opcode,
+								  String istr, boolean needCache, String preOutputName, String[] dVarNames) {
+		this(type, op, in1, in2, out, opcode, istr);
+		_needCache = needCache;
+		_preOutputName = preOutputName;
+		_dVarNames = dVarNames;
 	}
 	
 	public static BinarySPInstruction parseInstruction ( String str ) {
 		CPOperand in1 = new CPOperand("", ValueType.UNKNOWN, DataType.UNKNOWN);
 		CPOperand in2 = new CPOperand("", ValueType.UNKNOWN, DataType.UNKNOWN);
 		CPOperand out = new CPOperand("", ValueType.UNKNOWN, DataType.UNKNOWN);
-		String opcode = null;
+		String opcode;
 		boolean isBroadcast = false;
 		VectorType vtype = null;
+
+		boolean needCache = false;
+		String preOutputName = null;
+		String[] dVarNames = null;
 		
 		if(str.startsWith("SPARK"+Lop.OPERAND_DELIMITOR+"map")) {
 			String[] parts = InstructionUtils.getInstructionPartsWithValueType(str);
-			InstructionUtils.checkNumFields ( parts, 5 );
-			
+
 			opcode = parts[0];
 			in1.split(parts[1]);
 			in2.split(parts[2]);
 			out.split(parts[3]);
 			vtype = VectorType.valueOf(parts[5]);
+
+			needCache = Boolean.parseBoolean(parts[6]);
+			if (needCache) {
+				preOutputName = parts[7];
+				int dVarNamesNum = Integer.parseInt(parts[8]);
+				dVarNames = Arrays.copyOfRange(parts, 9, 9 + dVarNamesNum);
+			}
+
 			isBroadcast = true;
 		}
 		else {
 			opcode = parseBinaryInstruction(str, in1, in2, out);
+
+			String[] parts = InstructionUtils.getInstructionPartsWithValueType(str);
+			if (parts.length > 4) {
+				needCache = Boolean.parseBoolean(parts[4]);
+				if (needCache) {
+					preOutputName = parts[5].equalsIgnoreCase("null") ? null : parts[5];
+					int dVarNamesNum = preOutputName == null ? 0 : Integer.parseInt(parts[6]);
+					dVarNames = preOutputName == null ? null : Arrays.copyOfRange(parts, 7, 7 + dVarNamesNum);
+				}
+			}
 		}
 		
 		DataType dt1 = in1.getDataType();
@@ -80,19 +111,20 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		if (dt1 == DataType.MATRIX || dt2 == DataType.MATRIX) {
 			if(dt1 == DataType.MATRIX && dt2 == DataType.MATRIX) {
 				if(isBroadcast)
-					return new BinaryMatrixBVectorSPInstruction(operator, in1, in2, out, vtype, opcode, str);
+					return new BinaryMatrixBVectorSPInstruction(operator, in1, in2, out, vtype, opcode, str, needCache,
+							preOutputName, dVarNames);
 				else
 					return new BinaryMatrixMatrixSPInstruction(operator, in1, in2, out, opcode, str);
 			}
 			else
-				return new BinaryMatrixScalarSPInstruction(operator, in1, in2, out, opcode, str);
+				return new BinaryMatrixScalarSPInstruction(operator, in1, in2, out, opcode, str, needCache,
+						preOutputName, dVarNames);
 		}
 		return null;
 	}
 
 	protected static String parseBinaryInstruction(String instr, CPOperand in1, CPOperand in2, CPOperand out) {
 		String[] parts = InstructionUtils.getInstructionPartsWithValueType(instr);
-		InstructionUtils.checkNumFields ( parts, 3 );
 		String opcode = parts[0];
 		in1.split(parts[1]);
 		in2.split(parts[2]);
@@ -160,9 +192,23 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixBVectorBinaryInstruction(ExecutionContext ec, VectorType vtype) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
+		boolean needCacheNow = false;
 		
 		//sanity check dimensions
 		checkMatrixMatrixBinaryCharacteristics(sec);
+
+		// 判断是否连续多次做增量
+		if (_needCache) {
+			for (String dVarName : _dVarNames) {
+				String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
+				long count = sec.getScalarInput(countName, ValueType.INT, false).getLongValue();
+				if (count >= DWhileStatement.CACHE_PERIOD) {
+					// TODO added by czh 需要清除cache
+//					sec.unpersistRdd(_preOutputName);
+					needCacheNow = true;
+				}
+			}
+		}
 
 		//get input RDDs
 		String rddVar = input1.getName(); 
@@ -202,9 +248,12 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 //				out = in1.mapPartitionsToPair(
 //						new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
 //			}
-
 		}
-		
+
+		if (needCacheNow) {
+			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
+		}
+
 		//set output RDD
 		updateBinaryOutputMatrixCharacteristics(sec);
 		sec.setRDDHandleForVariable(output.getName(), out);
@@ -215,7 +264,25 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixScalarBinaryInstruction(ExecutionContext ec) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
-	
+		boolean needCacheNow = false;
+
+		// 判断是否连续多次做增量
+		if (_needCache) {
+			if (_dVarNames != null) {
+				for (String dVarName : _dVarNames) {
+					String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
+					long count = sec.getScalarInput(countName, ValueType.INT, false).getLongValue();
+					if (count >= DWhileStatement.CACHE_PERIOD) {
+						// TODO added by czh 需要清除cache
+//						sec.unpersistRdd(_preOutputName);
+						needCacheNow = true;
+					}
+				}
+			} else {
+				needCacheNow = true;
+			}
+		}
+
 		//get input RDD
 		String rddVar = (input1.getDataType() == DataType.MATRIX) ? input1.getName() : input2.getName();
 		JavaPairRDD<MatrixIndexes,MatrixBlock> in1 = sec.getBinaryBlockRDDHandleForVariable( rddVar );
@@ -228,7 +295,11 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		
 		//execute scalar matrix arithmetic instruction
 		JavaPairRDD<MatrixIndexes,MatrixBlock> out = in1.mapValues( new MatrixScalarUnaryFunction(sc_op) );
-			
+
+		if (needCacheNow) {
+			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
+		}
+
 		//put output RDD handle into symbol table
 		updateUnaryOutputMatrixCharacteristics(sec, rddVar, output.getName());
 		sec.setRDDHandleForVariable(output.getName(), out);

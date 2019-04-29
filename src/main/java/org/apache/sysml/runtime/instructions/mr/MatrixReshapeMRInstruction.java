@@ -50,7 +50,6 @@ public class MatrixReshapeMRInstruction extends UnaryInstruction {
 	}
 
 	public static MatrixReshapeMRInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 5 );
 		String[] parts = InstructionUtils.getInstructionParts(str);
 		String opcode = parts[0];
 		byte in = Byte.parseByte(parts[1]);

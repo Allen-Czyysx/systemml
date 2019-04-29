@@ -97,6 +97,11 @@ public class ParameterizedBuiltinOp extends MultiThreadedHop
 			getInput().add(input);
 			input.getParent().add(this);
 			_paramIndexMap.put(s, index);
+
+			if (s.equalsIgnoreCase("target")) {
+				_dVarNames = input._dVarNames;
+			}
+
 			index++;
 		}
 		

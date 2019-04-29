@@ -55,7 +55,6 @@ public class PMMJMRInstruction extends BinaryMRInstructionBase implements IDistr
 	}
 
 	public static PMMJMRInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 6 );
 		String[] parts = InstructionUtils.getInstructionParts(str);
 		String opcode = parts[0];
 		byte in1 = Byte.parseByte(parts[1]);

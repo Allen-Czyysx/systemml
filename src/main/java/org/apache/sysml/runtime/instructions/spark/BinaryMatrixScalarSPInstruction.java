@@ -19,15 +19,19 @@
 
 package org.apache.sysml.runtime.instructions.spark;
 
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 
 public class BinaryMatrixScalarSPInstruction extends BinarySPInstruction {
 
-	protected BinaryMatrixScalarSPInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out,
-			String opcode, String istr) {
-		super(SPType.Binary, op, in1, in2, out, opcode, istr);
+	BinaryMatrixScalarSPInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out, String opcode,
+									String istr, boolean needCache, String preOutputName, String[] dVarNames) {
+		super(SPType.Binary, op, in1, in2, out, opcode, istr, needCache, preOutputName, dVarNames);
+		if (_preOutputName == null) {
+			_preOutputName = DWhileStatement.getPreOutputNameFromInst(this);
+		}
 	}
 
 	@Override

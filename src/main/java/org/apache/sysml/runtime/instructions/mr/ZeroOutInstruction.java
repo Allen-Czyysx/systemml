@@ -46,7 +46,6 @@ public class ZeroOutInstruction extends UnaryMRInstructionBase {
 	}
 
 	public static ZeroOutInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 6 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		String opcode = parts[0];
 		if(!opcode.equalsIgnoreCase("zeroOut"))

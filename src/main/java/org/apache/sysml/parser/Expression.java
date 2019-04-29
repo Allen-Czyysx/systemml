@@ -138,6 +138,7 @@ public abstract class Expression implements ParseInfo
 		SOLVE,
 		SQRT,
 		SUM,
+		SUMBLOCK,
 		SVD,
 		TABLE,
 		TAN,
@@ -223,8 +224,18 @@ public abstract class Expression implements ParseInfo
 	private static final IDSequence _tempId = new IDSequence();
 	protected Identifier[] _outputs;
 
+	boolean _needCache = false;
+
 	public Expression() {
 		_outputs = null;
+	}
+
+	public boolean needCache() {
+		return _needCache;
+	}
+
+	public void setNeedCache(boolean needCache) {
+		_needCache = needCache;
 	}
 
 	public abstract Expression rewriteExpression(String prefix);

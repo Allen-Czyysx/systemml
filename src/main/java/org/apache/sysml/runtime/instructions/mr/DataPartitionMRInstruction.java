@@ -33,7 +33,6 @@ public class DataPartitionMRInstruction extends UnaryInstruction {
 	}
 
 	public static DataPartitionMRInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in, out;
 		in = Byte.parseByte(parts[1]);

@@ -43,7 +43,6 @@ public class BinaryMInstruction extends BinaryMRInstructionBase implements IDist
 	}
 
 	public static BinaryMInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 5 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in1, in2, out;
 		String opcode = parts[0];

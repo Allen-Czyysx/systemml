@@ -161,17 +161,14 @@ public class RandSPInstruction extends UnarySPInstruction {
 		DataGenMethod method = DataGenMethod.INVALID;
 		if ( opcode.equalsIgnoreCase(DataGen.RAND_OPCODE) ) {
 			method = DataGenMethod.RAND;
-			InstructionUtils.checkNumFields ( str, 12 );
 		}
 		else if ( opcode.equalsIgnoreCase(DataGen.SEQ_OPCODE) ) {
 			method = DataGenMethod.SEQ;
 			// 8 operands: rows, cols, rpb, cpb, from, to, incr, outvar
-			InstructionUtils.checkNumFields ( str, 8 ); 
 		}
 		else if ( opcode.equalsIgnoreCase(DataGen.SAMPLE_OPCODE) ) {
 			method = DataGenMethod.SAMPLE;
 			// 7 operands: range, size, replace, seed, rpb, cpb, outvar
-			InstructionUtils.checkNumFields ( str, 7 ); 
 		}
 		
 		Operator op = null;

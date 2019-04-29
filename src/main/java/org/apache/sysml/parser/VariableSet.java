@@ -52,6 +52,16 @@ public class VariableSet
 				_variables.remove(var);
 	}
 
+	public void removeVariables(Set<String> names) {
+		for (String name : names) {
+			_variables.remove(name);
+		}
+	}
+
+	public void removeVariable(String name) {
+		_variables.remove(name);
+	}
+
 	public boolean containsVariable(String name){
 		return _variables.containsKey(name);
 	}
@@ -60,7 +70,7 @@ public class VariableSet
 		return _variables.keySet().stream()
 			.anyMatch(n -> names.contains(n));
 	}
-	
+
 	public DataIdentifier getVariable(String name){
 		return _variables.get(name);
 	}

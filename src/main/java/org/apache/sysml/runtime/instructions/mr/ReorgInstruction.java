@@ -55,7 +55,6 @@ public class ReorgInstruction extends UnaryMRInstructionBase {
 	}
 	
 	public static ReorgInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 2 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in, out;
 		String opcode = parts[0];

@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -25,11 +25,12 @@ import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 
 public class BinaryMatrixBVectorSPInstruction extends BinarySPInstruction {
-	private VectorType _vtype = null;
+	private VectorType _vtype;
 
 	protected BinaryMatrixBVectorSPInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out,
-			VectorType vtype, String opcode, String istr) {
-		super(SPType.Binary, op, in1, in2, out, opcode, istr);
+											   VectorType vtype, String opcode, String istr, boolean needCache,
+											   String preOutputName, String[] dVarNames) {
+		super(SPType.Binary, op, in1, in2, out, opcode, istr, needCache, preOutputName, dVarNames);
 		_vtype = vtype;
 	}
 

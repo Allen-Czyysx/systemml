@@ -50,8 +50,6 @@ public class BinUaggChainInstruction extends UnaryInstruction {
 	}
 
 	public static BinUaggChainInstruction parseInstruction( String str ) {
-		//check number of fields (2/3 inputs, output, type)
-		InstructionUtils.checkNumFields ( str, 4 );
 		//parse instruction parts (without exec type)
 		String[] parts = InstructionUtils.getInstructionParts( str );
 		BinaryOperator bop = InstructionUtils.parseBinaryOperator(parts[1]);

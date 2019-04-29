@@ -46,7 +46,6 @@ public class CumulativeSplitInstruction extends UnaryInstruction {
 	}
 	
 	public static CumulativeSplitInstruction parseInstruction ( String str ) {
-		InstructionUtils.checkNumFields ( str, 3 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in = Byte.parseByte(parts[1]);
 		byte out = Byte.parseByte(parts[2]);

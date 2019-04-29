@@ -59,6 +59,7 @@ public class AggUnaryOp extends MultiThreadedHop
 		_direction = idx;
 		getInput().add(0, inp);
 		inp.getParent().add(this);
+		_dVarNames = inp._dVarNames;
 	}
 
 	@Override

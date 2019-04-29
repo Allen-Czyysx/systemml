@@ -29,7 +29,6 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.api.java.function.PairFunction;
 
-import org.apache.sysml.runtime.instructions.spark.functions.ExamSparsityFunction;
 import scala.Tuple2;
 
 import org.apache.sysml.hops.AggBinaryOp.SparkAggType;
@@ -56,21 +55,23 @@ import org.apache.sysml.runtime.matrix.operators.AggregateBinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.AggregateOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 
-public class MapmmSPInstruction extends BinarySPInstruction {
+import static org.apache.spark.api.java.StorageLevels.MEMORY_AND_DISK;
 
-	// TODO added by czh 暂时, 实现的时候要删
-	private static boolean isFirst = true;
+public class MapmmSPInstruction extends BinarySPInstruction {
 
 	private CacheType _type = null;
 	private boolean _outputEmpty = true;
 	private SparkAggType _aggtype;
 
 	private MapmmSPInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out, CacheType type,
-			boolean outputEmpty, SparkAggType aggtype, String opcode, String istr) {
+							   boolean outputEmpty, SparkAggType aggtype, String opcode, String istr, boolean needCache,
+							   String preOutputName) {
 		super(SPType.MAPMM, op, in1, in2, out, opcode, istr);
 		_type = type;
 		_outputEmpty = outputEmpty;
 		_aggtype = aggtype;
+		_needCache = needCache;
+		_preOutputName = preOutputName;
 	}
 
 	public static MapmmSPInstruction parseInstruction( String str ) {
@@ -86,10 +87,14 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		CacheType type = CacheType.valueOf(parts[4]);
 		boolean outputEmpty = Boolean.parseBoolean(parts[5]);
 		SparkAggType aggtype = SparkAggType.valueOf(parts[6]);
-		
+
+		boolean needCache = Boolean.parseBoolean(parts[7]);
+		String preOutputName = needCache ? parts[8] : null;
+
 		AggregateOperator agg = new AggregateOperator(0, Plus.getPlusFnObject());
 		AggregateBinaryOperator aggbin = new AggregateBinaryOperator(Multiply.getMultiplyFnObject(), agg);
-		return new MapmmSPInstruction(aggbin, in1, in2, out, type, outputEmpty, aggtype, opcode, str);		
+		return new MapmmSPInstruction(aggbin, in1, in2, out, type, outputEmpty, aggtype, opcode, str, needCache,
+				preOutputName);
 	}
 	
 	@Override
@@ -101,7 +106,12 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		String bcastVar = type.isRight() ? input2.getName() : input1.getName();
 		MatrixCharacteristics mcRdd = sec.getMatrixCharacteristics(rddVar);
 		MatrixCharacteristics mcBc = sec.getMatrixCharacteristics(bcastVar);
-		
+
+		if (_needCache) {
+			// TODO added by czh 需要清除cache
+//			sec.unpersistRdd(_preOutputName);
+		}
+
 		//get input rdd with preferred number of partitions to avoid unnecessary repartition
 		JavaPairRDD<MatrixIndexes,MatrixBlock> in1 = sec.getBinaryBlockRDDHandleForVariable(rddVar,
 			(requiresFlatMapFunction(type, mcBc) && requiresRepartitioning(
@@ -160,21 +170,19 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 			else if( preservesPartitioning(mcRdd, type) )
 				out = in1.mapPartitionsToPair(new RDDMapMMPartitionFunction(type, in2), true);
 			else
-				out = in1.mapToPair( new RDDMapMMFunction(type, in2) );
+				out = in1.mapToPair(new RDDMapMMFunction(type, in2));
 			
 			//empty output block filter
-			// TODO added by czh 固定过滤, 减少网络IO
-//			if( !_outputEmpty )
+			if( !_outputEmpty )
 				out = out.filter(new FilterNonEmptyBlocksFunction());
 
-			// TODO added by czh 只取x一个块时不需要求和
-//			if( _aggtype == SparkAggType.MULTI_BLOCK )
-//				out = RDDAggregateUtils.sumByKeyStable(out, false);
-			if (isFirst && _aggtype == SparkAggType.MULTI_BLOCK) {
+			// TODO added by czh 待改, 只取x一个块时不需要求和
+			if( _aggtype == SparkAggType.MULTI_BLOCK )
 				out = RDDAggregateUtils.sumByKeyStable(out, false);
-				isFirst = false;
-			} else {
-				out = out.mapValues(new ExamSparsityFunction());
+
+			// cache新RDD
+			if (_needCache) {
+				out = sec.persistRdd(_preOutputName, out, MEMORY_AND_DISK);
 			}
 
 			//put output RDD handle into symbol table
@@ -262,7 +270,7 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		private final AggregateBinaryOperator _op;
 		private final PartitionedBroadcast<MatrixBlock> _pbc;
 		
-		public RDDMapMMFunction( CacheType type, PartitionedBroadcast<MatrixBlock> binput )
+		public RDDMapMMFunction(CacheType type, PartitionedBroadcast<MatrixBlock> binput)
 		{
 			_type = type;
 			_pbc = binput;
@@ -279,10 +287,10 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 			MatrixIndexes ixIn = arg0._1();
 			MatrixBlock blkIn = arg0._2();
 
-			// TODO added by czh 测试在这过滤, 删
-			if (ixIn.getColumnIndex() != 1) {
-				return new Tuple2<>(new MatrixIndexes(), new MatrixBlock());
-			}
+//			// TODO added by czh 暂时, 实现的时候要删
+//			if (!isFirst && ixIn.getColumnIndex() != 1) {
+//				return new Tuple2<>(new MatrixIndexes(ixIn.getRowIndex(), 1), new MatrixBlock());
+//			}
 
 			MatrixIndexes ixOut = new MatrixIndexes();
 			MatrixBlock blkOut = new MatrixBlock();

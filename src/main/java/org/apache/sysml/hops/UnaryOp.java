@@ -68,6 +68,7 @@ public class UnaryOp extends MultiThreadedHop
 		getInput().add(0, inp);
 		inp.getParent().add(this);
 		_op = o;
+		_dVarNames = inp._dVarNames;
 		
 		//compute unknown dims and nnz
 		refreshSizeInformation();

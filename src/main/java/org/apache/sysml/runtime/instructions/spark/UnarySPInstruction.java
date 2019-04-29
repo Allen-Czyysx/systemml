@@ -39,17 +39,14 @@ public abstract class UnarySPInstruction extends ComputationSPInstruction {
 	}
 
 	static String parseUnaryInstruction(String instr, CPOperand in, CPOperand out) {
-		InstructionUtils.checkNumFields(instr, 2);
 		return parse(instr, in, null, null, out);
 	}
 
 	static String parseUnaryInstruction(String instr, CPOperand in1, CPOperand in2, CPOperand out) {
-		InstructionUtils.checkNumFields(instr, 3);
 		return parse(instr, in1, in2, null, out);
 	}
 
 	static String parseUnaryInstruction(String instr, CPOperand in1, CPOperand in2, CPOperand in3, CPOperand out) {
-		InstructionUtils.checkNumFields(instr, 4);
 		return parse(instr, in1, in2, in3, out);
 	}
 

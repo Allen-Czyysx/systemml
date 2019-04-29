@@ -59,7 +59,6 @@ public class RangeBasedReIndexInstruction extends UnaryMRInstructionBase {
 	}
 
 	public static RangeBasedReIndexInstruction parseInstruction( String str ) {
-		InstructionUtils.checkNumFields ( str, 8 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		String opcode = parts[0];
 		boolean forLeft = false;

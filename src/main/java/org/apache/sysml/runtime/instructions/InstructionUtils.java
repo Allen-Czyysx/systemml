@@ -319,12 +319,16 @@ public class InstructionUtils
 			CorrectionLocationType cloc = CorrectionLocationType.LASTFOURROWS;
 			AggregateOperator agg = new AggregateOperator(0, varFn, true, cloc);
 			aggun = new AggregateUnaryOperator(agg, ReduceRow.getReduceRowFnObject(), numThreads);
-		}
-		else if ( opcode.equalsIgnoreCase("ua+") ) {
+
+		} else if (opcode.equalsIgnoreCase("ua+")) {
 			AggregateOperator agg = new AggregateOperator(0, Plus.getPlusFnObject());
 			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
-		} 
-		else if ( opcode.equalsIgnoreCase("uar+") ) {
+
+		} else if (opcode.equalsIgnoreCase("uab+")) {
+			AggregateOperator agg = new AggregateOperator(0, Or.getOrFnObject());
+			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
+
+		} else if ( opcode.equalsIgnoreCase("uar+") ) {
 			// RowSums
 			AggregateOperator agg = new AggregateOperator(0, Plus.getPlusFnObject());
 			aggun = new AggregateUnaryOperator(agg, ReduceCol.getReduceColFnObject(), numThreads);
@@ -417,11 +421,11 @@ public class InstructionUtils
 			boolean lcorrExists = (corrExists==null) ? true : Boolean.parseBoolean(corrExists);
 			CorrectionLocationType lcorrLoc = (corrLoc==null) ? CorrectionLocationType.LASTCOLUMN : CorrectionLocationType.valueOf(corrLoc);
 			agg = new AggregateOperator(0, KahanPlusSq.getKahanPlusSqFnObject(), lcorrExists, lcorrLoc);
-		}
-		else if ( opcode.equalsIgnoreCase("a+") ) {
+
+		} else if (opcode.equalsIgnoreCase("a+") || opcode.equalsIgnoreCase("ab+")) {
 			agg = new AggregateOperator(0, Plus.getPlusFnObject());
-		} 
-		else if ( opcode.equalsIgnoreCase("a*") ) {
+
+		} else if ( opcode.equalsIgnoreCase("a*") ) {
 			agg = new AggregateOperator(1, Multiply.getMultiplyFnObject());
 		}
 		else if (opcode.equalsIgnoreCase("arimax")){
@@ -798,6 +802,9 @@ public class InstructionUtils
 	{
 		if ( opcode.equalsIgnoreCase("uak+") || opcode.equalsIgnoreCase("uark+") || opcode.equalsIgnoreCase("uack+"))
 			return "ak+";
+		else if ( opcode.equalsIgnoreCase("uab+")) {
+			return "ab+";
+		}
 		else if ( opcode.equalsIgnoreCase("uasqk+") || opcode.equalsIgnoreCase("uarsqk+") || opcode.equalsIgnoreCase("uacsqk+") )
 			return "asqk+";
 		else if ( opcode.equalsIgnoreCase("uamean") || opcode.equalsIgnoreCase("uarmean") || opcode.equalsIgnoreCase("uacmean") )

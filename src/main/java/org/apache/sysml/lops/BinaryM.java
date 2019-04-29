@@ -207,7 +207,9 @@ public class BinaryM extends Lop
 		
 		sb.append( OPERAND_DELIMITOR );
 		sb.append(_vectorType);
-		
+
+		setCacheInfoToInst(sb);
+
 		return sb.toString();
 	}
 	

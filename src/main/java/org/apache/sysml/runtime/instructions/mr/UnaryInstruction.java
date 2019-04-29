@@ -37,7 +37,6 @@ public class UnaryInstruction extends UnaryMRInstructionBase {
 
 	public static UnaryInstruction parseInstruction ( String str ) {
 		String opcode = InstructionUtils.getOpCode(str);
-		InstructionUtils.checkNumFields ( str, 2 );
 		String[] parts = InstructionUtils.getInstructionParts ( str );
 		byte in, out;
 		in = Byte.parseByte(parts[1]);

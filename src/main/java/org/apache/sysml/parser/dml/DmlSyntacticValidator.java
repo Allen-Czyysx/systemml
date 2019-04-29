@@ -610,16 +610,25 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ArrayList<StatementBlock> before = new ArrayList<>();
 		ArrayList<StatementBlock> after = new ArrayList<>();
 
-		for (String varName : dVarNames) {
-			String preVarName = DWhileStatement.getPreVarName(varName);
-			DataIdentifier var = new DataIdentifier(varName);
-			PreDataIdentifier preVar = new PreDataIdentifier(preVarName, varName);
+		for (String dVarName : dVarNames) {
+			String preVarName = DWhileStatement.getPreVarName(dVarName);
+			DataIdentifier var = new DataIdentifier(dVarName);
+			PreDataIdentifier preVar = new PreDataIdentifier(preVarName, dVarName);
+			DataIdentifier selectVar = new DataIdentifier(DWhileStatement.getSelectName(dVarName));
+			DataIdentifier deltaVar = new DataIdentifier(DWhileStatement.getDeltaName(dVarName));
 
-			// Init: 创建useDelta变量
-			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(varName));
+			// Init: 创建useDelta, useDeltaCount
+			// useDelta 标记下次迭代是否使用增量
+			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(dVarName));
 			AssignmentStatement disableUseDelta = new AssignmentStatement(ctx, useDelta,
 					new BooleanIdentifier(ctx, false, currentFile));
 			init.add(getStatementBlock(disableUseDelta));
+
+			// useDeltaCount 记录连续使用增量的次数
+			DataIdentifier useDeltaCount = new DataIdentifier(DWhileStatement.getVarUseDeltaCountName(dVarName));
+			AssignmentStatement initUseDeltaCount = new AssignmentStatement(ctx, useDeltaCount,
+					new IntIdentifier(ctx, -1, currentFile));
+			init.add(getStatementBlock(initUseDeltaCount));
 
 			// Before: 记录input旧值
 			// TODO added by czh 暂时每次都记录
@@ -632,8 +641,12 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			delta.setLeft(var);
 			delta.setRight(preVar);
 
+			// 记录 delta
+			AssignmentStatement assignDelta = new AssignmentStatement(ctx, deltaVar, delta);
+			after.add(getStatementBlock(assignDelta));
+
 			// abs = abs(delta)
-			Expression[] absExps = {delta};
+			Expression[] absExps = {deltaVar};
 			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
 
@@ -642,48 +655,89 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			BuiltinFunctionExpression max = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
 
-			// bound = max * ratio
+			// selectBound = max * ratio
 			double ratio = Double.parseDouble(ctx.ratio.getText());
-			BinaryExpression bound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
-			bound.setLeft(max);
-			bound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
+			BinaryExpression selectBound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+			selectBound.setLeft(max);
+			selectBound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
 
-			// select = (abs >= bound)
+			// select = (abs >= selectBound)
+			// TODO added by czh 可能需要调整为取块, 而不是取数据
 			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+//			RelationalExpression select = new RelationalExpression(
+//					Expression.RelationalOp.GREATEREQUAL, dwst, true);
 			select.setLeft(abs);
-			select.setRight(bound);
+			select.setRight(selectBound);
 
-			// lightDelta = removeEmpty(delta, rows, select, false)
-			LinkedHashMap<String, Expression> lightDeltaParams = new LinkedHashMap<>();
-			lightDeltaParams.put("target", delta);
-			lightDeltaParams.put("margin", new StringIdentifier(ctx, "rows", currentFile));
-			lightDeltaParams.put("select", select);
-			lightDeltaParams.put("empty.return", new BooleanIdentifier(ctx, false, currentFile));
-			ParameterizedBuiltinFunctionExpression lightDelta = new ParameterizedBuiltinFunctionExpression(
-					ctx, Expression.ParameterizedBuiltinFunctionOp.RMEMPTY, lightDeltaParams, currentFile
-			);
-
-			// 记录select, lightDelta
-			DataIdentifier sl = new DataIdentifier(DWhileStatement.getSelectName(varName));
-			DataIdentifier ld = new DataIdentifier(DWhileStatement.getDeltaName(varName));
-			AssignmentStatement assignSelect = new AssignmentStatement(ctx, sl, select);
-			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, ld, lightDelta);
+			// 记录 select
+			AssignmentStatement assignSelect = new AssignmentStatement(ctx, selectVar, select);
 			after.add(getStatementBlock(assignSelect));
-			after.add(getStatementBlock(assignLightDelta));
 
-			// 开启增量迭代
-			// TODO added by czh 从第二次迭代开始一直使用增量迭代
-			AssignmentStatement enableUseDelta = new AssignmentStatement(ctx, useDelta,
-					new BooleanIdentifier(ctx, true, currentFile));
-			after.add(getStatementBlock(enableUseDelta));
+			// blockNum = sumBlock(select)
+			Expression[] blockNumArgs = {selectVar};
+			BuiltinFunctionExpression blockNum = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.SUMBLOCK, blockNumArgs, currentFile);
 
-			// TODO added by czh 暂时先打印lightDelta
-//			LinkedHashMap<String, Expression> printParams = new LinkedHashMap<>();
-//			printParams.put("target", lightDelta);
-//			ParameterizedBuiltinFunctionExpression toString = new ParameterizedBuiltinFunctionExpression(
-//					ctx, Expression.ParameterizedBuiltinFunctionOp.TOSTRING, printParams, currentFile);
+			// rowNum = nrow(var)
+			Expression[] nrowArgs = {var};
+			BuiltinFunctionExpression rowNum = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.NROW, nrowArgs, currentFile);
+
+			// blockNumBound = rowNum / (1000 * 10)
+			BinaryExpression blockNumBound = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+			blockNumBound.setLeft(rowNum);
+			// TODO added by czh debug
+//			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 100, currentFile));
+			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
+
+			// deltaCondition = (blockNum <= blockNumBound)
+			// TODO added by czh 暂时, 之后改为代价模型判断
+			RelationalExpression deltaCondition = new RelationalExpression(Expression.RelationalOp.LESSEQUAL, dwst);
+			deltaCondition.setLeft(blockNum);
+			deltaCondition.setRight(blockNumBound);
+
+			// 增量迭代条件判断
+			IfStatement ifUseDelta = new IfStatement();
+			ifUseDelta.setConditionalPredicate(new ConditionalPredicate(deltaCondition));
+			after.add(getStatementBlock(ifUseDelta));
+
+			// if (deltaCondition) { 开启增量迭代
+
+			// lightDelta = delta * select
+			// TODO added by czh 可能需要调整为取块, 而不是取数据
+			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+			lightDelta.setLeft(deltaVar);
+			lightDelta.setRight(selectVar);
+			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, deltaVar, lightDelta);
+			ifUseDelta.addStatementBlockIfBody(getStatementBlock(assignLightDelta));
+
+			// useDelta = true
+			AssignmentStatement enableUseDelta = new AssignmentStatement(
+					ctx, useDelta, new BooleanIdentifier(ctx, true, currentFile));
+			ifUseDelta.addStatementBlockIfBody(getStatementBlock(enableUseDelta));
+
+			// useDeltaCount++
+			BinaryExpression useDeltaCountPlusOne = new BinaryExpression(Expression.BinaryOp.PLUS, dwst);
+			useDeltaCountPlusOne.setLeft(useDeltaCount);
+			useDeltaCountPlusOne.setRight(new IntIdentifier(ctx, 1, currentFile));
+			AssignmentStatement assignUseDeltaCount = new AssignmentStatement(
+					ctx, useDeltaCount, useDeltaCountPlusOne);
+			ifUseDelta.addStatementBlockIfBody(getStatementBlock(assignUseDeltaCount));
+
+			// } else { 停止增量迭代
+
+			// useDelta = false
+			ifUseDelta.addStatementBlockElseBody(getStatementBlock(disableUseDelta));
+
+			// useDeltaCount = -1
+			ifUseDelta.addStatementBlockElseBody(getStatementBlock(initUseDeltaCount));
+
+			// }
+
+			// TODO added by czh print for debug 删
+			// print(blockNum)
 //			List<Expression> expList = new ArrayList<>();
-//			expList.add(toString);
+//			expList.add(blockNum);
 //			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);
 //			after.add(getStatementBlock(print));
 		}
