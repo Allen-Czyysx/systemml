@@ -1146,7 +1146,6 @@ public class DMLTranslator {
 					}
 
 					// dwhile中产生的变量
-					// TODO added by czh 暂时
 					if (DWhileStatement.isDWhileTmpVar(targetName)) {
 						liveOutToTemp.put(targetName, i);
 					}
@@ -1162,7 +1161,6 @@ public class DMLTranslator {
 					}
 
 					// dwhile中产生的变量
-					// TODO added by czh 暂时
 					if (DWhileStatement.isDWhileTmpVar(targetName)) {
 						liveOutToTemp.put(targetName, i);
 					}
@@ -1946,8 +1944,6 @@ public class DMLTranslator {
 							// newHop = max(unfixed, 0)
 							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
 									aggBHop.getValueType(), OpOp2.MAX, unfixed, new LiteralOp(0));
-//							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-//									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
 
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);

@@ -38,14 +38,14 @@ public abstract class Expression implements ParseInfo
 	 * Binary operators.
 	 */
 	public enum BinaryOp {
-		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, MATMULT, POW, INVALID
+		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, MATMULT, POW, ANDBLOCK, INVALID
 	}
 
 	/**
 	 * Relational operators.
 	 */
 	public enum RelationalOp {
-		LESSEQUAL, LESS, GREATEREQUAL, GREATER, EQUAL, NOTEQUAL, INVALID
+		LESSEQUAL, LESS, GREATEREQUAL, GREATER, EQUAL, NOTEQUAL, GREATEREQUALBLOCK, INVALID
 	}
 
 	/**

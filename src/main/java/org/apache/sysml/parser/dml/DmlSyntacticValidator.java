@@ -631,7 +631,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			init.add(getStatementBlock(initUseDeltaCount));
 
 			// Before: 记录input旧值
-			// TODO added by czh 暂时每次都记录
 			AssignmentStatement assignPreDVar = new AssignmentStatement(ctx, preVar, var);
 			before.add(getStatementBlock(assignPreDVar));
 

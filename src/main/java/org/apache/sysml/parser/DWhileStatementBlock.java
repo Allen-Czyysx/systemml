@@ -286,7 +286,7 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 		return current;
 	}
 
-	// TODO added by czh 暴力解决会移除 dwhileTmpVar 的现象, 之后需改
+	// 暴力解决会移除 dwhileTmpVar 的现象
 	private void fixDTmpVarInLiveOut(VariableSet lo) {
 		for (Map.Entry<String, DataIdentifier> varEntry : _updated.getVariables().entrySet()) {
 			if (DWhileStatement.isDWhileTmpVar(varEntry.getKey())) {

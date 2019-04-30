@@ -20,7 +20,10 @@
 package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.sysml.lops.runtime.RunMRJobs;
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
 import org.apache.sysml.runtime.instructions.SPInstructionParser;
 import org.apache.sysml.runtime.matrix.operators.Operator;
@@ -107,5 +110,26 @@ public abstract class SPInstruction extends Instruction {
 		
 		//default post-process behavior
 		super.postprocessInstruction(ec);
+	}
+
+	/**
+	 * @return 当前是否需要 cache
+	 */
+	public boolean needCacheNow(SparkExecutionContext sec) {
+		if (_needCache) {
+			if (_dVarNames != null) {
+				for (String dVarName : _dVarNames) {
+					String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
+					long count = sec.getScalarInput(countName, Expression.ValueType.INT, false).getLongValue();
+					if (count >= DWhileStatement.CACHE_PERIOD) {
+						return true;
+					}
+				}
+			} else {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

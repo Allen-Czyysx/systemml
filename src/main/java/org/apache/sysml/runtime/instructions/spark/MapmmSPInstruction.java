@@ -106,10 +106,10 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		String bcastVar = type.isRight() ? input2.getName() : input1.getName();
 		MatrixCharacteristics mcRdd = sec.getMatrixCharacteristics(rddVar);
 		MatrixCharacteristics mcBc = sec.getMatrixCharacteristics(bcastVar);
+		boolean needCacheNow = needCacheNow(sec);
 
-		if (_needCache) {
-			// TODO added by czh 需要清除cache
-//			sec.unpersistRdd(_preOutputName);
+		if (needCacheNow) {
+			sec.unpersistRdd(_preOutputName);
 		}
 
 		//get input rdd with preferred number of partitions to avoid unnecessary repartition
@@ -181,7 +181,7 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 				out = RDDAggregateUtils.sumByKeyStable(out, false);
 
 			// cache新RDD
-			if (_needCache) {
+			if (needCacheNow) {
 				out = sec.persistRdd(_preOutputName, out, MEMORY_AND_DISK);
 			}
 

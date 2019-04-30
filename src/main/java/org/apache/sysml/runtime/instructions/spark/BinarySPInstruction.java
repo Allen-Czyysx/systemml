@@ -192,23 +192,14 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixBVectorBinaryInstruction(ExecutionContext ec, VectorType vtype) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
-		boolean needCacheNow = false;
+		boolean needCacheNow = needCacheNow(sec);
+
+		if (needCacheNow) {
+			sec.unpersistRdd(_preOutputName);
+		}
 		
 		//sanity check dimensions
 		checkMatrixMatrixBinaryCharacteristics(sec);
-
-		// 判断是否连续多次做增量
-		if (_needCache) {
-			for (String dVarName : _dVarNames) {
-				String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
-				long count = sec.getScalarInput(countName, ValueType.INT, false).getLongValue();
-				if (count >= DWhileStatement.CACHE_PERIOD) {
-					// TODO added by czh 需要清除cache
-//					sec.unpersistRdd(_preOutputName);
-					needCacheNow = true;
-				}
-			}
-		}
 
 		//get input RDDs
 		String rddVar = input1.getName(); 
@@ -249,23 +240,10 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixScalarBinaryInstruction(ExecutionContext ec) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
-		boolean needCacheNow = false;
+		boolean needCacheNow = needCacheNow(sec);
 
-		// 判断是否连续多次做增量
-		if (_needCache) {
-			if (_dVarNames != null) {
-				for (String dVarName : _dVarNames) {
-					String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
-					long count = sec.getScalarInput(countName, ValueType.INT, false).getLongValue();
-					if (count >= DWhileStatement.CACHE_PERIOD) {
-						// TODO added by czh 需要清除cache
-//						sec.unpersistRdd(_preOutputName);
-						needCacheNow = true;
-					}
-				}
-			} else {
-				needCacheNow = true;
-			}
+		if (needCacheNow) {
+			sec.unpersistRdd(_preOutputName);
 		}
 
 		//get input RDD

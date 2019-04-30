@@ -7,7 +7,7 @@ import java.util.ArrayList;
 
 public class DWhileStatement extends WhileStatement {
 
-	public static final int CACHE_PERIOD = 8;
+	public static final int CACHE_PERIOD = 10;
 
 	private String[] _dVarNames;
 
