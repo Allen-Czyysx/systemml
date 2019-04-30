@@ -287,11 +287,6 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 			MatrixIndexes ixIn = arg0._1();
 			MatrixBlock blkIn = arg0._2();
 
-//			// TODO added by czh 暂时, 实现的时候要删
-//			if (!isFirst && ixIn.getColumnIndex() != 1) {
-//				return new Tuple2<>(new MatrixIndexes(ixIn.getRowIndex(), 1), new MatrixBlock());
-//			}
-
 			MatrixIndexes ixOut = new MatrixIndexes();
 			MatrixBlock blkOut = new MatrixBlock();
 			

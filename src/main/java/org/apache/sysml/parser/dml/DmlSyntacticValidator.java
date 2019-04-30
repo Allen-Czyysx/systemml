@@ -664,8 +664,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			// select = (abs >= selectBound)
 			// TODO added by czh 可能需要调整为取块, 而不是取数据
 			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
-//			RelationalExpression select = new RelationalExpression(
-//					Expression.RelationalOp.GREATEREQUAL, dwst, true);
 			select.setLeft(abs);
 			select.setRight(selectBound);
 
@@ -734,8 +732,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 			// }
 
-			// TODO added by czh print for debug 删
-			// print(blockNum)
+			// TODO added by czh print(blockNum) 删
 //			List<Expression> expList = new ArrayList<>();
 //			expList.add(blockNum);
 //			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);

@@ -2043,9 +2043,6 @@ public abstract class Hop implements ParseInfo
 		_filename = parseInfo.getFilename();
 	}
 
-	// TODO added by czh
-	//  目前支持MapMM
-
 	/**
 	 * 供增量迭代在SP环境中使用, 设置缓存所需信息
 	 * TODO added by czh 需要修改对应 Lop 的 getInstructions 和 SPInstruction 的 parseInstruction

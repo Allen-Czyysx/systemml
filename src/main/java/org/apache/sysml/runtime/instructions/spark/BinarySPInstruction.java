@@ -233,21 +233,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 			//alternative: out = in1.mapToPair(new MatrixVectorBinaryOpFunction(bop, in2, vtype));
 			out = in1.mapPartitionsToPair(
 					new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
-
-//			// TODO added by czh 固定过滤, 减少网络IO
-//			Hop.OpOp2 opType = bop.getBinaryOperatorOpOp2();
-//			if (opType == Hop.OpOp2.MULT || opType == Hop.OpOp2.GREATEREQUAL) {
-//				out = in1.filter(new FilterFirstBlockFunction());
-//				MatrixCharacteristics mcOut = sec.getMatrixCharacteristics(output.getName());
-//				mcOut.setNonZeros(DEFAULT_BLOCKSIZE);
-//			} else {
-//				//note: we use mappartition in order to preserve partitioning information for
-//				//binary mv operations where the keys are guaranteed not to change, the reason
-//				//why we cannot use mapValues is the need for broadcast key lookups.
-//				//alternative: out = in1.mapToPair(new MatrixVectorBinaryOpFunction(bop, in2, vtype));
-//				out = in1.mapPartitionsToPair(
-//						new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
-//			}
 		}
 
 		if (needCacheNow) {

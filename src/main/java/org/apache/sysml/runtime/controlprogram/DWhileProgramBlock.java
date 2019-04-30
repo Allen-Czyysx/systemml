@@ -101,10 +101,9 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 
 				// TODO added by czh 删
 				long t4 = System.currentTimeMillis();
-				System.out.println("before\t" + (t2 - t1) / 1000.0);
 				System.out.println("child \t" + (t3 - t2) / 1000.0);
 				System.out.println("after \t" + (t4 - t3) / 1000.0);
-				System.out.println("dwhile\t" + (t4 - t1) / 1000.0);
+				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\n");
 			}
 
 			// reset update-in-place variables

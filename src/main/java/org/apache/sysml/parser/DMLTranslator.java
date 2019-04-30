@@ -1740,7 +1740,8 @@ public class DMLTranslator {
 
 		// 需要记录当前hop的结果
 		hop.setRecorded();
-		String preOutputName = DWhileStatement.getPreOutputNameFromHop(hop);
+		String preOutputName = hop.getPreOutputName() == null ?
+				DWhileStatement.getPreOutputNameFromHop(hop) : hop.getPreOutputName();
 		DataOp write = new DataOp(preOutputName, hop.getDataType(), hop.getValueType(),
 				hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
 		write.setOutputParams(hop);
@@ -1823,7 +1824,6 @@ public class DMLTranslator {
 
 			if (opType == OpOp1.PRINT || opType == OpOp1.CAST_AS_SCALAR) {
 				if (needDelta) {
-					// 增量计划 TODO added by czh
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 
 				} else {
@@ -1848,7 +1848,6 @@ public class DMLTranslator {
 
 			if (opType == OpOp2.DIV || opType == OpOp2.PLUS || opType == OpOp2.MINUS || opType == OpOp2.MULT) {
 				if (needDelta) {
-					// 增量计划 TODO added by czh
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 
 				} else {
@@ -1874,7 +1873,6 @@ public class DMLTranslator {
 
 			if (opType == AggOp.MAX || opType == AggOp.SUM) {
 				if (needDelta) {
-					// 增量计划 TODO added by czh
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 
 				} else {
@@ -1935,9 +1933,9 @@ public class DMLTranslator {
 						DataOp pre = constructReadOpforVar(preVar);
 
 						if (needDelta) {
-							// TODO added by czh
 							throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 						} else {
+							// TODO added by czh 处理误差
 							// unfixed = pre + delta
 							BinaryOp unfixed = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
 									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
@@ -1947,7 +1945,10 @@ public class DMLTranslator {
 
 							// newHop = max(unfixed, 0)
 							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-									aggBHop.getValueType(), OpOp2.MAX, unfixed, new LiteralOp(1));
+									aggBHop.getValueType(), OpOp2.MAX, unfixed, new LiteralOp(0));
+//							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
+//									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
 							newHop.setNeedRecord(true);
@@ -1963,7 +1964,6 @@ public class DMLTranslator {
 				}
 
 				if (!updated.containsVariable(rightName)) {
-					// TODO added by czh 暂时不需要跑到这里
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 				}
 			}
@@ -1976,7 +1976,6 @@ public class DMLTranslator {
 
 			if (opType == ParamBuiltinOp.TOSTRING) {
 				if (needDelta) {
-					// 增量计划 TODO added by czh
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 
 				} else {
