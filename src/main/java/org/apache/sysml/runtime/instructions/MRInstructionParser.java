@@ -219,7 +219,9 @@ public class MRInstructionParser extends InstructionParser
 		String2MRInstructionType.put( "mapbitwXor", MRType.Binary);
 		String2MRInstructionType.put( "mapbitwShiftL", MRType.Binary);
 		String2MRInstructionType.put( "mapbitwShiftR", MRType.Binary);
-		
+		String2MRInstructionType.put( "mapb>=", MRType.Binary);
+		String2MRInstructionType.put( "mapb*", MRType.Binary);
+
 		// Ternary Instruction Opcodes
 		String2MRInstructionType.put( "+*",     MRType.Ternary); 
 		String2MRInstructionType.put( "-*",     MRType.Ternary); 

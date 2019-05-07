@@ -73,6 +73,7 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			}
 
 			// run loop body until predicate becomes false
+			int count = 1;
 			while (executePredicate(ec).getBooleanValue()) {
 				// TODO added by czh 删
 				long t1 = System.currentTimeMillis();
@@ -103,7 +104,8 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 				long t4 = System.currentTimeMillis();
 				System.out.println("child \t" + (t3 - t2) / 1000.0);
 				System.out.println("after \t" + (t4 - t3) / 1000.0);
-				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\n");
+				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\t" + count + "\n");
+				count++;
 			}
 
 			// reset update-in-place variables

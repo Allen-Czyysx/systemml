@@ -38,6 +38,7 @@ public class BinaryScalar extends Lop
 		AND, OR, XOR,
 		LOG,POW,MAX,MIN,PRINT,IQSIZE,
 		BW_AND, BW_OR, BW_XOR, BW_SHIFTL, BW_SHIFTR, //Bitwise operations
+		GREATER_THAN_OR_EQUALS_BLOCK, MULT_BLOCK, // 以块做比较
 	}
 	
 	private final OperationTypes operation;

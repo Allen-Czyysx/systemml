@@ -176,7 +176,9 @@ public class SPInstructionParser extends InstructionParser
 		String2SPInstructionType.put( "map^"    , SPType.Binary);
 		String2SPInstructionType.put( "map+*"   , SPType.Binary);
 		String2SPInstructionType.put( "map-*"   , SPType.Binary);
-		
+		String2SPInstructionType.put( "b*"   , SPType.Binary);
+		String2SPInstructionType.put( "mapb*"   , SPType.Binary);
+
 		// Relational Instruction Opcodes 
 		String2SPInstructionType.put( "=="   , SPType.Binary);
 		String2SPInstructionType.put( "!="   , SPType.Binary);
@@ -190,7 +192,9 @@ public class SPInstructionParser extends InstructionParser
 		String2SPInstructionType.put( "map<="   , SPType.Binary);
 		String2SPInstructionType.put( "map=="   , SPType.Binary);
 		String2SPInstructionType.put( "map!="   , SPType.Binary);
-		
+		String2SPInstructionType.put( "b>="   , SPType.Binary);
+		String2SPInstructionType.put( "mapb>="   , SPType.Binary);
+
 		// Boolean Instruction Opcodes 
 		String2SPInstructionType.put( "&&"   , SPType.Binary);
 		String2SPInstructionType.put( "||"   , SPType.Binary);

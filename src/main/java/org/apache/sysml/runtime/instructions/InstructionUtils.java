@@ -41,46 +41,8 @@ import org.apache.sysml.lops.WeightedSquaredLossR;
 import org.apache.sysml.lops.WeightedUnaryMM;
 import org.apache.sysml.lops.WeightedUnaryMMR;
 import org.apache.sysml.runtime.DMLRuntimeException;
-import org.apache.sysml.runtime.functionobjects.And;
-import org.apache.sysml.runtime.functionobjects.BitwAnd;
-import org.apache.sysml.runtime.functionobjects.BitwOr;
-import org.apache.sysml.runtime.functionobjects.BitwShiftL;
-import org.apache.sysml.runtime.functionobjects.BitwShiftR;
-import org.apache.sysml.runtime.functionobjects.BitwXor;
-import org.apache.sysml.runtime.functionobjects.Builtin;
+import org.apache.sysml.runtime.functionobjects.*;
 import org.apache.sysml.runtime.functionobjects.Builtin.BuiltinCode;
-import org.apache.sysml.runtime.functionobjects.CM;
-import org.apache.sysml.runtime.functionobjects.Divide;
-import org.apache.sysml.runtime.functionobjects.Equals;
-import org.apache.sysml.runtime.functionobjects.GreaterThan;
-import org.apache.sysml.runtime.functionobjects.GreaterThanEquals;
-import org.apache.sysml.runtime.functionobjects.IfElse;
-import org.apache.sysml.runtime.functionobjects.IndexFunction;
-import org.apache.sysml.runtime.functionobjects.IntegerDivide;
-import org.apache.sysml.runtime.functionobjects.KahanPlus;
-import org.apache.sysml.runtime.functionobjects.KahanPlusSq;
-import org.apache.sysml.runtime.functionobjects.LessThan;
-import org.apache.sysml.runtime.functionobjects.LessThanEquals;
-import org.apache.sysml.runtime.functionobjects.Mean;
-import org.apache.sysml.runtime.functionobjects.Minus;
-import org.apache.sysml.runtime.functionobjects.Minus1Multiply;
-import org.apache.sysml.runtime.functionobjects.MinusMultiply;
-import org.apache.sysml.runtime.functionobjects.MinusNz;
-import org.apache.sysml.runtime.functionobjects.Modulus;
-import org.apache.sysml.runtime.functionobjects.Multiply;
-import org.apache.sysml.runtime.functionobjects.Multiply2;
-import org.apache.sysml.runtime.functionobjects.Not;
-import org.apache.sysml.runtime.functionobjects.NotEquals;
-import org.apache.sysml.runtime.functionobjects.Or;
-import org.apache.sysml.runtime.functionobjects.Plus;
-import org.apache.sysml.runtime.functionobjects.PlusMultiply;
-import org.apache.sysml.runtime.functionobjects.Power;
-import org.apache.sysml.runtime.functionobjects.Power2;
-import org.apache.sysml.runtime.functionobjects.ReduceAll;
-import org.apache.sysml.runtime.functionobjects.ReduceCol;
-import org.apache.sysml.runtime.functionobjects.ReduceDiag;
-import org.apache.sysml.runtime.functionobjects.ReduceRow;
-import org.apache.sysml.runtime.functionobjects.Xor;
 import org.apache.sysml.runtime.instructions.cp.CPInstruction.CPType;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.gpu.GPUInstruction.GPUINSTRUCTION_TYPE;
@@ -325,7 +287,7 @@ public class InstructionUtils
 			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
 
 		} else if (opcode.equalsIgnoreCase("uab+")) {
-			AggregateOperator agg = new AggregateOperator(0, Or.getOrFnObject());
+			AggregateOperator agg = new AggregateOperator(0, null);
 			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
 
 		} else if ( opcode.equalsIgnoreCase("uar+") ) {
@@ -422,8 +384,11 @@ public class InstructionUtils
 			CorrectionLocationType lcorrLoc = (corrLoc==null) ? CorrectionLocationType.LASTCOLUMN : CorrectionLocationType.valueOf(corrLoc);
 			agg = new AggregateOperator(0, KahanPlusSq.getKahanPlusSqFnObject(), lcorrExists, lcorrLoc);
 
-		} else if (opcode.equalsIgnoreCase("a+") || opcode.equalsIgnoreCase("ab+")) {
+		} else if (opcode.equalsIgnoreCase("a+")) {
 			agg = new AggregateOperator(0, Plus.getPlusFnObject());
+
+		} else if (opcode.equalsIgnoreCase("ab+")) {
+			agg = new AggregateOperator(0, PlusBlock.getPlusBlockFnObject());
 
 		} else if ( opcode.equalsIgnoreCase("a*") ) {
 			agg = new AggregateOperator(1, Multiply.getMultiplyFnObject());
@@ -607,7 +572,10 @@ public class InstructionUtils
 		}
 		else if ( opcode.equalsIgnoreCase("*") ) {
 			return new RightScalarOperator(Multiply.getMultiplyFnObject(), constant);
-		} 
+
+		} else if (opcode.equalsIgnoreCase("b*")) {
+			return new RightScalarOperator(MultiplyBlock.getMultiplyBlockFnObject(), constant);
+		}
 		//non-commutative operators
 		else if ( opcode.equalsIgnoreCase("-") ) {
 			if(arg1IsScalar)
@@ -658,8 +626,13 @@ public class InstructionUtils
 			if(arg1IsScalar)
 				return new LeftScalarOperator(GreaterThanEquals.getGreaterThanEqualsFnObject(), constant);
 			return new RightScalarOperator(GreaterThanEquals.getGreaterThanEqualsFnObject(), constant);
-		}
-		else if ( opcode.equalsIgnoreCase("<") ) {
+
+		} else if (opcode.equalsIgnoreCase("b>=")) {
+			if(arg1IsScalar)
+				return new LeftScalarOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject(), constant);
+			return new RightScalarOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject(), constant);
+
+		} else if ( opcode.equalsIgnoreCase("<") ) {
 			if(arg1IsScalar)
 				return new LeftScalarOperator(LessThan.getLessThanFnObject(), constant);
 			return new RightScalarOperator(LessThan.getLessThanFnObject(), constant);
@@ -754,7 +727,10 @@ public class InstructionUtils
 			return new BinaryOperator(LessThanEquals.getLessThanEqualsFnObject());
 		else if(opcode.equalsIgnoreCase(">=") || opcode.equalsIgnoreCase("map>="))
 			return new BinaryOperator(GreaterThanEquals.getGreaterThanEqualsFnObject());
-		else if(opcode.equalsIgnoreCase("&&") || opcode.equalsIgnoreCase("map&&"))
+		else if (opcode.equalsIgnoreCase("b>=") || opcode.equalsIgnoreCase("mapb>=")) {
+			return new BinaryOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject());
+
+		} else if(opcode.equalsIgnoreCase("&&") || opcode.equalsIgnoreCase("map&&"))
 			return new BinaryOperator(And.getAndFnObject());
 		else if(opcode.equalsIgnoreCase("||") || opcode.equalsIgnoreCase("map||"))
 			return new BinaryOperator(Or.getOrFnObject());
@@ -776,7 +752,10 @@ public class InstructionUtils
 			return new BinaryOperator(Minus.getMinusFnObject());
 		else if(opcode.equalsIgnoreCase("*") || opcode.equalsIgnoreCase("map*"))
 			return new BinaryOperator(Multiply.getMultiplyFnObject());
-		else if(opcode.equalsIgnoreCase("1-*") || opcode.equalsIgnoreCase("map1-*"))
+		else if (opcode.equalsIgnoreCase("b*") || opcode.equalsIgnoreCase("mapb*")) {
+			return new BinaryOperator(MultiplyBlock.getMultiplyBlockFnObject());
+
+		} else if(opcode.equalsIgnoreCase("1-*") || opcode.equalsIgnoreCase("map1-*"))
 			return new BinaryOperator(Minus1Multiply.getMinus1MultiplyFnObject());
 		else if ( opcode.equalsIgnoreCase("*2") ) 
 			return new BinaryOperator(Multiply2.getMultiply2FnObject());

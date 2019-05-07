@@ -1596,17 +1596,18 @@ public class BinaryOp extends MultiThreadedHop
 	}
 	
 	public boolean supportsMatrixScalarOperations() {
-		return ( op==OpOp2.PLUS ||op==OpOp2.MINUS
-				||op==OpOp2.MULT ||op==OpOp2.DIV
-				||op==OpOp2.MODULUS ||op==OpOp2.INTDIV
-				||op==OpOp2.LESS ||op==OpOp2.LESSEQUAL
-				||op==OpOp2.GREATER ||op==OpOp2.GREATEREQUAL
-				||op==OpOp2.EQUAL ||op==OpOp2.NOTEQUAL
-				||op==OpOp2.MIN ||op==OpOp2.MAX
-				||op==OpOp2.LOG ||op==OpOp2.POW
-				||op==OpOp2.AND ||op==OpOp2.OR ||op==OpOp2.XOR
-				||op==OpOp2.BITWAND ||op==OpOp2.BITWOR ||op==OpOp2.BITWXOR
-				||op==OpOp2.BITWSHIFTL ||op==OpOp2.BITWSHIFTR);
+		return op == OpOp2.PLUS || op == OpOp2.MINUS
+				|| op == OpOp2.MULT || op == OpOp2.DIV
+				|| op == OpOp2.MODULUS || op == OpOp2.INTDIV
+				|| op == OpOp2.LESS || op == OpOp2.LESSEQUAL
+				|| op == OpOp2.GREATER || op == OpOp2.GREATEREQUAL
+				|| op == OpOp2.EQUAL || op == OpOp2.NOTEQUAL
+				|| op == OpOp2.MIN || op == OpOp2.MAX
+				|| op == OpOp2.LOG || op == OpOp2.POW
+				|| op == OpOp2.AND || op == OpOp2.OR || op == OpOp2.XOR
+				|| op == OpOp2.BITWAND || op == OpOp2.BITWOR || op == OpOp2.BITWXOR
+				|| op == OpOp2.BITWSHIFTL || op == OpOp2.BITWSHIFTR
+				|| op == OpOp2.GREATEREQUALBLOCK || op == OpOp2.MULTBLOCK;
 	}
 	
 	public boolean isPPredOperation() {

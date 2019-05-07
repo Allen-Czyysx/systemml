@@ -24,6 +24,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 
+import org.apache.sysml.runtime.functionobjects.PlusBlock;
+import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
 import scala.Tuple2;
 
 import org.apache.sysml.hops.AggBinaryOp.SparkAggType;
@@ -42,6 +44,8 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.data.OperationsOnMatrixValues;
 import org.apache.sysml.runtime.matrix.operators.AggregateOperator;
 import org.apache.sysml.runtime.matrix.operators.AggregateUnaryOperator;
+
+import java.util.Arrays;
 
 public class AggregateUnarySPInstruction extends UnarySPInstruction {
 	private SparkAggType _aggtype = null;
@@ -74,59 +78,69 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 	
 	@Override
 	public void processInstruction( ExecutionContext ec ) {
-		SparkExecutionContext sec = (SparkExecutionContext)ec;
+		SparkExecutionContext sec = (SparkExecutionContext) ec;
 		MatrixCharacteristics mc = sec.getMatrixCharacteristics(input1.getName());
-		
+
 		//get input
-		JavaPairRDD<MatrixIndexes,MatrixBlock> in = sec.getBinaryBlockRDDHandleForVariable( input1.getName() );
-		JavaPairRDD<MatrixIndexes,MatrixBlock> out = in;
-		
+		JavaPairRDD<MatrixIndexes, MatrixBlock> in = sec.getBinaryBlockRDDHandleForVariable(input1.getName());
+		JavaPairRDD<MatrixIndexes, MatrixBlock> out = in;
+
 		//filter input blocks for trace
-		if( getOpcode().equalsIgnoreCase("uaktrace") )
+		if (getOpcode().equalsIgnoreCase("uaktrace"))
 			out = out.filter(new FilterDiagBlocksFunction());
-		
+
 		//execute unary aggregate operation
-		AggregateUnaryOperator auop = (AggregateUnaryOperator)_optr;
+		AggregateUnaryOperator auop = (AggregateUnaryOperator) _optr;
 		AggregateOperator aggop = _aop;
-		
+
 		//perform aggregation if necessary and put output into symbol table
-		if( _aggtype == SparkAggType.SINGLE_BLOCK )
-		{
-			if( auop.sparseSafe )
-				out = out.filter(new FilterNonEmptyBlocksFunction());
-			
-			JavaRDD<MatrixBlock> out2 = out.map(
-					new RDDUAggFunction2(auop, mc.getRowsPerBlock(), mc.getColsPerBlock()));
-			MatrixBlock out3 = RDDAggregateUtils.aggStable(out2, aggop);
-			
-			//drop correction after aggregation
-			out3.dropLastRowsOrColumns(aggop.correctionLocation);
-			
-			//put output block into symbol table (no lineage because single block)
-			//this also includes implicit maintenance of matrix characteristics
-			sec.setMatrixOutput(output.getName(), out3, getExtendedOpcode());
-		}
-		else //MULTI_BLOCK or NONE
-		{
-			if( _aggtype == SparkAggType.NONE ) {
+		if (_aggtype == SparkAggType.SINGLE_BLOCK) {
+			if (aggop.increOp.fn.isBlockFn()) {
+//			if (false) {
+				if (aggop.increOp.fn instanceof PlusBlock) {
+					MatrixBlock mb = sec.getBlockForVariable(input1.getName());
+					int sum = Arrays.stream(mb.getFilterBlock().getData()).sum();
+					MatrixBlock outMb = new MatrixBlock(1, 1, false, 1);
+					outMb.allocateDenseBlock();
+					outMb.getDenseBlock().set(sum);
+					sec.setMatrixOutput(output.getName(), outMb, getExtendedOpcode());
+				}
+
+			} else {
+				if (auop.sparseSafe)
+					out = out.filter(new FilterNonEmptyBlocksFunction());
+
+				JavaRDD<MatrixBlock> out2 = out.map(
+						new RDDUAggFunction2(auop, mc.getRowsPerBlock(), mc.getColsPerBlock()));
+				MatrixBlock out3 = RDDAggregateUtils.aggStable(out2, aggop);
+
+				//drop correction after aggregation
+				out3.dropLastRowsOrColumns(aggop.correctionLocation);
+
+				//put output block into symbol table (no lineage because single block)
+				//this also includes implicit maintenance of matrix characteristics
+				sec.setMatrixOutput(output.getName(), out3, getExtendedOpcode());
+			}
+
+		} else { //MULTI_BLOCK or NONE
+			if (_aggtype == SparkAggType.NONE) {
 				//in case of no block aggregation, we always drop the correction as well as
 				//use a partitioning-preserving mapvalues 
 				out = out.mapValues(new RDDUAggValueFunction(auop, mc.getRowsPerBlock(), mc.getColsPerBlock()));
-			}
-			else if( _aggtype == SparkAggType.MULTI_BLOCK ) {
+			} else if (_aggtype == SparkAggType.MULTI_BLOCK) {
 				//in case of multi-block aggregation, we always keep the correction
 				out = out.mapToPair(new RDDUAggFunction(auop, mc.getRowsPerBlock(), mc.getColsPerBlock()));
 				out = RDDAggregateUtils.aggByKeyStable(out, aggop, false);
-	
+
 				//drop correction after aggregation if required (aggbykey creates 
 				//partitioning, drop correction via partitioning-preserving mapvalues)
-				if( auop.aggOp.correctionExists )
-					out = out.mapValues( new AggregateDropCorrectionFunction(aggop) );
+				if (auop.aggOp.correctionExists)
+					out = out.mapValues(new AggregateDropCorrectionFunction(aggop));
 			}
-			
+
 			//put output RDD handle into symbol table
 			updateUnaryAggOutputMatrixCharacteristics(sec, auop.indexFn);
-			sec.setRDDHandleForVariable(output.getName(), out);	
+			sec.setRDDHandleForVariable(output.getName(), out);
 			sec.addLineageRDD(output.getName(), input1.getName());
 		}
 	}
@@ -172,9 +186,9 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 	{
 		private static final long serialVersionUID = 2672082409287856038L;
 		
-		private AggregateUnaryOperator _op = null;
-		private int _brlen = -1;
-		private int _bclen = -1;
+		private AggregateUnaryOperator _op;
+		private int _brlen;
+		private int _bclen;
 		
 		public RDDUAggFunction2( AggregateUnaryOperator op, int brlen, int bclen ) {
 			_op = op;
@@ -186,9 +200,12 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 		public MatrixBlock call( Tuple2<MatrixIndexes, MatrixBlock> arg0 ) 
 			throws Exception 
 		{
-			//unary aggregate operation (always keep the correction)
-			return (MatrixBlock) arg0._2.aggregateUnaryOperations(
-					_op, new MatrixBlock(), _brlen, _bclen, arg0._1());
+			if (_op.aggOp.increOp.fn != null) {
+				//unary aggregate operation (always keep the correction)
+				return (MatrixBlock) arg0._2.aggregateUnaryOperations(
+						_op, new MatrixBlock(), _brlen, _bclen, arg0._1());
+			}
+			return arg0._2;
 		}
 	}
 

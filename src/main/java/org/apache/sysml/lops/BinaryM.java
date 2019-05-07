@@ -110,69 +110,74 @@ public class BinaryM extends Lop
 	{
 		return getOpcode( _operation );
 	}
-	
-	public static String getOpcode( OperationTypes op ) {
-		switch(op) {
-		/* Arithmetic */
-		case ADD:
-			return "map+";
-		case SUBTRACT:
-			return "map-";
-		case MULTIPLY:
-			return "map*";
-		case DIVIDE:
-			return "map/";
-		case MODULUS:
-			return "map%%";	
-		case INTDIV:
-			return "map%/%";
-		case MINUS1_MULTIPLY:
-			return "map1-*";	
-		
-		/* Relational */
-		case LESS_THAN:
-			return "map<";
-		case LESS_THAN_OR_EQUALS:
-			return "map<=";
-		case GREATER_THAN:
-			return "map>";
-		case GREATER_THAN_OR_EQUALS:
-			return "map>=";
-		case EQUALS:
-			return "map==";
-		case NOT_EQUALS:
-			return "map!=";
-		
+
+	public static String getOpcode(OperationTypes op) {
+		switch (op) {
+			/* Arithmetic */
+			case ADD:
+				return "map+";
+			case SUBTRACT:
+				return "map-";
+			case MULTIPLY:
+				return "map*";
+			case DIVIDE:
+				return "map/";
+			case MODULUS:
+				return "map%%";
+			case INTDIV:
+				return "map%/%";
+			case MINUS1_MULTIPLY:
+				return "map1-*";
+
+			/* Relational */
+			case LESS_THAN:
+				return "map<";
+			case LESS_THAN_OR_EQUALS:
+				return "map<=";
+			case GREATER_THAN:
+				return "map>";
+			case GREATER_THAN_OR_EQUALS:
+				return "map>=";
+			case EQUALS:
+				return "map==";
+			case NOT_EQUALS:
+				return "map!=";
+			case GREATER_THAN_OR_EQUALS_BLOCK:
+				return "mapb>=";
+			case AND_BLOCK:
+				return "mapb*";
+
 			/* Boolean */
-		case AND:
-			return "map&&";
-		case OR:
-			return "map||";
-		
-		
-		/* Builtin Functions */
-		case MIN:
-			return "mapmin";
-		case MAX:
-			return "mapmax";
-		case POW:
-			return "map^";
-			
-		default:
-			throw new UnsupportedOperationException("Instruction is not defined for Binary operation: " + op);
+			case AND:
+				return "map&&";
+			case OR:
+				return "map||";
+
+
+			/* Builtin Functions */
+			case MIN:
+				return "mapmin";
+			case MAX:
+				return "mapmax";
+			case POW:
+				return "map^";
+
+			default:
+				throw new UnsupportedOperationException("Instruction is not defined for Binary operation: " + op);
 		}
 	}
 
 	public static boolean isOpcode(String opcode) {
 		return opcode.equals("map+") || opcode.equals("map-") ||
-			   opcode.equals("map*") || opcode.equals("map/") ||
-			   opcode.equals("map%%") || opcode.equals("map%/%") ||
-			   opcode.equals("map<") || opcode.equals("map<=") ||
-			   opcode.equals("map>") || opcode.equals("map>=") ||
-			   opcode.equals("map==") || opcode.equals("map!=") ||
-			   opcode.equals("map&&") || opcode.equals("map||") ||
-			   opcode.equals("mapmin") || opcode.equals("mapmax") ||
-			   opcode.equals("map^") || opcode.equals("map1-*");
+				opcode.equals("map*") || opcode.equals("map/") ||
+				opcode.equals("map%%") || opcode.equals("map%/%") ||
+				opcode.equals("map<") || opcode.equals("map<=") ||
+				opcode.equals("map>") || opcode.equals("map>=") ||
+				opcode.equals("map==") || opcode.equals("map!=") ||
+				opcode.equals("map&&") || opcode.equals("map||") ||
+				opcode.equals("mapmin") || opcode.equals("mapmax") ||
+				opcode.equals("map^") || opcode.equals("map1-*") ||
+				opcode.equals("mapb>=") || opcode.equals("mapb*");
 	}
 	
 	

@@ -78,7 +78,9 @@ public class MatrixCharacteristics implements Serializable
 	private int numColumnsPerBlock = 1;
 	private long nonZero = -1;
 	private boolean ubNnz = false;
-	
+
+	public String name; // TODO added by czh
+
 	public MatrixCharacteristics() {}
 	
 	public MatrixCharacteristics(long nr, long nc, long nnz) {

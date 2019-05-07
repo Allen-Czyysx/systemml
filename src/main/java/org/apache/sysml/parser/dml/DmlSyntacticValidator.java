@@ -661,8 +661,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			selectBound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
 
 			// select = (abs >= selectBound)
-			// TODO added by czh 可能需要调整为取块, 而不是取数据
-			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
 			select.setLeft(abs);
 			select.setRight(selectBound);
 
@@ -701,8 +700,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			// if (deltaCondition) { 开启增量迭代
 
 			// lightDelta = delta * select
-			// TODO added by czh 可能需要调整为取块, 而不是取数据
-			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULTBLOCK, dwst);
 			lightDelta.setLeft(deltaVar);
 			lightDelta.setRight(selectVar);
 			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, deltaVar, lightDelta);

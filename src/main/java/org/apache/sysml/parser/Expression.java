@@ -38,7 +38,7 @@ public abstract class Expression implements ParseInfo
 	 * Binary operators.
 	 */
 	public enum BinaryOp {
-		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, MATMULT, POW, ANDBLOCK, INVALID
+		PLUS, MINUS, MULT, DIV, MODULUS, INTDIV, MATMULT, POW, MULTBLOCK, INVALID
 	}
 
 	/**
@@ -301,6 +301,8 @@ public abstract class Expression implements ParseInfo
 			return BinaryOp.POW;
 		else if (val.equalsIgnoreCase("%*%"))
 			return BinaryOp.MATMULT;
+		else if (val.equalsIgnoreCase("b*"))
+			return BinaryOp.MULTBLOCK;
 		return BinaryOp.INVALID;
 	}
 

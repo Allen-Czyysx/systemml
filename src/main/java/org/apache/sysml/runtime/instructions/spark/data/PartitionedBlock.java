@@ -32,6 +32,7 @@ import java.util.Arrays;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.caching.CacheBlock;
 import org.apache.sysml.runtime.controlprogram.caching.CacheBlockFactory;
+import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.util.FastBufferedDataInputStream;
 import org.apache.sysml.runtime.util.FastBufferedDataOutputStream;
 
@@ -141,6 +142,24 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 
 	@SuppressWarnings("unchecked")
 	public T getBlock(int rowIndex, int colIndex) {
+		if (_partBlocks[0] instanceof MatrixBlock && ((MatrixBlock) _partBlocks[0]).isFilterBlock()) {
+			MatrixBlock ret = new MatrixBlock(true);
+
+			// TODO added by czh 暂只支持 colIndex == 1
+			if (colIndex != 1) {
+				throw new DMLRuntimeException("Unsupported: colIndex = " + colIndex);
+			}
+
+			int rIdx = rowIndex - 1;
+			int pIdx = rIdx / _bclen;
+			int idx = rIdx % _bclen;
+
+			int data = ((MatrixBlock) _partBlocks[pIdx]).getFilterBlock().getData(idx);
+			ret.getFilterBlock().setData(data);
+			ret.setNonZeros(data != 0 ? 1 : 0);
+			return (T) ret;
+		}
+
 		//check for valid block index
 		int nrblks = getNumRowBlocks();
 		int ncblks = getNumColumnBlocks();

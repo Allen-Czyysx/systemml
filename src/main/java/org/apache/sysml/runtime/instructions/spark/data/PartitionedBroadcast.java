@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.caching.CacheBlock;
 import org.apache.sysml.runtime.controlprogram.caching.CacheBlockFactory;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
@@ -91,8 +92,13 @@ public class PartitionedBroadcast<T extends CacheBlock> implements Serializable
 			int ix = (rowIndex-1)*getNumColumnBlocks()+(colIndex-1);
 			pix = ix / numPerPart;
 		}
-		
-		return _pbc[pix].value().getBlock(rowIndex, colIndex);
+
+		// TODO added by czh
+		try {
+			return _pbc[pix].value().getBlock(rowIndex, colIndex);
+		} catch (DMLRuntimeException e) {
+			throw new DMLRuntimeException(e.getMessage() + " when getting block from " + _mc.name);
+		}
 	}
 	
 	/**

@@ -36,9 +36,9 @@ public class MatrixVectorBinaryOpPartitionFunction implements PairFlatMapFunctio
 {
 	private static final long serialVersionUID = 9096091404578628534L;
 	
-	private BinaryOperator _op = null;
-	private PartitionedBroadcast<MatrixBlock> _pmV = null;
-	private VectorType _vtype = null;
+	private BinaryOperator _op;
+	private PartitionedBroadcast<MatrixBlock> _pmV;
+	private VectorType _vtype;
 	
 	public MatrixVectorBinaryOpPartitionFunction( BinaryOperator op, PartitionedBroadcast<MatrixBlock> binput, VectorType vtype ) 
 	{
@@ -53,34 +53,32 @@ public class MatrixVectorBinaryOpPartitionFunction implements PairFlatMapFunctio
 	{
 		return new MapBinaryPartitionIterator( arg0 );
 	}
-	
+
 	/**
 	 * Lazy mbinary iterator to prevent materialization of entire partition output in-memory.
 	 * The implementation via mapPartitions is required to preserve partitioning information,
-	 * which is important for performance. 
+	 * which is important for performance.
 	 */
-	private class MapBinaryPartitionIterator extends LazyIterableIterator<Tuple2<MatrixIndexes, MatrixBlock>>
-	{
+	private class MapBinaryPartitionIterator extends LazyIterableIterator<Tuple2<MatrixIndexes, MatrixBlock>> {
+
 		public MapBinaryPartitionIterator(Iterator<Tuple2<MatrixIndexes, MatrixBlock>> in) {
 			super(in);
 		}
 
 		@Override
-		protected Tuple2<MatrixIndexes, MatrixBlock> computeNext(Tuple2<MatrixIndexes, MatrixBlock> arg)
-			throws Exception
-		{
+		protected Tuple2<MatrixIndexes, MatrixBlock> computeNext(Tuple2<MatrixIndexes, MatrixBlock> arg) {
 			//unpack partition key-value pairs
 			MatrixIndexes ix = arg._1();
 			MatrixBlock in1 = arg._2();
-			
+
 			//get the rhs block 
-			int rix= (int)((_vtype==VectorType.COL_VECTOR) ? ix.getRowIndex() : 1);
-			int cix= (int)((_vtype==VectorType.COL_VECTOR) ? 1 : ix.getColumnIndex());
+			int rix = (int) ((_vtype == VectorType.COL_VECTOR) ? ix.getRowIndex() : 1);
+			int cix = (int) ((_vtype == VectorType.COL_VECTOR) ? 1 : ix.getColumnIndex());
 			MatrixBlock in2 = _pmV.getBlock(rix, cix);
-				
+
 			//execute the binary operation
-			MatrixBlock ret = (MatrixBlock) (in1.binaryOperations (_op, in2, new MatrixBlock()));
-			return new Tuple2<>(ix, ret);	
-		}			
+			MatrixBlock ret = (MatrixBlock) (in1.binaryOperations(_op, in2, new MatrixBlock()));
+			return new Tuple2<>(ix, ret);
+		}
 	}
 }

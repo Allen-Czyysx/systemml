@@ -1140,6 +1140,7 @@ public abstract class Hop implements ParseInfo
 		LOG_NZ, //sparse-safe log; ppred(X,0,"!=")*log(X,0.5)
 		MINUS1_MULT, //1-X*Y
 		BITWAND, BITWOR, BITWXOR, BITWSHIFTL, BITWSHIFTR, //bitwise operations
+		GREATEREQUALBLOCK, MULTBLOCK, // 以块做比较
 	}
 
 	// Operations that require 3 operands
@@ -1301,6 +1302,8 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsB.put(OpOp2.BITWXOR, Binary.OperationTypes.BW_XOR);
 		HopsOpOp2LopsB.put(OpOp2.BITWSHIFTL, Binary.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsB.put(OpOp2.BITWSHIFTR, Binary.OperationTypes.BW_SHIFTR);
+		HopsOpOp2LopsB.put(OpOp2.GREATEREQUALBLOCK, Binary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
+		HopsOpOp2LopsB.put(OpOp2.MULTBLOCK, Binary.OperationTypes.AND_BLOCK);
 	}
 
 	protected static final HashMap<Hop.OpOp2, BinaryScalar.OperationTypes> HopsOpOp2LopsBS;
@@ -1331,6 +1334,8 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsBS.put(OpOp2.BITWXOR, BinaryScalar.OperationTypes.BW_XOR);
 		HopsOpOp2LopsBS.put(OpOp2.BITWSHIFTL, BinaryScalar.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsBS.put(OpOp2.BITWSHIFTR, BinaryScalar.OperationTypes.BW_SHIFTR);
+		HopsOpOp2LopsBS.put(OpOp2.GREATEREQUALBLOCK, BinaryScalar.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
+		HopsOpOp2LopsBS.put(OpOp2.MULTBLOCK, BinaryScalar.OperationTypes.MULT_BLOCK);
 	}
 
 	protected static final HashMap<Hop.OpOp2, org.apache.sysml.lops.Unary.OperationTypes> HopsOpOp2LopsU;
@@ -1363,6 +1368,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsU.put(OpOp2.BITWXOR, Unary.OperationTypes.BW_XOR);
 		HopsOpOp2LopsU.put(OpOp2.BITWSHIFTL, Unary.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsU.put(OpOp2.BITWSHIFTR, Unary.OperationTypes.BW_SHIFTR);
+		HopsOpOp2LopsU.put(OpOp2.GREATEREQUALBLOCK, Unary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
 	}
 
 	protected static final HashMap<Hop.OpOp1, org.apache.sysml.lops.Unary.OperationTypes> HopsOpOp1LopsU;
@@ -1557,6 +1563,8 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2String.put(OpOp2.BITWXOR, "bitwXor");
 		HopsOpOp2String.put(OpOp2.BITWSHIFTL, "bitwShiftL");
 		HopsOpOp2String.put(OpOp2.BITWSHIFTR, "bitwShiftR");
+		HopsOpOp2String.put(OpOp2.GREATEREQUALBLOCK, "b>=");
+		HopsOpOp2String.put(OpOp2.MULTBLOCK, "b*");
 	}
 
 	public static String getBinaryOpCode(OpOp2 op) {
@@ -2045,8 +2053,7 @@ public abstract class Hop implements ParseInfo
 
 	/**
 	 * 供增量迭代在SP环境中使用, 设置缓存所需信息
-	 * TODO added by czh 需要修改对应 Lop 的 getInstructions 和 SPInstruction 的 parseInstruction
-	 *  目前支持 mapmm, map+, >=, max
+	 * 目前支持 mapmm, map+, >=, max
 	 */
 	public void setCacheInfoToLop() {
 		if (_needCache) {

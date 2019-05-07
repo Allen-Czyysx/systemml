@@ -107,6 +107,7 @@ public class WhileProgramBlock extends ProgramBlock
 			UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 			
 			//run loop body until predicate becomes false
+			int count = 1;
 			while( executePredicate(ec).getBooleanValue() ) {
 				// TODO added by czh 删
 				long t1 = System.currentTimeMillis();
@@ -118,7 +119,8 @@ public class WhileProgramBlock extends ProgramBlock
 				}
 
 				// TODO added by czh 删
-				System.out.println("while\t" + (System.currentTimeMillis() - t1) / 1000.0);
+				System.out.println("while\t" + (System.currentTimeMillis() - t1) / 1000.0 + "\t" + count + "\n");
+				count++;
 			}
 			
 			// reset update-in-place variables

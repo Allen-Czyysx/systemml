@@ -23,12 +23,7 @@ package org.apache.sysml.runtime.matrix.operators;
 import java.io.Serializable;
 
 import org.apache.sysml.lops.PartialAggregate.CorrectionLocationType;
-import org.apache.sysml.runtime.functionobjects.KahanPlus;
-import org.apache.sysml.runtime.functionobjects.KahanPlusSq;
-import org.apache.sysml.runtime.functionobjects.Minus;
-import org.apache.sysml.runtime.functionobjects.Or;
-import org.apache.sysml.runtime.functionobjects.Plus;
-import org.apache.sysml.runtime.functionobjects.ValueFunction;
+import org.apache.sysml.runtime.functionobjects.*;
 
 
 public class AggregateOperator  extends Operator implements Serializable
@@ -47,7 +42,7 @@ public class AggregateOperator  extends Operator implements Serializable
 	public AggregateOperator(double initValue, ValueFunction op, boolean correctionExists, CorrectionLocationType correctionLocation) {
 		//as long as (v op 0)=v, then op is sparseSafe
 		super(op instanceof Plus || op instanceof KahanPlus || op instanceof KahanPlusSq 
-			|| op instanceof Or || op instanceof Minus);
+			|| op instanceof Or || op instanceof Minus || op instanceof PlusBlock);
 		initialValue=initValue;
 		increOp=new BinaryOperator(op);
 		this.correctionExists=correctionExists;

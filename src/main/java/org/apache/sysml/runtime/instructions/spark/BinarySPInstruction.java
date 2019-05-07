@@ -41,8 +41,10 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
+import scala.Tuple2;
 
 import java.util.Arrays;
+import java.util.List;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
@@ -213,7 +215,7 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		boolean isOuter = (mc1.getRows()>1 && mc1.getCols()==1 && mc2.getRows()==1 && mc2.getCols()>1);
 		
 		//execute map binary operation
-		JavaPairRDD<MatrixIndexes,MatrixBlock> out = null;
+		JavaPairRDD<MatrixIndexes,MatrixBlock> out;
 		if( isOuter ) {
 			out = in1.flatMapToPair(new OuterVectorBinaryOpFunction(bop, in2));
 		}
@@ -229,6 +231,12 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		if (needCacheNow) {
 			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
 		}
+
+		// TODO added by czh 删
+//		if (bop.fn.isBlockFn()) {
+//			List<Tuple2<MatrixIndexes,MatrixBlock>> list = out.collect();
+//			System.out.println(list);
+//		}
 
 		//set output RDD
 		updateBinaryOutputMatrixCharacteristics(sec);
@@ -262,6 +270,12 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		if (needCacheNow) {
 			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
 		}
+
+		// TODO added by czh 删
+//		if (sc_op.fn instanceof org.apache.sysml.runtime.functionobjects.GreaterThanEqualsBlock) {
+//			List<Tuple2<MatrixIndexes,MatrixBlock>> list = out.collect();
+//			System.out.println(list);
+//		}
 
 		//put output RDD handle into symbol table
 		updateUnaryOutputMatrixCharacteristics(sec, rddVar, output.getName());

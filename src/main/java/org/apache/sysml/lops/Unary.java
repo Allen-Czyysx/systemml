@@ -45,7 +45,8 @@ public class Unary extends Lop
 		CUMSUM, CUMPROD, CUMMIN, CUMMAX, CUMSUMPROD,
 		SPROP, SIGMOID, SUBTRACT_NZ, LOG_NZ,
 		CAST_AS_MATRIX, CAST_AS_FRAME,
-		NOTSUPPORTED
+		NOTSUPPORTED,
+		GREATER_THAN_OR_EQUALS_BLOCK, // 以块做比较
 	}
 
 	private OperationTypes operation;
@@ -171,161 +172,172 @@ public class Unary extends Lop
 
 	public static String getOpcode(OperationTypes op) {
 		switch (op) {
-		case NOT:
-			return "!";
-		case ABS:
-			return "abs";
-		case SIN:
-			return "sin";
-		case COS:
-			return "cos";
-		case TAN:
-			return "tan";
-		case ASIN:
-			return "asin";
-		case ACOS:
-			return "acos";
-		case ATAN:
-			return "atan";
-		case SINH:
-			return "sinh";
-		case COSH:
-			return "cosh";
-		case TANH:
-			return "tanh";
-		case SIGN:
-			return "sign";
-		case SQRT:
-			return "sqrt";
-		case EXP:
-			return "exp";
-		
-		case LOG:
-			return "log";
-		
-		case LOG_NZ:
-			return "log_nz";
-			
-		case ROUND:
-			return "round";
+			case NOT:
+				return "!";
+			case ABS:
+				return "abs";
+			case SIN:
+				return "sin";
+			case COS:
+				return "cos";
+			case TAN:
+				return "tan";
+			case ASIN:
+				return "asin";
+			case ACOS:
+				return "acos";
+			case ATAN:
+				return "atan";
+			case SINH:
+				return "sinh";
+			case COSH:
+				return "cosh";
+			case TANH:
+				return "tanh";
+			case SIGN:
+				return "sign";
+			case SQRT:
+				return "sqrt";
+			case EXP:
+				return "exp";
 
-		case ADD:
-			return "+";
+			case LOG:
+				return "log";
 
-		case SUBTRACT:
-			return "-";
+			case LOG_NZ:
+				return "log_nz";
 
-		case SUBTRACT_NZ:
-			return "-nz";
-		
-		case SUBTRACTRIGHT:
-			return "s-r";
+			case ROUND:
+				return "round";
 
-		case MULTIPLY:
-			return "*";
+			case ADD:
+				return "+";
 
-		case MULTIPLY2:
-			return "*2";
+			case SUBTRACT:
+				return "-";
 
-		case MINUS1_MULTIPLY:
-			return "1-*";
-			
-		case DIVIDE:
-			return "/";
+			case SUBTRACT_NZ:
+				return "-nz";
 
-		case MODULUS:
-			return "%%";
-			
-		case INTDIV:
-			return "%/%";
-			
-		case Over:
-			return "so";
+			case SUBTRACTRIGHT:
+				return "s-r";
 
-		case POW:
-			return "^";
-		
-		case POW2:
-			return "^2";
+			case MULTIPLY:
+				return "*";
 
-		case GREATER_THAN:
-			return ">";
+			case MULTIPLY2:
+				return "*2";
 
-		case GREATER_THAN_OR_EQUALS:
-			return ">=";
+			case MINUS1_MULTIPLY:
+				return "1-*";
 
-		case LESS_THAN:
-			return "<";
+			case DIVIDE:
+				return "/";
 
-		case LESS_THAN_OR_EQUALS:
-			return "<=";
+			case MODULUS:
+				return "%%";
 
-		case EQUALS:
-			return "==";
+			case INTDIV:
+				return "%/%";
 
-		case NOT_EQUALS:
-			return "!=";
+			case Over:
+				return "so";
 
-		case MAX:
-			return "max";
+			case POW:
+				return "^";
 
-		case MIN:
-			return "min";
-		
-		case CEIL:
-			return "ceil";
-		
-		case FLOOR:
-			return "floor";
-		
-		case CUMSUM:
-			return "ucumk+";
-		
-		case CUMPROD:
-			return "ucum*";
-		
-		case CUMMIN:
-			return "ucummin";
-		
-		case CUMMAX:
-			return "ucummax";
-		
-		case CUMSUMPROD:
-			return "ucumk+*";
-		
-		case INVERSE:
-			return "inverse";
-		
-		case CHOLESKY:
-			return "cholesky";
-		
-		case MR_IQM:
-			return "qpick";
+			case POW2:
+				return "^2";
 
-		case SPROP:
-			return "sprop";
-			
-		case SIGMOID:
-			return "sigmoid";
-		
-		case CAST_AS_MATRIX:
-			return UnaryCP.CAST_AS_MATRIX_OPCODE;
+			case GREATER_THAN:
+				return ">";
 
-		case CAST_AS_FRAME:
-			return UnaryCP.CAST_AS_FRAME_OPCODE;
-		
-		case AND: return "&&";
-		case OR:  return "||";
-		case XOR: return "xor";
-		case BW_AND: return "bitwAnd";
-		case BW_OR:  return "bitwOr";
-		case BW_XOR: return "bitwXor";
-		case BW_SHIFTL: return "bitwShiftL";
-		case BW_SHIFTR: return "bitwShiftR";
-		
-		default:
-			throw new LopsException(
-					"Instruction not defined for Unary operation: " + op);
+			case GREATER_THAN_OR_EQUALS:
+				return ">=";
+
+			case GREATER_THAN_OR_EQUALS_BLOCK:
+				return "b>=";
+
+			case LESS_THAN:
+				return "<";
+
+			case LESS_THAN_OR_EQUALS:
+				return "<=";
+
+			case EQUALS:
+				return "==";
+
+			case NOT_EQUALS:
+				return "!=";
+
+			case MAX:
+				return "max";
+
+			case MIN:
+				return "min";
+
+			case CEIL:
+				return "ceil";
+
+			case FLOOR:
+				return "floor";
+
+			case CUMSUM:
+				return "ucumk+";
+
+			case CUMPROD:
+				return "ucum*";
+
+			case CUMMIN:
+				return "ucummin";
+
+			case CUMMAX:
+				return "ucummax";
+
+			case CUMSUMPROD:
+				return "ucumk+*";
+
+			case INVERSE:
+				return "inverse";
+
+			case CHOLESKY:
+				return "cholesky";
+
+			case MR_IQM:
+				return "qpick";
+
+			case SPROP:
+				return "sprop";
+
+			case SIGMOID:
+				return "sigmoid";
+
+			case CAST_AS_MATRIX:
+				return UnaryCP.CAST_AS_MATRIX_OPCODE;
+
+			case CAST_AS_FRAME:
+				return UnaryCP.CAST_AS_FRAME_OPCODE;
+
+			case AND:
+				return "&&";
+			case OR:
+				return "||";
+			case XOR:
+				return "xor";
+			case BW_AND:
+				return "bitwAnd";
+			case BW_OR:
+				return "bitwOr";
+			case BW_XOR:
+				return "bitwXor";
+			case BW_SHIFTL:
+				return "bitwShiftL";
+			case BW_SHIFTR:
+				return "bitwShiftR";
+
+			default:
+				throw new LopsException(
+						"Instruction not defined for Unary operation: " + op);
 		}
 	}
 	
@@ -439,12 +451,13 @@ public class Unary extends Lop
 			sb.append( Lop.OPERAND_DELIMITOR );
 			sb.append( getOpcode() );
 			sb.append( OPERAND_DELIMITOR );
-			
-			if(  operation == OperationTypes.INTDIV || operation == OperationTypes.MODULUS || 
-				 operation == OperationTypes.POW || 
-				 operation == OperationTypes.GREATER_THAN || operation == OperationTypes.GREATER_THAN_OR_EQUALS ||
-				 operation == OperationTypes.LESS_THAN || operation == OperationTypes.LESS_THAN_OR_EQUALS ||
-				 operation == OperationTypes.EQUALS || operation == OperationTypes.NOT_EQUALS )
+
+			if (operation == OperationTypes.INTDIV || operation == OperationTypes.MODULUS ||
+					operation == OperationTypes.POW ||
+					operation == OperationTypes.GREATER_THAN || operation == OperationTypes.GREATER_THAN_OR_EQUALS ||
+					operation == OperationTypes.LESS_THAN || operation == OperationTypes.LESS_THAN_OR_EQUALS ||
+					operation == OperationTypes.EQUALS || operation == OperationTypes.NOT_EQUALS ||
+					operation == OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK)
 			{
 				//TODO discuss w/ Shirish: we should consolidate the other operations (see ScalarInstruction.parseInstruction / BinaryCPInstruction.getScalarOperator)
 				//append both operands

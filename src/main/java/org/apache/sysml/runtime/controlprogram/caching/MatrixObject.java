@@ -469,8 +469,8 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 			//obtain matrix block from RDD
 			int rlen = (int)mc.getRows();
 			int clen = (int)mc.getCols();
-			int brlen = (int)mc.getRowsPerBlock();
-			int bclen = (int)mc.getColsPerBlock();
+			int brlen = mc.getRowsPerBlock();
+			int bclen = mc.getColsPerBlock();
 			long nnz = mc.getNonZerosBound();
 			
 			//guarded rdd collect 

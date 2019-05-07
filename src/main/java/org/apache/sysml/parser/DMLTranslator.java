@@ -1820,7 +1820,7 @@ public class DMLTranslator {
 			UnaryOp uHop = (UnaryOp) hop;
 			OpOp1 opType = uHop.getOp();
 
-			if (opType == OpOp1.PRINT || opType == OpOp1.CAST_AS_SCALAR) {
+			if (opType == OpOp1.PRINT || opType == OpOp1.CAST_AS_SCALAR || opType == OpOp1.ABS) {
 				if (needDelta) {
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 
@@ -1845,10 +1845,15 @@ public class DMLTranslator {
 			OpOp2 opType = bHop.getOp();
 
 			if (opType == OpOp2.DIV || opType == OpOp2.PLUS || opType == OpOp2.MINUS || opType == OpOp2.MULT) {
+				boolean useOriginal = true;
 				if (needDelta) {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+					// TODO added by czh 加入支持的增量计算的算子
+					if (false) {
+						useOriginal = false;
+					}
+				}
 
-				} else {
+				if (useOriginal) {
 					// 原计划
 					Hop left = dIterForEachHop(bHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
 					Hop right = dIterForEachHop(bHop.getInput().get(1), false, dwsb, curDVarNames).get(0);
@@ -1858,6 +1863,9 @@ public class DMLTranslator {
 					newHop.setParseInfo(bHop);
 					newHop.setDisableRecord(true);
 					dHops.add(newHop);
+
+				} else {
+					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 				}
 
 				return dHops;
@@ -2388,6 +2396,8 @@ public class DMLTranslator {
 			currBop = new AggBinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT, AggOp.SUM, left, right);
 		} else if (source.getOpCode() == Expression.BinaryOp.POW) {
 			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.POW, left, right);
+		} else if (source.getOpCode() == Expression.BinaryOp.MULTBLOCK) {
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULTBLOCK, left, right);
 		} else {
 			throw new ParseException("Unsupported parsing of binary expression: " + source.getOpCode());
 		}
@@ -2432,6 +2442,8 @@ public class DMLTranslator {
 			op = OpOp2.EQUAL;
 		} else if (source.getOpCode() == Expression.RelationalOp.NOTEQUAL) {
 			op = OpOp2.NOTEQUAL;
+		} else if (source.getOpCode() == Expression.RelationalOp.GREATEREQUALBLOCK) {
+			op = OpOp2.GREATEREQUALBLOCK;
 		}
 		currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), op, left, right);
 		currBop.setParseInfo(source);

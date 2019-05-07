@@ -635,9 +635,85 @@ public class SparkExecutionContext extends ExecutionContext
 		return bret;
 	}
 
+	public MatrixBlock getBlockForMatrixObject(MatrixObject mo) {
+		//NOTE: The memory consumption of this method is the in-memory size of the
+		//matrix object plus the partitioned size in 1k-1k blocks. Since the call
+		//to broadcast happens after the matrix object has been released, the memory
+		//requirements of blockified chunks in Spark's block manager are covered under
+		//this maximum. Also note that we explicitly clear the in-memory blocks once
+		//the broadcasts are created (other than in local mode) in order to avoid
+		//unnecessary memory requirements during the lifetime of this broadcast handle.
+
+		long t0 = ConfigurationManager.isStatistics() ? System.nanoTime() : 0;
+
+		PartitionedBroadcast<MatrixBlock> broadcast = null;
+		MatrixBlock mb;
+
+		//reuse existing broadcast handle
+		if (mo.getBroadcastHandle() != null && mo.getBroadcastHandle().isPartitionedBroadcastValid()) {
+			broadcast = mo.getBroadcastHandle().getPartitionedBroadcast();
+		}
+
+		//create new broadcast handle (never created, evicted)
+		if (broadcast == null) {
+			//account for overwritten invalid broadcast (e.g., evicted)
+			if (mo.getBroadcastHandle() != null)
+				CacheableData.addBroadcastSize(-mo.getBroadcastHandle().getPartitionedBroadcastSize());
+
+			//obtain meta data for matrix
+			int brlen = (int) mo.getNumRowsPerBlock();
+			int bclen = (int) mo.getNumColumnsPerBlock();
+
+			//create partitioned matrix block and release memory consumed by input
+			mb = mo.acquireRead();
+			PartitionedBlock<MatrixBlock> pmb = new PartitionedBlock<>(mb, brlen, bclen);
+			mo.release();
+
+			//determine coarse-grained partitioning
+			int numPerPart = PartitionedBroadcast.computeBlocksPerPartition(mo.getNumRows(), mo.getNumColumns(), brlen, bclen);
+			int numParts = (int) Math.ceil((double) pmb.getNumRowBlocks() * pmb.getNumColumnBlocks() / numPerPart);
+			Broadcast<PartitionedBlock<MatrixBlock>>[] ret = new Broadcast[numParts];
+
+			//create coarse-grained partitioned broadcasts
+			if (numParts > 1) {
+				Arrays.parallelSetAll(ret, i -> createPartitionedBroadcast(pmb, numPerPart, i));
+			} else { //single partition
+				ret[0] = getSparkContext().broadcast(pmb);
+				if (!isLocalMaster())
+					pmb.clearBlocks();
+			}
+
+			broadcast = new PartitionedBroadcast<>(ret, mo.getMatrixCharacteristics());
+			// create the broadcast handle if the matrix or frame has never been broadcasted
+			if (mo.getBroadcastHandle() == null) {
+				mo.setBroadcastHandle(new BroadcastObject<MatrixBlock>());
+			}
+			mo.getBroadcastHandle().setPartitionedBroadcast(broadcast,
+					OptimizerUtils.estimatePartitionedSizeExactSparsity(mo.getMatrixCharacteristics()));
+			CacheableData.addBroadcastSize(mo.getBroadcastHandle().getPartitionedBroadcastSize());
+
+		} else {
+			throw new DMLRuntimeException("Shouldn't be here");
+		}
+
+		if (ConfigurationManager.isStatistics()) {
+			Statistics.accSparkBroadCastTime(System.nanoTime() - t0);
+			Statistics.incSparkBroadcastCount(1);
+		}
+
+		return mb;
+	}
+
 	public PartitionedBroadcast<MatrixBlock> getBroadcastForVariable(String varname) {
 		MatrixObject mo = getMatrixObject(varname);
+		mo.getMatrixCharacteristics().name = varname; // TODO added by czh
 		return getBroadcastForMatrixObject(mo);
+	}
+
+	public MatrixBlock getBlockForVariable(String varname) {
+		MatrixObject mo = getMatrixObject(varname);
+		mo.getMatrixCharacteristics().name = varname; // TODO added by czh
+		return getBlockForMatrixObject(mo);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -830,91 +906,116 @@ public class SparkExecutionContext extends ExecutionContext
 	/**
 	 * Utility method for creating a single matrix block out of a binary block RDD.
 	 * Note that this collect call might trigger execution of any pending transformations.
-	 *
+	 * <p>
 	 * NOTE: This is an unguarded utility function, which requires memory for both the output matrix
 	 * and its collected, blocked representation.
 	 *
-	 * @param rdd JavaPairRDD for matrix block
-	 * @param rlen number of rows
-	 * @param clen number of columns
+	 * @param rdd   JavaPairRDD for matrix block
+	 * @param rlen  number of rows
+	 * @param clen  number of columns
 	 * @param brlen number of rows in a block
 	 * @param bclen number of columns in a block
-	 * @param nnz number of non-zeros
+	 * @param nnz   number of non-zeros
 	 * @return matrix block
 	 */
-	public static MatrixBlock toMatrixBlock(JavaPairRDD<MatrixIndexes,MatrixBlock> rdd, int rlen, int clen, int brlen, int bclen, long nnz) {
+	public static MatrixBlock toMatrixBlock(JavaPairRDD<MatrixIndexes, MatrixBlock> rdd, int rlen, int clen, int brlen,
+											int bclen, long nnz) {
 		long t0 = ConfigurationManager.isStatistics() ? System.nanoTime() : 0;
 
-		MatrixBlock out = null;
-		
-		if( rlen <= brlen && clen <= bclen ) //SINGLE BLOCK
-		{
-			//special case without copy and nnz maintenance
-			List<Tuple2<MatrixIndexes,MatrixBlock>> list = rdd.collect();
+		MatrixBlock out;
 
-			if( list.size()>1 )
+		if (rlen <= brlen && clen <= bclen) { //SINGLE BLOCK
+			//special case without copy and nnz maintenance
+			List<Tuple2<MatrixIndexes, MatrixBlock>> list = rdd.collect();
+
+			if (list.size() > 1)
 				throw new DMLRuntimeException("Expecting no more than one result block.");
-			else if( list.size()==1 )
+			else if (list.size() == 1)
 				out = list.get(0)._2();
 			else //empty (e.g., after ops w/ outputEmpty=false)
 				out = new MatrixBlock(rlen, clen, true);
 			out.examSparsity();
-		}
-		else //MULTIPLE BLOCKS
-		{
+
+		} else { //MULTIPLE BLOCKS
 			//determine target sparse/dense representation
-			long lnnz = (nnz >= 0) ? nnz : (long)rlen * clen;
+			long lnnz = (nnz >= 0) ? nnz : (long) rlen * clen;
 			boolean sparse = MatrixBlock.evalSparseFormatInMemory(rlen, clen, lnnz);
 
 			//create output matrix block (w/ lazy allocation)
 			out = new MatrixBlock(rlen, clen, sparse, lnnz);
-			
+
 			//kickoff asynchronous allocation
 			Future<MatrixBlock> fout = out.allocateBlockAsync();
-			
+
 			//trigger pending RDD operations and collect blocks
-			List<Tuple2<MatrixIndexes,MatrixBlock>> list = rdd.collect();
+			List<Tuple2<MatrixIndexes, MatrixBlock>> list = rdd.collect();
 			out = IOUtilFunctions.get(fout); //wait for allocation
-			
+
 			//copy blocks one-at-a-time into output matrix block
 			long aNnz = 0;
-			for( Tuple2<MatrixIndexes,MatrixBlock> keyval : list )
-			{
+			boolean flag = true;
+			for (Tuple2<MatrixIndexes, MatrixBlock> keyval : list) {
 				//unpack index-block pair
 				MatrixIndexes ix = keyval._1();
 				MatrixBlock block = keyval._2();
-				
-				//compute row/column block offsets
-				int row_offset = (int)(ix.getRowIndex()-1)*brlen;
-				int col_offset = (int)(ix.getColumnIndex()-1)*bclen;
-				int rows = block.getNumRows();
-				int cols = block.getNumColumns();
-				
-				//handle compressed blocks (decompress for robustness)
-				if( block instanceof CompressedMatrixBlock )
-					block = ((CompressedMatrixBlock)block).decompress();
-				
-				//append block
-				if( sparse ) { //SPARSE OUTPUT
-					//append block to sparse target in order to avoid shifting, where
-					//we use a shallow row copy in case of MCSR and single column blocks
-					//note: this append requires, for multiple column blocks, a final sort
-					out.appendToSparse(block, row_offset, col_offset, clen>bclen);
-				}
-				else { //DENSE OUTPUT
-					out.copy( row_offset, row_offset+rows-1,
-							  col_offset, col_offset+cols-1, block, false );
-				}
 
-				//incremental maintenance nnz
-				aNnz += block.getNonZeros();
+				if (block.isFilterBlock()) {
+					if (flag) {
+						out.clean();
+						int r = (int) Math.ceil(rlen * 1.0 / brlen);
+						int c = (int) Math.ceil(clen * 1.0 / bclen);
+						// TODO added by czh 暂不支持 c != 1
+						if (c != 1) {
+							throw new DMLRuntimeException("Unsupported: c = " + c);
+						}
+						out.initFilterBlock(r, c);
+						flag = false;
+					}
+
+					int data = block.getFilterBlock().getData(0);
+					out.getFilterBlock().setData((int) ix.getRowIndex() - 1, data);
+					aNnz += data != 0 ? 1 : 0;
+
+				} else {
+					//compute row/column block offsets
+					int row_offset = (int) (ix.getRowIndex() - 1) * brlen;
+					int col_offset = (int) (ix.getColumnIndex() - 1) * bclen;
+					int rows = block.getNumRows();
+					int cols = block.getNumColumns();
+
+					//handle compressed blocks (decompress for robustness)
+					if (block instanceof CompressedMatrixBlock)
+						block = ((CompressedMatrixBlock) block).decompress();
+
+					//append block
+					if (sparse) { //SPARSE OUTPUT
+						//append block to sparse target in order to avoid shifting, where
+						//we use a shallow row copy in case of MCSR and single column blocks
+						//note: this append requires, for multiple column blocks, a final sort
+						out.appendToSparse(block, row_offset, col_offset, clen > bclen);
+
+					} else { //DENSE OUTPUT
+						out.copy(row_offset, row_offset + rows - 1,
+								col_offset, col_offset + cols - 1, block, false);
+					}
+
+					//incremental maintenance nnz
+					aNnz += block.getNonZeros();
+				}
 			}
 
 			//post-processing output matrix
-			if( sparse && clen>bclen )
-				out.sortSparseRows();
-			out.setNonZeros(aNnz);
-			out.examSparsity();
+			if (flag) {
+				if (sparse && clen > bclen)
+					out.sortSparseRows();
+				out.setNonZeros(aNnz);
+				out.examSparsity();
+			} else {
+				out.setNonZeros(aNnz);
+				if (aNnz == 0) {
+					out.getFilterBlock().initData(0);
+				}
+			}
 		}
 
 		if (ConfigurationManager.isStatistics()) {

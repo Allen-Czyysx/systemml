@@ -38,6 +38,7 @@ public class Binary extends Lop
 		AND, OR, XOR,
 		MAX, MIN, POW, SOLVE, NOTSUPPORTED,
 		BW_AND, BW_OR, BW_XOR, BW_SHIFTL, BW_SHIFTR, //Bitwise operations
+		GREATER_THAN_OR_EQUALS_BLOCK, AND_BLOCK, // 以块做比较
 	}
 
 	private OperationTypes operation;
@@ -120,71 +121,75 @@ public class Binary extends Lop
 	
 	public static String getOpcode( OperationTypes op ) {
 		switch(op) {
-		/* Arithmetic */
-		case ADD:
-			return "+";
-		case SUBTRACT:
-			return "-";
-		case MULTIPLY:
-			return "*";
-		case DIVIDE:
-			return "/";
-		case MODULUS:
-			return "%%";	
-		case INTDIV:
-			return "%/%";		
-		case MATMULT:
-			return "ba+*";
-		case MINUS1_MULTIPLY:
-			return "1-*";
-		
-		/* Relational */
-		case LESS_THAN:
-			return "<";
-		case LESS_THAN_OR_EQUALS:
-			return "<=";
-		case GREATER_THAN:
-			return ">";
-		case GREATER_THAN_OR_EQUALS:
-			return ">=";
-		case EQUALS:
-			return "==";
-		case NOT_EQUALS:
-			return "!=";
-		
-		/* Boolean */
-		case AND:
-			return "&&";
-		case OR:
-			return "||";
+			/* Arithmetic */
+			case ADD:
+				return "+";
+			case SUBTRACT:
+				return "-";
+			case MULTIPLY:
+				return "*";
+			case DIVIDE:
+				return "/";
+			case MODULUS:
+				return "%%";
+			case INTDIV:
+				return "%/%";
+			case MATMULT:
+				return "ba+*";
+			case MINUS1_MULTIPLY:
+				return "1-*";
 
-		/* Binary Builtin Function */
-		case XOR:
-			return "xor";
-		case BW_AND:
-			return "bitwAnd";
-		case BW_OR:
-			return "bitwOr";
-		case BW_XOR:
-			return "bitwXor";
-		case BW_SHIFTL:
-			return "bitwShiftL";
-		case BW_SHIFTR:
-			return "bitwShiftR";
+			/* Relational */
+			case LESS_THAN:
+				return "<";
+			case LESS_THAN_OR_EQUALS:
+				return "<=";
+			case GREATER_THAN:
+				return ">";
+			case GREATER_THAN_OR_EQUALS:
+				return ">=";
+			case EQUALS:
+				return "==";
+			case NOT_EQUALS:
+				return "!=";
+			case GREATER_THAN_OR_EQUALS_BLOCK:
+				return "b>=";
+			case AND_BLOCK:
+				return "b*";
 
-		/* Builtin Functions */
-		case MIN:
-			return "min";
-		case MAX:
-			return "max";
-		case POW:
-			return "^";
-			
-		case SOLVE:
-			return "solve";
-			
-		default:
-			throw new UnsupportedOperationException("Instruction is not defined for Binary operation: " + op);
+			/* Boolean */
+			case AND:
+				return "&&";
+			case OR:
+				return "||";
+
+			/* Binary Builtin Function */
+			case XOR:
+				return "xor";
+			case BW_AND:
+				return "bitwAnd";
+			case BW_OR:
+				return "bitwOr";
+			case BW_XOR:
+				return "bitwXor";
+			case BW_SHIFTL:
+				return "bitwShiftL";
+			case BW_SHIFTR:
+				return "bitwShiftR";
+
+			/* Builtin Functions */
+			case MIN:
+				return "min";
+			case MAX:
+				return "max";
+			case POW:
+				return "^";
+
+			case SOLVE:
+				return "solve";
+
+			default:
+				throw new UnsupportedOperationException("Instruction is not defined for Binary operation: " + op);
 		}
 	}
 	
