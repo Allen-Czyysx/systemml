@@ -157,7 +157,7 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		}
 		else //MULTI_BLOCK or NONE
 		{
-			JavaPairRDD<MatrixIndexes,MatrixBlock> out = null;
+			JavaPairRDD<MatrixIndexes,MatrixBlock> out;
 			if( requiresFlatMapFunction(type, mcBc) ) {
 				if( requiresRepartitioning(type, mcRdd, mcBc, in1.getNumPartitions()) ) {
 					int numParts = getNumRepartitioning(type, mcRdd, mcBc);

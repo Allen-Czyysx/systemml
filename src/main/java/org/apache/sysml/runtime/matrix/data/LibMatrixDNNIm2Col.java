@@ -188,7 +188,7 @@ public class LibMatrixDNNIm2Col
 	
 
 	// ------------------------------------------------------------------------------------------------------
-	// Since col2im always operates on intermediate generated as part of matmult, it is not clear which operator to select apriori.
+	// Since col2im always operates on intermediate generated as part of matmult, it is not clear which operator to selectBlock apriori.
 	// Therefore, it is provided as utility function rather than an operator (like im2col or rotate180)
 	
 	//Converts input: PQ X CRS matrix and writes to 1 X CHW

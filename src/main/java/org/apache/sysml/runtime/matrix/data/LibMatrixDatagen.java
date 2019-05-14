@@ -489,7 +489,7 @@ public class LibMatrixDatagen
 				int blockcols = (cbj == ncb-1 ? (cols-cbj*cpb) : cpb);
 				int coloffset = cbj*cpb;
 				
-				// select the appropriate block-level seed and init PRNG
+				// selectBlock the appropriate block-level seed and init PRNG
 				long seed = !invokedFromCP ?  bSeed : seeds[counter++]; 
 				valuePRNG.setSeed(seed);
 				

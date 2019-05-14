@@ -27,6 +27,8 @@ import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.functionobjects.Builtin;
+import org.apache.sysml.runtime.functionobjects.Plus;
+import org.apache.sysml.runtime.functionobjects.PlusBlock;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
@@ -34,6 +36,8 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.AggregateUnaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.SimpleOperator;
+
+import java.util.Arrays;
 
 public class AggregateUnaryCPInstruction extends UnaryCPInstruction
 {
@@ -71,6 +75,7 @@ public class AggregateUnaryCPInstruction extends UnaryCPInstruction
 		else { //DEFAULT BEHAVIOR
 			AggregateUnaryOperator aggun = InstructionUtils
 				.parseBasicAggregateUnaryOperator(opcode, Integer.parseInt(parts[3]));
+
 			return new AggregateUnaryCPInstruction(aggun, in1, out, AUType.DEFAULT, opcode, str);
 		}
 	}
@@ -138,10 +143,24 @@ public class AggregateUnaryCPInstruction extends UnaryCPInstruction
 		else { //DEFAULT
 			MatrixBlock matBlock = ec.getMatrixInput(input1.getName());
 			AggregateUnaryOperator au_op = (AggregateUnaryOperator) _optr;
-			
-			MatrixBlock resultBlock = (MatrixBlock) matBlock.aggregateUnaryOperations(au_op, new MatrixBlock(),
-				matBlock.getNumRows(), matBlock.getNumColumns(), new MatrixIndexes(1, 1), true);
-			
+			MatrixBlock resultBlock;
+
+			if (au_op.aggOp.increOp.fn.isBlockFn()) {
+				if (au_op.aggOp.increOp.fn instanceof PlusBlock) {
+					int sum = Arrays.stream(matBlock.getFilterBlock().getData()).sum();
+					System.out.println("blockSum = " + sum);
+					resultBlock = new MatrixBlock(1, 1, false, 1);
+					resultBlock.allocateDenseBlock();
+					resultBlock.getDenseBlock().set(sum);
+				} else {
+					throw new DMLRuntimeException("Shouldn't be here");
+				}
+
+			} else {
+				resultBlock = (MatrixBlock) matBlock.aggregateUnaryOperations(au_op, new MatrixBlock(),
+						matBlock.getNumRows(), matBlock.getNumColumns(), new MatrixIndexes(1, 1), true);
+			}
+
 			ec.releaseMatrixInput(input1.getName());
 			if(output.getDataType() == DataType.SCALAR){
 				DoubleObject ret = new DoubleObject(resultBlock.getValue(0, 0));

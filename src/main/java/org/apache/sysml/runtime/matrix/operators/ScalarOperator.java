@@ -43,7 +43,7 @@ public abstract class ScalarOperator extends Operator
 {
 	private static final long serialVersionUID = 4547253761093455869L;
 
-	public final ValueFunction fn;
+	public ValueFunction fn;
 	protected final double _constant;
 	
 	public ScalarOperator(ValueFunction p, double cst) {

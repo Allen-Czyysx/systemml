@@ -79,7 +79,7 @@ public class MatrixCharacteristics implements Serializable
 	private long nonZero = -1;
 	private boolean ubNnz = false;
 
-	public String name; // TODO added by czh
+	public String name;
 
 	public MatrixCharacteristics() {}
 	

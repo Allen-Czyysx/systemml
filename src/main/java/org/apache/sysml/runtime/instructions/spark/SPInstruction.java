@@ -119,7 +119,7 @@ public abstract class SPInstruction extends Instruction {
 		if (_needCache) {
 			if (_dVarNames != null) {
 				for (String dVarName : _dVarNames) {
-					String countName = DWhileStatement.getVarUseDeltaCountName(dVarName);
+					String countName = DWhileStatement.getUseDeltaCountName(dVarName);
 					long count = sec.getScalarInput(countName, Expression.ValueType.INT, false).getLongValue();
 					if (count >= DWhileStatement.CACHE_PERIOD) {
 						return true;

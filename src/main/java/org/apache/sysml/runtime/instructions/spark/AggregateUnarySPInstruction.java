@@ -72,6 +72,9 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 		String corrExists = (corrLoc != CorrectionLocationType.NONE) ? "true" : "false";
 		
 		AggregateUnaryOperator aggun = InstructionUtils.parseBasicAggregateUnaryOperator(opcode);
+		if (aggun.aggOp.increOp.fn instanceof PlusBlock) {
+			aggun.aggOp.increOp.fn = null;
+		}
 		AggregateOperator aop = InstructionUtils.parseAggregateOperator(aopcode, corrExists, corrLoc.toString());
 		return new AggregateUnarySPInstruction(SPType.AggregateUnary, aggun, aop, in1, out, aggtype, opcode, str);
 	}
@@ -96,10 +99,10 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 		//perform aggregation if necessary and put output into symbol table
 		if (_aggtype == SparkAggType.SINGLE_BLOCK) {
 			if (aggop.increOp.fn.isBlockFn()) {
-//			if (false) {
 				if (aggop.increOp.fn instanceof PlusBlock) {
 					MatrixBlock mb = sec.getBlockForVariable(input1.getName());
 					int sum = Arrays.stream(mb.getFilterBlock().getData()).sum();
+					System.out.println("blockSum = "  + sum);
 					MatrixBlock outMb = new MatrixBlock(1, 1, false, 1);
 					outMb.allocateDenseBlock();
 					outMb.getDenseBlock().set(sum);

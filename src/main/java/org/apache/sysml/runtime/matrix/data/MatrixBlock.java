@@ -139,6 +139,8 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	protected DenseBlock denseBlock   = null;
 	protected SparseBlock sparseBlock = null;
 	FilterBlock filterBlock = null;
+
+	FilterBlock selectBlock = null;
 	
 	//sparse-block-specific attributes (allocation only)
 	protected int estimatedNNzsPerRow = -1; 
@@ -340,17 +342,6 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		recomputeNonZeros();
 	}
 
-	public void initFilterBlock() {
-		initFilterBlock(rlen, clen);
-	}
-
-	public void initFilterBlock(int r, int c) {
-		rlen = r;
-		clen = c;
-		filterBlock = new FilterBlock();
-		filterBlock.initData(r * c);
-	}
-
 	public void clean() {
 		rlen = -1;
 		clen = -1;
@@ -371,6 +362,21 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 			return true;
 		}
 		return sparse ? sparseBlock != null : denseBlock != null;
+	}
+
+	public void allocateFilterBlock() {
+		allocateFilterBlock(rlen, clen);
+	}
+
+	public void allocateFilterBlock(int r, int c) {
+		if (filterBlock != null && !filterBlock.isEmpty()) {
+			return;
+		}
+
+		rlen = r;
+		clen = c;
+		filterBlock = new FilterBlock();
+		filterBlock.initData(r * c);
 	}
 
 	public MatrixBlock allocateDenseBlock() {
@@ -563,6 +569,14 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	////////
 	// Data handling
+
+	public void setSelectBlock(FilterBlock select) {
+		selectBlock = select;
+	}
+
+	public FilterBlock getSelectBlock() {
+		return selectBlock;
+	}
 
 	public FilterBlock getFilterBlock() {
 		return filterBlock;
@@ -1902,7 +1916,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 						estimatedNNzsPerRow = 0;
 					} else {
 						nonZeros = FrameBlock.BUFFER_SIZE;
-						estimatedNNzsPerRow = 1000;
+						estimatedNNzsPerRow = OptimizerUtils.DEFAULT_BLOCKSIZE;
 					}
 					break;
 				case EMPTY_BLOCK:
@@ -3953,6 +3967,10 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 					"must be within matrix dimensions [" + getNumRows() + "," + getNumColumns() + "]");
 		}
 
+		if (selectBlock != null && selectBlock.getData(rl / OptimizerUtils.DEFAULT_BLOCKSIZE) == 0) {
+			return new MatrixBlock(ru - rl + 1, cu - cl + 1, true);
+		}
+
 		// Output matrix will have the same sparsity as that of the input matrix.
 		// (assuming a uniform distribution of non-zeros in the input)
 		MatrixBlock result = checkType((MatrixBlock) ret);
@@ -3996,7 +4014,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 			throw new DMLRuntimeException("Shouldn't be here");
 		}
 
-		dest.initFilterBlock();
+		dest.allocateFilterBlock();
 		int[] destData;
 		try {
 			destData = Arrays.copyOfRange(filterBlock.getData(), rl, rlen);
@@ -4400,7 +4418,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 			LibMatrixAgg.recomputeIndexes(ret, op, blockingFactorRow, blockingFactorCol, indexesIn);
 		}
 		else if(op.sparseSafe)
-			sparseAggregateUnaryHelp(op, ret, blockingFactorRow, blockingFactorCol, indexesIn);
+			sparseAggregateUnaryHelp(op, ret);
 		else
 			denseAggregateUnaryHelp(op, ret, blockingFactorRow, blockingFactorCol, indexesIn);
 		
@@ -4409,40 +4427,38 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		
 		return ret;
 	}
-	
-	private void sparseAggregateUnaryHelp(AggregateUnaryOperator op, MatrixBlock result,
-			int blockingFactorRow, int blockingFactorCol, MatrixIndexes indexesIn)
-	{
+
+	private void sparseAggregateUnaryHelp(AggregateUnaryOperator op, MatrixBlock result) {
 		//initialize result
-		if(op.aggOp.initialValue!=0)
+		if (op.aggOp.initialValue != 0) {
 			result.reset(result.rlen, result.clen, op.aggOp.initialValue);
-		CellIndex tempCellIndex = new CellIndex(-1,-1);
-		KahanObject buffer = new KahanObject(0,0);
-		
-		if( sparse && sparseBlock!=null ) {
+		}
+		CellIndex tempCellIndex = new CellIndex(-1, -1);
+		KahanObject buffer = new KahanObject(0, 0);
+
+		if (sparse && sparseBlock != null) {
 			SparseBlock a = sparseBlock;
-			for(int r=0; r<Math.min(rlen, a.numRows()); r++) {
-				if(a.isEmpty(r)) continue;
+			for (int r = 0; r < Math.min(rlen, a.numRows()); r++) {
+				if (a.isEmpty(r)) continue;
 				int apos = a.pos(r);
 				int alen = a.size(r);
 				int[] aix = a.indexes(r);
 				double[] aval = a.values(r);
-				for(int i=apos; i<apos+alen; i++) {
+				for (int i = apos; i < apos + alen; i++) {
 					tempCellIndex.set(r, aix[i]);
 					op.indexFn.execute(tempCellIndex, tempCellIndex);
-					incrementalAggregateUnaryHelp(op.aggOp, result, 
+					incrementalAggregateUnaryHelp(op.aggOp, result,
 							tempCellIndex.row, tempCellIndex.column, aval[i], buffer);
 				}
 			}
-		}
-		else if( !sparse && denseBlock!=null ) {
+		} else if (!sparse && denseBlock != null) {
 			DenseBlock a = getDenseBlock();
-			for(int i=0; i<rlen; i++)
-				for(int j=0; j<clen; j++) {
+			for (int i = 0; i < rlen; i++)
+				for (int j = 0; j < clen; j++) {
 					tempCellIndex.set(i, j);
 					op.indexFn.execute(tempCellIndex, tempCellIndex);
 					incrementalAggregateUnaryHelp(op.aggOp, result,
-						tempCellIndex.row, tempCellIndex.column, a.get(i, j), buffer);
+							tempCellIndex.row, tempCellIndex.column, a.get(i, j), buffer);
 				}
 		}
 	}

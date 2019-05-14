@@ -20,12 +20,7 @@
 
 package org.apache.sysml.runtime.matrix.operators;
 
-import org.apache.sysml.runtime.functionobjects.IndexFunction;
-import org.apache.sysml.runtime.functionobjects.KahanPlus;
-import org.apache.sysml.runtime.functionobjects.KahanPlusSq;
-import org.apache.sysml.runtime.functionobjects.Minus;
-import org.apache.sysml.runtime.functionobjects.Or;
-import org.apache.sysml.runtime.functionobjects.Plus;
+import org.apache.sysml.runtime.functionobjects.*;
 
 
 public class AggregateUnaryOperator  extends Operator 
@@ -49,7 +44,8 @@ public class AggregateUnaryOperator  extends Operator
 			|| aop.increOp.fn instanceof KahanPlus 
 			|| aop.increOp.fn instanceof KahanPlusSq 
 			|| aop.increOp.fn instanceof Or 
-			|| aop.increOp.fn instanceof Minus);
+			|| aop.increOp.fn instanceof Minus
+			|| aop.increOp.fn instanceof PlusBlock);
 		aggOp = aop;
 		indexFn = iop;
 		k = numThreads;

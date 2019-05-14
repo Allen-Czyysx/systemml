@@ -93,7 +93,6 @@ public class PartitionedBroadcast<T extends CacheBlock> implements Serializable
 			pix = ix / numPerPart;
 		}
 
-		// TODO added by czh
 		try {
 			return _pbc[pix].value().getBlock(rowIndex, colIndex);
 		} catch (DMLRuntimeException e) {

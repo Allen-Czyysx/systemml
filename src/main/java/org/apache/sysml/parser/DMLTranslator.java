@@ -606,7 +606,8 @@ public class DMLTranslator {
 				rtpb = new ParForProgramBlock(prog, iterPred.getIterVar().getName(),
 						iterPred.getParForParams(), ((ParForStatementBlock) sb).getResultVariables());
 				ParForProgramBlock pfrtpb = (ParForProgramBlock) rtpb;
-				pfrtpb.setStatementBlock((ParForStatementBlock) sb); //used for optimization and creating unscoped variables
+				pfrtpb.setStatementBlock((ParForStatementBlock) sb); //used for optimization and creating unscoped
+				// variables
 			} else {//ForStatementBlock
 				rtpb = new ForProgramBlock(prog, iterPred.getIterVar().getName());
 			}
@@ -671,7 +672,8 @@ public class DMLTranslator {
 				}
 
 				if (!fstmt.getBody().isEmpty()) {
-					throw new LopsException(fstmt.printErrorLocation() + "ExternalFunctionStatementBlock should have no statement blocks in body");
+					throw new LopsException(fstmt.printErrorLocation() + "ExternalFunctionStatementBlock should have " +
+							"no statement blocks in body");
 				}
 			} else {
 				// create function program block
@@ -773,7 +775,8 @@ public class DMLTranslator {
 				predicateLops.printMe();
 
 				if (wstb.getNumStatements() > 1) {
-					throw new HopsException(wstb.printBlockErrorLocation() + "WhileStatementBlock has more than 1 statement");
+					throw new HopsException(wstb.printBlockErrorLocation() + "WhileStatementBlock has more than 1 " +
+							"statement");
 				}
 				WhileStatement ws = (WhileStatement) wstb.getStatement(0);
 
@@ -794,7 +797,8 @@ public class DMLTranslator {
 				predicateLops.printMe();
 
 				if (istb.getNumStatements() > 1) {
-					throw new HopsException(istb.printBlockErrorLocation() + "IfStatmentBlock has more than 1 statement");
+					throw new HopsException(istb.printBlockErrorLocation() + "IfStatmentBlock has more than 1 " +
+							"statement");
 				}
 				IfStatement is = (IfStatement) istb.getStatement(0);
 
@@ -838,7 +842,8 @@ public class DMLTranslator {
 				}
 
 				if (fsb.getNumStatements() > 1) {
-					throw new HopsException(fsb.printBlockErrorLocation() + "ForStatementBlock has more than 1 statement");
+					throw new HopsException(fsb.printBlockErrorLocation() + "ForStatementBlock has more than 1 " +
+							"statement");
 				}
 				ForStatement ws = (ForStatement) fsb.getStatement(0);
 
@@ -1177,9 +1182,13 @@ public class DMLTranslator {
 				if (updated.containsVariable(varName) || gen.containsVariable(varName)) {
 
 					DataIdentifier var = liveIn.getVariables().get(varName);
-					long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-					long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
-					DataOp read = new DataOp(var.getName(), var.getDataType(), var.getValueType(), DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+					long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() :
+							var.getDim1();
+					long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() :
+							var.getDim2();
+					DataOp read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
+							DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(),
+							var.getColumnsInBlock());
 					read.setParseInfo(var);
 					ids.put(varName, read);
 				}
@@ -1198,7 +1207,8 @@ public class DMLTranslator {
 
 				//error handling unsupported indexing expression in write statement
 				if (target instanceof IndexedIdentifier) {
-					throw new LanguageException(source.printErrorLocation() + ": Unsupported indexing expression in write statement. " +
+					throw new LanguageException(source.printErrorLocation() + ": Unsupported indexing expression in " +
+							"write statement. " +
 							"Please, assign the right indexing result to a variable and write this variable.");
 				}
 
@@ -1219,7 +1229,8 @@ public class DMLTranslator {
 
 						case BINARY:
 							// write output in binary block format
-							ae.setOutputParams(ae.getDim1(), ae.getDim2(), ae.getNnz(), ae.getUpdateType(), ConfigurationManager.getBlocksize(), ConfigurationManager.getBlocksize());
+							ae.setOutputParams(ae.getDim1(), ae.getDim2(), ae.getNnz(), ae.getUpdateType(),
+									ConfigurationManager.getBlocksize(), ConfigurationManager.getBlocksize());
 							break;
 
 						default:
@@ -1245,21 +1256,24 @@ public class DMLTranslator {
 						Hop.OpOp1 op = Hop.OpOp1.PRINT;
 						Expression source = ps.getExpressions().get(0);
 						Hop ae = processExpression(source, target, ids);
-						Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
+						Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op,
+								ae);
 						printHop.setParseInfo(current);
 						output.add(printHop);
 					} else if (ptype == PRINTTYPE.ASSERT) {
 						Hop.OpOp1 op = Hop.OpOp1.ASSERT;
 						Expression source = ps.getExpressions().get(0);
 						Hop ae = processExpression(source, target, ids);
-						Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
+						Hop printHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op,
+								ae);
 						printHop.setParseInfo(current);
 						output.add(printHop);
 					} else if (ptype == PRINTTYPE.STOP) {
 						Hop.OpOp1 op = Hop.OpOp1.STOP;
 						Expression source = ps.getExpressions().get(0);
 						Hop ae = processExpression(source, target, ids);
-						Hop stopHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op, ae);
+						Hop stopHop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), op,
+								ae);
 						stopHop.setParseInfo(current);
 						output.add(stopHop);
 						sb.setSplitDag(true); //avoid merge
@@ -1292,7 +1306,8 @@ public class DMLTranslator {
 				Expression source = as.getSource();
 
 
-				// CASE: regular assignment statement -- source is DML expression that is NOT user-defined or external function 
+				// CASE: regular assignment statement -- source is DML expression that is NOT user-defined or external
+				// function
 				if (!(source instanceof FunctionCallIdentifier)) {
 
 					// CASE: target is regular data identifier
@@ -1313,8 +1328,10 @@ public class DMLTranslator {
 						//add transient write if needed
 						Integer statementId = liveOutToTemp.get(target.getName());
 						if ((statementId != null) && (statementId.intValue() == i)) {
-							DataOp transientwrite = new DataOp(target.getName(), target.getDataType(), target.getValueType(), ae, DataOpTypes.TRANSIENTWRITE, null);
-							transientwrite.setOutputParams(ae.getDim1(), ae.getDim2(), ae.getNnz(), ae.getUpdateType(), ae.getRowsInBlock(), ae.getColsInBlock());
+							DataOp transientwrite = new DataOp(target.getName(), target.getDataType(),
+									target.getValueType(), ae, DataOpTypes.TRANSIENTWRITE, null);
+							transientwrite.setOutputParams(ae.getDim1(), ae.getDim2(), ae.getNnz(), ae.getUpdateType()
+									, ae.getRowsInBlock(), ae.getColsInBlock());
 							transientwrite.setParseInfo(target);
 							updatedLiveOut.addVariable(target.getName(), target);
 							output.add(transientwrite);
@@ -1338,13 +1355,16 @@ public class DMLTranslator {
 						if (target.getDataType() != DataType.MATRIX) {
 							target.setDataType(DataType.MATRIX);
 							target.setValueType(ValueType.DOUBLE);
-							target.setBlockDimensions(ConfigurationManager.getBlocksize(), ConfigurationManager.getBlocksize());
+							target.setBlockDimensions(ConfigurationManager.getBlocksize(),
+									ConfigurationManager.getBlocksize());
 						}
 
 						Integer statementId = liveOutToTemp.get(target.getName());
 						if ((statementId != null) && (statementId.intValue() == i)) {
-							DataOp transientwrite = new DataOp(target.getName(), target.getDataType(), target.getValueType(), ae, DataOpTypes.TRANSIENTWRITE, null);
-							transientwrite.setOutputParams(origDim1, origDim2, ae.getNnz(), ae.getUpdateType(), ae.getRowsInBlock(), ae.getColsInBlock());
+							DataOp transientwrite = new DataOp(target.getName(), target.getDataType(),
+									target.getValueType(), ae, DataOpTypes.TRANSIENTWRITE, null);
+							transientwrite.setOutputParams(origDim1, origDim2, ae.getNnz(), ae.getUpdateType(),
+									ae.getRowsInBlock(), ae.getColsInBlock());
 							transientwrite.setParseInfo(target);
 							updatedLiveOut.addVariable(target.getName(), target);
 							output.add(transientwrite);
@@ -1353,7 +1373,8 @@ public class DMLTranslator {
 				} else {
 					//assignment, function call
 					FunctionCallIdentifier fci = (FunctionCallIdentifier) source;
-					FunctionStatementBlock fsb = this._dmlProg.getFunctionStatementBlock(fci.getNamespace(), fci.getName());
+					FunctionStatementBlock fsb = this._dmlProg.getFunctionStatementBlock(fci.getNamespace(),
+							fci.getName());
 
 					//error handling missing function
 					if (fsb == null) {
@@ -1388,8 +1409,10 @@ public class DMLTranslator {
 					String[] inputNames2 = inputNames.toArray(new String[0]);
 					FunctionType ftype = fsb.getFunctionOpType();
 					FunctionOp fcall = (target == null) ?
-							new FunctionOp(ftype, fci.getNamespace(), fci.getName(), inputNames2, finputs, new String[]{}, false) :
-							new FunctionOp(ftype, fci.getNamespace(), fci.getName(), inputNames2, finputs, new String[]{target.getName()}, false);
+							new FunctionOp(ftype, fci.getNamespace(), fci.getName(), inputNames2, finputs,
+									new String[]{}, false) :
+							new FunctionOp(ftype, fci.getNamespace(), fci.getName(), inputNames2, finputs,
+									new String[]{target.getName()}, false);
 					fcall.setParseInfo(fci);
 					output.add(fcall);
 				}
@@ -1400,7 +1423,8 @@ public class DMLTranslator {
 
 				if (source instanceof FunctionCallIdentifier) {
 					FunctionCallIdentifier fci = (FunctionCallIdentifier) source;
-					FunctionStatementBlock fsb = this._dmlProg.getFunctionStatementBlock(fci.getNamespace(), fci.getName());
+					FunctionStatementBlock fsb = this._dmlProg.getFunctionStatementBlock(fci.getNamespace(),
+							fci.getName());
 					if (fsb == null) {
 						throw new LanguageException(source.printErrorLocation() + "function "
 								+ fci.getName() + " is undefined in namespace " + fci.getNamespace());
@@ -1432,14 +1456,17 @@ public class DMLTranslator {
 					output.add(fcall);
 				} else if (source instanceof BuiltinFunctionExpression && ((BuiltinFunctionExpression) source).multipleReturns()) {
 					// construct input hops
-					Hop fcall = processMultipleReturnBuiltinFunctionExpression((BuiltinFunctionExpression) source, mas.getTargetList(), ids);
+					Hop fcall = processMultipleReturnBuiltinFunctionExpression((BuiltinFunctionExpression) source,
+							mas.getTargetList(), ids);
 					output.add(fcall);
 				} else if (source instanceof ParameterizedBuiltinFunctionExpression && ((ParameterizedBuiltinFunctionExpression) source).multipleReturns()) {
 					// construct input hops
-					Hop fcall = processMultipleReturnParameterizedBuiltinFunctionExpression((ParameterizedBuiltinFunctionExpression) source, mas.getTargetList(), ids);
+					Hop fcall =
+							processMultipleReturnParameterizedBuiltinFunctionExpression((ParameterizedBuiltinFunctionExpression) source, mas.getTargetList(), ids);
 					output.add(fcall);
 				} else
-					throw new LanguageException("Class \"" + source.getClass() + "\" is not supported in Multiple Assignment statements");
+					throw new LanguageException("Class \"" + source.getClass() + "\" is not supported in Multiple " +
+							"Assignment statements");
 			}
 
 		}
@@ -1448,7 +1475,8 @@ public class DMLTranslator {
 
 	}
 
-	private void appendDefaultArguments(FunctionStatement fstmt, List<String> inputNames, List<Hop> inputs, HashMap<String, Hop> ids) {
+	private void appendDefaultArguments(FunctionStatement fstmt, List<String> inputNames, List<Hop> inputs,
+										HashMap<String, Hop> ids) {
 		//NOTE: For default expressions of unspecified function arguments, we have two choices:
 		//either (a) compile ifelse(exist(argName),default, argName) into the function, or
 		//simply (b) add the default to the argument list of function calls when needed.
@@ -1502,7 +1530,8 @@ public class DMLTranslator {
 			constructHops(current, dwstList);
 	}
 
-	public void constructHopsForFunctionControlBlock(FunctionStatementBlock fsb, ArrayList<DWhileStatementBlock> dwstList) {
+	public void constructHopsForFunctionControlBlock(FunctionStatementBlock fsb,
+													 ArrayList<DWhileStatementBlock> dwstList) {
 		ArrayList<StatementBlock> body = ((FunctionStatement) fsb.getStatement(0)).getBody();
 		for (StatementBlock current : body)
 			constructHops(current, dwstList);
@@ -1515,7 +1544,8 @@ public class DMLTranslator {
 			constructHops(current, dwstList);
 	}
 
-	private void constructHopsForDWhileControlBlock(DWhileStatementBlock dwsb, ArrayList<DWhileStatementBlock> dwstList) {
+	private void constructHopsForDWhileControlBlock(DWhileStatementBlock dwsb,
+													ArrayList<DWhileStatementBlock> dwstList) {
 		// 循环条件
 		constructHopsForConditionalPredicate(dwsb);
 
@@ -1576,7 +1606,7 @@ public class DMLTranslator {
 		}
 
 		// 增量迭代 x 计划
-		curDVarNames = new String[] {dwst.getDVarNames()[0]};
+		curDVarNames = new String[]{dwst.getDVarNames()[0]};
 		StatementBlock dPart2 = constructDStatementBlock(dwsb, curDVarNames);
 
 		// TODO added by czh 暂支持1或2个变量
@@ -1620,7 +1650,7 @@ public class DMLTranslator {
 			StatementBlock dPart1 = constructDStatementBlock(dwsb, curDVarNames);
 
 			// 增量迭代 y 计划
-			curDVarNames = new String[] {dwst.getDVarNames()[1]};
+			curDVarNames = new String[]{dwst.getDVarNames()[1]};
 			StatementBlock dPart3 = constructDStatementBlock(dwsb, curDVarNames);
 
 			// 不能出现在 constructDStatementBlock() 前面, 否则在增量迭代里会做多次记录
@@ -1656,7 +1686,8 @@ public class DMLTranslator {
 	/**
 	 * 针对
 	 */
-	private StatementBlock constructDIfStatementBlock(DWhileStatementBlock dwsb, IfStatement ifst, String curDVarName) {
+	private StatementBlock constructDIfStatementBlock(DWhileStatementBlock dwsb, IfStatement ifst,
+													  String curDVarName) {
 		StatementBlock ifsb = ParserWrapper.getStatementBlock(ifst);
 
 		DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(curDVarName));
@@ -1687,7 +1718,21 @@ public class DMLTranslator {
 		tmpDHops.addAll(tmpRecordDHops);
 		dPart.setHops(tmpDHops);
 
+		for (Hop hop : bodyHops) {
+			resetHopForDStatement(hop);
+		}
+
 		return dPart;
+	}
+
+	/**
+	 * 清空 hop 的 _dHop
+	 */
+	private void resetHopForDStatement(Hop hop) {
+		for (Hop input : hop.getInput()) {
+			resetHopForDStatement(input);
+		}
+		hop.setDHop(null);
 	}
 
 	/**
@@ -1704,13 +1749,7 @@ public class DMLTranslator {
 		VariableSet updated = dwsb.variablesUpdated();
 		boolean needRecord = false;
 
-		// 递归遍历子算子
-		for (Hop op : hop.getInput()) {
-			needRecord |= recordPreVarForEachHop(op, recordHops, dwsb);
-		}
-
 		// TODO added by czh 暂不考虑嵌套dwhile, 和内部if, while
-		// TODO added by czh 之后要增加忽略的算子
 		if (hop instanceof DataOp) {
 			DataOp dataOp = (DataOp) hop;
 			if (dataOp.getDataOpType() == DataOpTypes.TRANSIENTREAD) {
@@ -1720,15 +1759,12 @@ public class DMLTranslator {
 						return true;
 					}
 				}
-				return false;
-			}
-
-			if (dataOp.getDataOpType() == DataOpTypes.TRANSIENTWRITE) {
-				return false;
 			}
 		}
-		if (hop instanceof LiteralOp || hop instanceof ParameterizedBuiltinOp) {
-			return false;
+
+		// 递归遍历子算子
+		for (Hop op : hop.getInput()) {
+			needRecord |= recordPreVarForEachHop(op, recordHops, dwsb);
 		}
 
 		// 不需要记录
@@ -1737,19 +1773,22 @@ public class DMLTranslator {
 		}
 
 		// 需要记录当前hop的结果
-		hop.setRecorded();
-		String preOutputName = hop.getPreOutputName() == null ?
-				DWhileStatement.getPreOutputNameFromHop(hop) : hop.getPreOutputName();
-		DataOp write = new DataOp(preOutputName, hop.getDataType(), hop.getValueType(),
-				hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
-		write.setOutputParams(hop);
-		write.setParseInfo(hop);
-		recordHops.add(write);
+		if (hop.needRecord()
+				|| hop instanceof AggBinaryOp && ((AggBinaryOp) hop).isMatrixMultiply()) {
+			hop.setRecorded();
+			String preOutputName = hop.getPreOutputName() == null ?
+					DWhileStatement.getPreOutputNameFromHop(hop) : hop.getPreOutputName();
+			DataOp write = new DataOp(preOutputName, hop.getDataType(), hop.getValueType(),
+					hop, DataOpTypes.TRANSIENTWRITE, hop.getFilename());
+			write.setOutputParams(hop);
+			write.setParseInfo(hop);
+			recordHops.add(write);
 
-		// 添加变量到updated
-		if (!updated.containsVariable(preOutputName)) {
-			PreDataIdentifier var = new PreDataIdentifier(hop);
-			updated.addVariable(preOutputName, var);
+			// 添加变量到updated
+			if (!updated.containsVariable(preOutputName)) {
+				PreDataIdentifier var = new PreDataIdentifier(hop);
+				updated.addVariable(preOutputName, var);
+			}
 		}
 
 		return true;
@@ -1762,13 +1801,12 @@ public class DMLTranslator {
 	 */
 	private ArrayList<Hop> dIterForEachHop(Hop hop, boolean needDelta, DWhileStatementBlock dwsb,
 										   String[] curDVarNames) {
-		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 		VariableSet updated = dwsb.variablesUpdated();
-
-		// 若返回1个, 表示新值; 若返回3个, 分别表示pre, delta, select
 		ArrayList<Hop> dHops = new ArrayList<>(3);
-
-		// TODO added by czh 之后增加支持的算子
+		String varName = hop.getName();
+		ArrayList<Hop> inputs = hop.getInput();
+		DataType dataType = hop.getDataType();
+		ValueType valueType = hop.getValueType();
 
 		// 常值
 		if (hop instanceof LiteralOp) {
@@ -1777,21 +1815,18 @@ public class DMLTranslator {
 		}
 
 		// 读写操作
-		if (hop instanceof DataOp) {
+		else if (hop instanceof DataOp) {
 			DataOp dataHop = (DataOp) hop;
 			DataOpTypes opType = dataHop.getDataOpType();
-			String varName = dataHop.getName();
 
 			if (opType == DataOpTypes.TRANSIENTWRITE) {
-				Hop input = dIterForEachHop(dataHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
-				DataOp newHop = new DataOp(varName, dataHop.getDataType(), dataHop.getValueType(), input,
-						DataOpTypes.TRANSIENTWRITE, dataHop.getFileName());
+				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				DataOp newHop = new DataOp(varName, dataType, valueType, input, DataOpTypes.TRANSIENTWRITE,
+						dataHop.getFileName());
 				newHop.setBlockInfo(dataHop);
 				dHops.add(newHop);
-				return dHops;
-			}
 
-			if (opType == DataOpTypes.TRANSIENTREAD) {
+			} else if (opType == DataOpTypes.TRANSIENTREAD) {
 				// TODO added by czh 这里要求增量迭代的变量名不能在更新后出现 TRANSIENTREAD
 				if (needDelta && DWhileStatement.isDVar(varName, curDVarNames)) {
 					// 增量计划
@@ -1810,97 +1845,100 @@ public class DMLTranslator {
 					// 原计划
 					dHops.add(dataHop);
 				}
-
-				return dHops;
+			} else {
+				// 原计划
+				dHops.add(dataHop);
 			}
 		}
 
 		// 一元操作
-		if (hop instanceof UnaryOp) {
+		else if (hop instanceof UnaryOp) {
 			UnaryOp uHop = (UnaryOp) hop;
 			OpOp1 opType = uHop.getOp();
 
-			if (opType == OpOp1.PRINT || opType == OpOp1.CAST_AS_SCALAR || opType == OpOp1.ABS) {
-				if (needDelta) {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
-
-				} else {
-					// 原计划
-					Hop input = dIterForEachHop(uHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
-					UnaryOp newHop = new UnaryOp(
-							uHop.getName(), uHop.getDataType(), uHop.getValueType(), opType, input);
-					newHop.setBlockInfo(uHop);
-					newHop.setParseInfo(uHop);
-					newHop.setDisableRecord(true);
-					dHops.add(newHop);
-				}
-
-				return dHops;
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				UnaryOp newHop = new UnaryOp(varName, dataType, valueType, opType, input);
+				newHop.setBlockInfo(uHop);
+				newHop.setParseInfo(uHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
 			}
 		}
 
 		// 二元按位操作
-		if (hop instanceof BinaryOp) {
+		else if (hop instanceof BinaryOp) {
 			BinaryOp bHop = (BinaryOp) hop;
 			OpOp2 opType = bHop.getOp();
 
-			if (opType == OpOp2.DIV || opType == OpOp2.PLUS || opType == OpOp2.MINUS || opType == OpOp2.MULT) {
-				boolean useOriginal = true;
-				if (needDelta) {
-					// TODO added by czh 加入支持的增量计算的算子
-					if (false) {
-						useOriginal = false;
-					}
-				}
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop left = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				Hop right = dIterForEachHop(inputs.get(1), false, dwsb, curDVarNames).get(0);
+				BinaryOp newHop = new BinaryOp(varName, dataType, valueType, opType, left, right);
+				newHop.setBlockInfo(bHop);
+				newHop.setParseInfo(bHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
+			}
+		}
 
-				if (useOriginal) {
-					// 原计划
-					Hop left = dIterForEachHop(bHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
-					Hop right = dIterForEachHop(bHop.getInput().get(1), false, dwsb, curDVarNames).get(0);
-					BinaryOp newHop = new BinaryOp(bHop.getName(), bHop.getDataType(),
-							bHop.getValueType(), opType, left, right);
-					newHop.setBlockInfo(bHop);
-					newHop.setParseInfo(bHop);
-					newHop.setDisableRecord(true);
-					dHops.add(newHop);
+		// 三元按位操作
+		else if (hop instanceof TernaryOp) {
+			TernaryOp tHop = (TernaryOp) hop;
+			OpOp3 opType = tHop.getOp();
 
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop input1 = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				Hop input2 = dIterForEachHop(inputs.get(1), false, dwsb, curDVarNames).get(0);
+				Hop input3 = dIterForEachHop(inputs.get(2), false, dwsb, curDVarNames).get(0);
+				TernaryOp newHop;
+				if (inputs.size() == 5) {
+					Hop input4 = dIterForEachHop(inputs.get(3), false, dwsb, curDVarNames).get(0);
+					Hop input5 = dIterForEachHop(inputs.get(4), false, dwsb, curDVarNames).get(0);
+					newHop = new TernaryOp(varName, dataType, valueType, opType, input1, input2, input3, input4,
+							input5);
 				} else {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+					newHop = new TernaryOp(varName, dataType, valueType, opType, input1, input2, input3);
 				}
-
-				return dHops;
+				newHop.setBlockInfo(tHop);
+				newHop.setParseInfo(tHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
 			}
 		}
 
 		// 一元聚合操作
-		if (hop instanceof AggUnaryOp) {
+		else if (hop instanceof AggUnaryOp) {
 			AggUnaryOp aggUHop = (AggUnaryOp) hop;
 			AggOp opType = aggUHop.getOp();
 
-			if (opType == AggOp.MAX || opType == AggOp.SUM) {
-				if (needDelta) {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
-
-				} else {
-					// 原计划
-					Hop input = dIterForEachHop(aggUHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
-					AggUnaryOp newHop = new AggUnaryOp(aggUHop.getName(), aggUHop.getDataType(),
-							aggUHop.getValueType(), opType, Direction.RowCol, input);
-					newHop.setBlockInfo(aggUHop);
-					newHop.setParseInfo(aggUHop);
-					newHop.setDisableRecord(true);
-					dHops.add(newHop);
-				}
-
-				return dHops;
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				AggUnaryOp newHop = new AggUnaryOp(varName, dataType, valueType, opType, Direction.RowCol, input);
+				newHop.setBlockInfo(aggUHop);
+				newHop.setParseInfo(aggUHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
 			}
 		}
 
 		// 二元聚合操作
-		if (hop instanceof AggBinaryOp) {
+		else if (hop instanceof AggBinaryOp) {
 			AggBinaryOp aggBHop = (AggBinaryOp) hop;
-			Hop originLeft = aggBHop.getInput().get(0);
-			Hop originRight = aggBHop.getInput().get(1);
+			Hop originLeft = inputs.get(0);
+			Hop originRight = inputs.get(1);
 			String leftName = originLeft.getName();
 			String rightName = originRight.getName();
 
@@ -1909,8 +1947,8 @@ public class DMLTranslator {
 					ArrayList<Hop> right = dIterForEachHop(originRight, true, dwsb, curDVarNames);
 					if (right.size() == 1) {
 						// 原计划: left %*% right
-						AggBinaryOp newHop = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(0));
+						AggBinaryOp newHop = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
+								originLeft, right.get(0));
 						newHop.setBlockInfo(aggBHop);
 						newHop.setParseInfo(aggBHop);
 						dHops.add(newHop);
@@ -1925,33 +1963,33 @@ public class DMLTranslator {
 						aggBHop.setNeedCache(true);
 						aggBHop.setPreOutputName(DWhileStatement.getPreOutputNameFromHop(aggBHop));
 
-						// delta = left %*% deltaRight
-						AggBinaryOp delta = new AggBinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-								aggBHop.getValueType(), OpOp2.MULT, AggOp.SUM, originLeft, right.get(1));
-						delta.setBlockInfo(originLeft);
-						delta.setParseInfo(aggBHop);
-						delta.setDisableOutputEmpty(true);
-						delta.setDisableRecord(true);
+						if (aggBHop.getDHop() != null) {
+							dHops.add(aggBHop.getDHop());
 
-						// pre
-						String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
-						DataIdentifier preVar = updated.getVariable(preVarName);
-						DataOp pre = constructReadOpforVar(preVar);
-
-						if (needDelta) {
-							throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 						} else {
+							// delta = left %*% deltaRight
+							AggBinaryOp delta = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
+									originLeft, right.get(1));
+							delta.setBlockInfo(originLeft);
+							delta.setParseInfo(aggBHop);
+							delta.setDisableOutputEmpty(true);
+							delta.setDisableRecord(true);
+
+							// pre
+							String preVarName = DWhileStatement.getPreOutputNameFromHop(aggBHop);
+							DataIdentifier preVar = updated.getVariable(preVarName);
+							DataOp pre = constructReadOpforVar(preVar);
+
 							// TODO added by czh 处理误差
 							// unfixed = pre + delta
-							BinaryOp unfixed = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-									aggBHop.getValueType(), OpOp2.PLUS, pre, delta);
+							BinaryOp unfixed = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
 							unfixed.setBlockInfo(aggBHop);
 							unfixed.setParseInfo(aggBHop);
 							unfixed.setDisableRecord(true);
 
 							// newHop = max(unfixed, 0)
-							BinaryOp newHop = new BinaryOp(aggBHop.getName(), aggBHop.getDataType(),
-									aggBHop.getValueType(), OpOp2.MAX, unfixed, new LiteralOp(0));
+							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.MAX, unfixed,
+									new LiteralOp(0));
 
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
@@ -1960,46 +1998,48 @@ public class DMLTranslator {
 							newHop.setNeedCache(true);
 							newHop.setPreOutputName(DWhileStatement.getPreOutputNameFromHop(aggBHop));
 
+							aggBHop.setDHop(newHop);
+
 							dHops.add(newHop);
 						}
 					}
 
-					return dHops;
-				}
-
-				if (!updated.containsVariable(rightName)) {
+				} else if (!updated.containsVariable(rightName)) {
 					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
 				}
+
+
+			} else {
+				// 原计划
 			}
 		}
 
 		// 内置带参函数操作
-		if (hop instanceof ParameterizedBuiltinOp) {
+		else if (hop instanceof ParameterizedBuiltinOp) {
 			ParameterizedBuiltinOp pHop = (ParameterizedBuiltinOp) hop;
 			ParamBuiltinOp opType = pHop.getOp();
 
-			if (opType == ParamBuiltinOp.TOSTRING) {
-				if (needDelta) {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
-
-				} else {
-					// 原计划
-					Hop input = dIterForEachHop(pHop.getInput().get(0), false, dwsb, curDVarNames).get(0);
-					LinkedHashMap<String, Hop> params = new LinkedHashMap<>();
-					params.put("target", input);
-					ParameterizedBuiltinOp newHop = new ParameterizedBuiltinOp(
-							pHop.getName(), pHop.getDataType(), pHop.getValueType(), opType, params);
-					newHop.setBlockInfo(pHop);
-					newHop.setParseInfo(pHop);
-					newHop.setDisableRecord(true);
-					dHops.add(newHop);
-				}
-
-				return dHops;
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				LinkedHashMap<String, Hop> params = new LinkedHashMap<>();
+				params.put("target", input);
+				ParameterizedBuiltinOp newHop = new ParameterizedBuiltinOp(varName, dataType, valueType, opType,
+						params);
+				newHop.setBlockInfo(pHop);
+				newHop.setParseInfo(pHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
 			}
 		}
 
-		throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+		if (dHops.isEmpty()) {
+			throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+		}
+
+		return dHops;
 	}
 
 	public void constructHopsForConditionalPredicate(StatementBlock passedSB) {
@@ -2007,7 +2047,7 @@ public class DMLTranslator {
 		HashMap<String, Hop> _ids = new HashMap<>();
 
 		// set conditional predicate
-		ConditionalPredicate cp = null;
+		ConditionalPredicate cp;
 
 		if (passedSB instanceof WhileStatementBlock) {
 			WhileStatement ws = (WhileStatement) passedSB.getStatement(0);
@@ -2032,13 +2072,15 @@ public class DMLTranslator {
 				var = passedSB.liveIn().getVariable(varName);
 			}
 
-			DataOp read = null;
+			DataOp read;
 
 			if (var == null) {
 				throw new ParseException("variable " + varName + " not live variable for conditional predicate");
 			} else {
-				long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-				long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
+				long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() :
+						var.getDim1();
+				long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() :
+						var.getDim2();
 
 				read = new DataOp(var.getName(), var.getDataType(), var.getValueType(), DataOpTypes.TRANSIENTREAD,
 						null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
@@ -2122,10 +2164,14 @@ public class DMLTranslator {
 					if (var == null) {
 						throw new ParseException("variable '" + varName + "' is not available for iterable predicate");
 					} else {
-						long actualDim1 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
-						long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
-						read = new DataOp(var.getName(), var.getDataType(), var.getValueType(), DataOpTypes.TRANSIENTREAD,
-								null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(), var.getColumnsInBlock());
+						long actualDim1 = (var instanceof IndexedIdentifier) ?
+								((IndexedIdentifier) var).getOrigDim1() : var.getDim1();
+						long actualDim2 = (var instanceof IndexedIdentifier) ?
+								((IndexedIdentifier) var).getOrigDim2() : var.getDim2();
+						read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
+								DataOpTypes.TRANSIENTREAD,
+								null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(),
+								var.getColumnsInBlock());
 						read.setParseInfo(var);
 					}
 					_ids.put(varName, read);
@@ -2169,7 +2215,8 @@ public class DMLTranslator {
 			else if (source instanceof BuiltinFunctionExpression)
 				return processBuiltinFunctionExpression((BuiltinFunctionExpression) source, target, hops);
 			else if (source instanceof ParameterizedBuiltinFunctionExpression)
-				return processParameterizedBuiltinFunctionExpression((ParameterizedBuiltinFunctionExpression) source, target, hops);
+				return processParameterizedBuiltinFunctionExpression((ParameterizedBuiltinFunctionExpression) source,
+						target, hops);
 			else if (source instanceof DataExpression) {
 				Hop ae = (Hop) processDataExpression((DataExpression) source, target, hops);
 				if (ae instanceof DataOp) {
@@ -2258,7 +2305,8 @@ public class DMLTranslator {
 			if (target.getDim1() != -1)
 				rowUpperHops = new LiteralOp(target.getOrigDim1());
 			else {
-				rowUpperHops = new UnaryOp(target.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NROW, hops.get(target.getName()));
+				rowUpperHops = new UnaryOp(target.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NROW,
+						hops.get(target.getName()));
 				rowUpperHops.setParseInfo(target);
 			}
 		}
@@ -2273,7 +2321,8 @@ public class DMLTranslator {
 			if (target.getDim2() != -1)
 				colUpperHops = new LiteralOp(target.getOrigDim2());
 			else
-				colUpperHops = new UnaryOp(target.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NCOL, hops.get(target.getName()));
+				colUpperHops = new UnaryOp(target.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NCOL,
+						hops.get(target.getName()));
 		}
 
 		// process the source expression to get source Hops
@@ -2282,7 +2331,8 @@ public class DMLTranslator {
 		// process the target to get targetHops
 		Hop targetOp = hops.get(target.getName());
 		if (targetOp == null) {
-			throw new ParseException(target.printErrorLocation() + " must define matrix " + target.getName() + " before indexing operations are allowed ");
+			throw new ParseException(target.printErrorLocation() + " must define matrix " + target.getName() + " " +
+					"before indexing operations are allowed ");
 		}
 
 		if (sourceOp.getDataType().isMatrix() && source.getOutput().getDataType().isScalar())
@@ -2317,7 +2367,8 @@ public class DMLTranslator {
 			if (source.getOrigDim1() != -1)
 				rowUpperHops = new LiteralOp(source.getOrigDim1());
 			else {
-				rowUpperHops = new UnaryOp(source.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NROW, hops.get(source.getName()));
+				rowUpperHops = new UnaryOp(source.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NROW,
+						hops.get(source.getName()));
 				rowUpperHops.setParseInfo(source);
 			}
 		}
@@ -2332,7 +2383,8 @@ public class DMLTranslator {
 			if (source.getOrigDim2() != -1)
 				colUpperHops = new LiteralOp(source.getOrigDim2());
 			else
-				colUpperHops = new UnaryOp(source.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NCOL, hops.get(source.getName()));
+				colUpperHops = new UnaryOp(source.getName(), DataType.SCALAR, ValueType.INT, Hop.OpOp1.NCOL,
+						hops.get(source.getName()));
 		}
 
 		if (target == null) {
@@ -2381,23 +2433,32 @@ public class DMLTranslator {
 		target.setValueType(source.getOutput().getValueType());
 
 		if (source.getOpCode() == Expression.BinaryOp.PLUS) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.PLUS, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.PLUS, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MINUS) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MINUS, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MINUS, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MULT) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.DIV) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.DIV, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.DIV, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MODULUS) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MODULUS, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MODULUS, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.INTDIV) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.INTDIV, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.INTDIV, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MATMULT) {
-			currBop = new AggBinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT, AggOp.SUM, left, right);
+			currBop = new AggBinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT,
+					AggOp.SUM, left, right);
 		} else if (source.getOpCode() == Expression.BinaryOp.POW) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.POW, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.POW, left,
+					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MULTBLOCK) {
-			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULTBLOCK, left, right);
+			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULTBLOCK,
+					left, right);
 		} else {
 			throw new ParseException("Unsupported parsing of binary expression: " + source.getOpCode());
 		}
@@ -2407,7 +2468,8 @@ public class DMLTranslator {
 
 	}
 
-	private Hop processRelationalExpression(RelationalExpression source, DataIdentifier target, HashMap<String, Hop> hops) {
+	private Hop processRelationalExpression(RelationalExpression source, DataIdentifier target,
+											HashMap<String, Hop> hops) {
 
 		Hop left = processExpression(source.getLeft(), null, hops);
 		Hop right = processExpression(source.getRight(), null, hops);
@@ -2479,7 +2541,8 @@ public class DMLTranslator {
 			target.setValueType(ValueType.BOOLEAN);
 
 		if (source.getRight() == null) {
-			Hop currUop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), Hop.OpOp1.NOT, left);
+			Hop currUop = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), Hop.OpOp1.NOT,
+					left);
 			currUop.setParseInfo(source);
 			return currUop;
 		} else {
@@ -2500,7 +2563,8 @@ public class DMLTranslator {
 		}
 	}
 
-	private static Hop constructDfHop(String name, DataType dt, ValueType vt, ParameterizedBuiltinFunctionOp op, LinkedHashMap<String, Hop> paramHops) {
+	private static Hop constructDfHop(String name, DataType dt, ValueType vt, ParameterizedBuiltinFunctionOp op,
+									  LinkedHashMap<String, Hop> paramHops) {
 
 		// Add a hop to paramHops to store distribution information. 
 		// Distribution parameter hops would have been already present in paramHops.
@@ -2541,7 +2605,8 @@ public class DMLTranslator {
 		if (distLop != null)
 			paramHops.put("dist", distLop);
 
-		return new ParameterizedBuiltinOp(name, dt, vt, ParameterizedBuiltinFunctionExpression.pbHopMap.get(op), paramHops);
+		return new ParameterizedBuiltinOp(name, dt, vt, ParameterizedBuiltinFunctionExpression.pbHopMap.get(op),
+				paramHops);
 	}
 
 	private Hop processMultipleReturnParameterizedBuiltinFunctionExpression(ParameterizedBuiltinFunctionExpression source, ArrayList<DataIdentifier> targetList,
@@ -2563,14 +2628,18 @@ public class DMLTranslator {
 				String[] outputNames = new String[targetList.size()];
 				outputNames[0] = ((DataIdentifier) targetList.get(0)).getName();
 				outputNames[1] = ((DataIdentifier) targetList.get(1)).getName();
-				outputs.add(new DataOp(outputNames[0], DataType.MATRIX, ValueType.DOUBLE, inputs.get(0), DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename()));
-				outputs.add(new DataOp(outputNames[1], DataType.FRAME, ValueType.STRING, inputs.get(0), DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename()));
+				outputs.add(new DataOp(outputNames[0], DataType.MATRIX, ValueType.DOUBLE, inputs.get(0),
+						DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename()));
+				outputs.add(new DataOp(outputNames[1], DataType.FRAME, ValueType.STRING, inputs.get(0),
+						DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename()));
 
-				currBuiltinOp = new FunctionOp(ftype, nameSpace, source.getOpCode().toString(), null, inputs, outputNames, outputs);
+				currBuiltinOp = new FunctionOp(ftype, nameSpace, source.getOpCode().toString(), null, inputs,
+						outputNames, outputs);
 				break;
 
 			default:
-				throw new ParseException("Invaid Opcode in DMLTranslator:processMultipleReturnParameterizedBuiltinFunctionExpression(): " + source.getOpCode());
+				throw new ParseException("Invaid Opcode in " +
+						"DMLTranslator:processMultipleReturnParameterizedBuiltinFunctionExpression(): " + source.getOpCode());
 		}
 
 		// set properties for created hops based on outputs of source expression
@@ -2592,7 +2661,8 @@ public class DMLTranslator {
 	 * @param hops   map of high-level operators
 	 * @return high-level operator
 	 */
-	private Hop processParameterizedBuiltinFunctionExpression(ParameterizedBuiltinFunctionExpression source, DataIdentifier target,
+	private Hop processParameterizedBuiltinFunctionExpression(ParameterizedBuiltinFunctionExpression source,
+															  DataIdentifier target,
 															  HashMap<String, Hop> hops) {
 
 		// this expression has multiple "named" parameters
@@ -2652,7 +2722,8 @@ public class DMLTranslator {
 				inputs.add(paramHops.get("by"));
 				inputs.add(paramHops.get("decreasing"));
 				inputs.add(paramHops.get("index.return"));
-				currBuiltinOp = new ReorgOp(target.getName(), target.getDataType(), target.getValueType(), ReOrgOp.SORT, inputs);
+				currBuiltinOp = new ReorgOp(target.getName(), target.getDataType(), target.getValueType(),
+						ReOrgOp.SORT, inputs);
 				break;
 
 			case TOSTRING:
@@ -2711,7 +2782,8 @@ public class DMLTranslator {
 		// construct hop based on opcode
 		switch (source.getOpCode()) {
 			case READ:
-				currBuiltinOp = new DataOp(target.getName(), target.getDataType(), target.getValueType(), DataOpTypes.PERSISTENTREAD, paramHops);
+				currBuiltinOp = new DataOp(target.getName(), target.getDataType(), target.getValueType(),
+						DataOpTypes.PERSISTENTREAD, paramHops);
 				((DataOp) currBuiltinOp).setFileName(((StringIdentifier) source.getVarParam(DataExpression.IO_FILENAME)).getValue());
 				break;
 
@@ -2733,7 +2805,8 @@ public class DMLTranslator {
 				tmp.add(1, paramHops.get(DataExpression.RAND_ROWS));
 				tmp.add(2, paramHops.get(DataExpression.RAND_COLS));
 				tmp.add(3, paramHops.get(DataExpression.RAND_BY_ROW));
-				currBuiltinOp = new ReorgOp(target.getName(), target.getDataType(), target.getValueType(), ReOrgOp.RESHAPE, tmp);
+				currBuiltinOp = new ReorgOp(target.getName(), target.getDataType(), target.getValueType(),
+						ReOrgOp.RESHAPE, tmp);
 				break;
 
 
@@ -2762,7 +2835,8 @@ public class DMLTranslator {
 	 * @param hops       map of high-level operators
 	 * @return high-level operator
 	 */
-	private Hop processMultipleReturnBuiltinFunctionExpression(BuiltinFunctionExpression source, ArrayList<DataIdentifier> targetList,
+	private Hop processMultipleReturnBuiltinFunctionExpression(BuiltinFunctionExpression source,
+															   ArrayList<DataIdentifier> targetList,
 															   HashMap<String, Hop> hops) {
 
 		// Construct Hops for all inputs
@@ -2796,18 +2870,21 @@ public class DMLTranslator {
 				String[] outputNames = new String[targetList.size()];
 				for (int i = 0; i < targetList.size(); i++) {
 					outputNames[i] = ((DataIdentifier) targetList.get(i)).getName();
-					Hop output = new DataOp(outputNames[i], DataType.MATRIX, ValueType.DOUBLE, inputs.get(0), DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename());
+					Hop output = new DataOp(outputNames[i], DataType.MATRIX, ValueType.DOUBLE, inputs.get(0),
+							DataOpTypes.FUNCTIONOUTPUT, inputs.get(0).getFilename());
 					outputs.add(output);
 				}
 
 				// Create the hop for current function call
-				FunctionOp fcall = new FunctionOp(ftype, nameSpace, source.getOpCode().toString(), null, inputs, outputNames, outputs);
+				FunctionOp fcall = new FunctionOp(ftype, nameSpace, source.getOpCode().toString(), null, inputs,
+						outputNames, outputs);
 				currBuiltinOp = fcall;
 
 				break;
 
 			default:
-				throw new ParseException("Invaid Opcode in DMLTranslator:processMultipleReturnBuiltinFunctionExpression(): " + source.getOpCode());
+				throw new ParseException("Invaid Opcode in " +
+						"DMLTranslator:processMultipleReturnBuiltinFunctionExpression(): " + source.getOpCode());
 		}
 
 		// set properties for created hops based on outputs of source expression
@@ -2881,12 +2958,14 @@ public class DMLTranslator {
 				break;
 
 			case ROWINDEXMAX:
-				currBuiltinOp = new AggUnaryOp(target.getName(), DataType.MATRIX, target.getValueType(), AggOp.MAXINDEX,
+				currBuiltinOp = new AggUnaryOp(target.getName(), DataType.MATRIX, target.getValueType(),
+						AggOp.MAXINDEX,
 						Direction.Row, expr);
 				break;
 
 			case ROWINDEXMIN:
-				currBuiltinOp = new AggUnaryOp(target.getName(), DataType.MATRIX, target.getValueType(), AggOp.MININDEX,
+				currBuiltinOp = new AggUnaryOp(target.getName(), DataType.MATRIX, target.getValueType(),
+						AggOp.MININDEX,
 						Direction.Row, expr);
 				break;
 
@@ -2913,8 +2992,10 @@ public class DMLTranslator {
 			case LENGTH:
 				// If the dimensions are available at compile time, then create a LiteralOp (constant propagation)
 				// Else create a UnaryOp so that a control program instruction is generated
-				currBuiltinOp = (expr.getDim1() == -1 || expr.getDim2() == -1) ? new UnaryOp(target.getName(), target.getDataType(),
-						target.getValueType(), Hop.OpOp1.LENGTH, expr) : new LiteralOp(expr.getDim1() * expr.getDim2());
+				currBuiltinOp = (expr.getDim1() == -1 || expr.getDim2() == -1) ? new UnaryOp(target.getName(),
+						target.getDataType(),
+						target.getValueType(), Hop.OpOp1.LENGTH, expr) :
+						new LiteralOp(expr.getDim1() * expr.getDim2());
 				break;
 
 			case LIST:
@@ -2938,7 +3019,8 @@ public class DMLTranslator {
 			case MEAN:
 				if (expr2 == null) {
 					// example: x = mean(Y);
-					currBuiltinOp = new AggUnaryOp(target.getName(), DataType.SCALAR, target.getValueType(), AggOp.MEAN,
+					currBuiltinOp = new AggUnaryOp(target.getName(), DataType.SCALAR, target.getValueType(),
+							AggOp.MEAN,
 							Direction.RowCol, expr);
 				} else {
 					// example: x = mean(Y,W);
@@ -2968,7 +3050,8 @@ public class DMLTranslator {
 								new BinaryOp(target.getName(), target.getDataType(), target.getValueType(),
 										OpOp2.valueOf(source.getOpCode().name()), expr, expr2) :
 								new NaryOp(target.getName(), target.getDataType(), target.getValueType(),
-										OpOpN.valueOf(source.getOpCode().name()), processAllExpressions(source.getAllExpr(), hops));
+										OpOpN.valueOf(source.getOpCode().name()),
+										processAllExpressions(source.getAllExpr(), hops));
 				break;
 
 			case PPRED:
@@ -2988,9 +3071,11 @@ public class DMLTranslator {
 				else if (sop.equalsIgnoreCase("!="))
 					operation = OpOp2.NOTEQUAL;
 				else {
-					throw new ParseException(source.printErrorLocation() + "Unknown argument (" + sop + ") for PPRED.");
+					throw new ParseException(source.printErrorLocation() + "Unknown argument (" + sop + ") for PPRED" +
+							".");
 				}
-				currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), operation, expr, expr2);
+				currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), operation,
+						expr, expr2);
 				break;
 
 			case TRACE:
@@ -3010,7 +3095,8 @@ public class DMLTranslator {
 				OpOp2 appendOp1 = (source.getOpCode() == BuiltinFunctionOp.CBIND) ? OpOp2.CBIND : OpOp2.RBIND;
 				OpOpN appendOp2 = (source.getOpCode() == BuiltinFunctionOp.CBIND) ? OpOpN.CBIND : OpOpN.RBIND;
 				currBuiltinOp = (source.getAllExpr().length == 2) ?
-						new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), appendOp1, expr, expr2) :
+						new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), appendOp1, expr,
+								expr2) :
 						new NaryOp(target.getName(), target.getDataType(), target.getValueType(), appendOp2,
 								processAllExpressions(source.getAllExpr(), hops));
 				break;
@@ -3035,11 +3121,13 @@ public class DMLTranslator {
 						weightHop.setColsInBlock(0);
 
 						if (numTableArgs == 2)
-							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp3.CTABLE, expr, expr2, weightHop);
+							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(),
+									target.getValueType(), OpOp3.CTABLE, expr, expr2, weightHop);
 						else {
 							Hop outDim1 = processExpression(source._args[2], null, hops);
 							Hop outDim2 = processExpression(source._args[3], null, hops);
-							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp3.CTABLE, expr, expr2, weightHop, outDim1, outDim2);
+							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(),
+									target.getValueType(), OpOp3.CTABLE, expr, expr2, weightHop, outDim1, outDim2);
 						}
 						break;
 
@@ -3047,39 +3135,48 @@ public class DMLTranslator {
 					case 5:
 						// example DML statement: F = ctable(A,B,W) or F = ctable(A,B,W,10,15)
 						if (numTableArgs == 3)
-							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp3.CTABLE, expr, expr2, expr3);
+							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(),
+									target.getValueType(), OpOp3.CTABLE, expr, expr2, expr3);
 						else {
 							Hop outDim1 = processExpression(source._args[3], null, hops);
 							Hop outDim2 = processExpression(source._args[4], null, hops);
-							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp3.CTABLE, expr, expr2, expr3, outDim1, outDim2);
+							currBuiltinOp = new TernaryOp(target.getName(), target.getDataType(),
+									target.getValueType(), OpOp3.CTABLE, expr, expr2, expr3, outDim1, outDim2);
 						}
 						break;
 
 					default:
-						throw new ParseException("Invalid number of arguments " + numTableArgs + " to table() function.");
+						throw new ParseException("Invalid number of arguments " + numTableArgs + " to table() function" +
+								".");
 				}
 				break;
 
 			//data type casts
 			case CAST_AS_SCALAR:
-				currBuiltinOp = new UnaryOp(target.getName(), DataType.SCALAR, target.getValueType(), Hop.OpOp1.CAST_AS_SCALAR, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), DataType.SCALAR, target.getValueType(),
+						Hop.OpOp1.CAST_AS_SCALAR, expr);
 				break;
 			case CAST_AS_MATRIX:
-				currBuiltinOp = new UnaryOp(target.getName(), DataType.MATRIX, target.getValueType(), Hop.OpOp1.CAST_AS_MATRIX, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), DataType.MATRIX, target.getValueType(),
+						Hop.OpOp1.CAST_AS_MATRIX, expr);
 				break;
 			case CAST_AS_FRAME:
-				currBuiltinOp = new UnaryOp(target.getName(), DataType.FRAME, target.getValueType(), Hop.OpOp1.CAST_AS_FRAME, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), DataType.FRAME, target.getValueType(),
+						Hop.OpOp1.CAST_AS_FRAME, expr);
 				break;
 
 			//value type casts
 			case CAST_AS_DOUBLE:
-				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.DOUBLE, Hop.OpOp1.CAST_AS_DOUBLE, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.DOUBLE,
+						Hop.OpOp1.CAST_AS_DOUBLE, expr);
 				break;
 			case CAST_AS_INT:
-				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.INT, Hop.OpOp1.CAST_AS_INT, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.INT,
+						Hop.OpOp1.CAST_AS_INT, expr);
 				break;
 			case CAST_AS_BOOLEAN:
-				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.BOOLEAN, Hop.OpOp1.CAST_AS_BOOLEAN, expr);
+				currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), ValueType.BOOLEAN,
+						Hop.OpOp1.CAST_AS_BOOLEAN, expr);
 				break;
 
 			// Boolean binary
@@ -3127,7 +3224,8 @@ public class DMLTranslator {
 							break;
 						default:
 							throw new ParseException(source.printErrorLocation() +
-									"processBuiltinFunctionExpression():: Could not find Operation type for builtin function: "
+									"processBuiltinFunctionExpression():: Could not find Operation type for builtin " +
+									"function: "
 									+ source.getOpCode());
 					}
 					currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(), mathOp2,
@@ -3140,10 +3238,12 @@ public class DMLTranslator {
 							break;
 						default:
 							throw new ParseException(source.printErrorLocation() +
-									"processBuiltinFunctionExpression():: Could not find Operation type for builtin function: "
+									"processBuiltinFunctionExpression():: Could not find Operation type for builtin " +
+									"function: "
 									+ source.getOpCode());
 					}
-					currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), mathOp3,
+					currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(),
+							mathOp3,
 							expr, expr2);
 				}
 				break;
@@ -3152,15 +3252,19 @@ public class DMLTranslator {
 			case COV:
 			case QUANTILE:
 			case INTERQUANTILE:
-				currBuiltinOp = (expr3 == null) ? new BinaryOp(target.getName(), target.getDataType(), target.getValueType(),
-						OpOp2.valueOf(source.getOpCode().name()), expr, expr2) : new TernaryOp(target.getName(), target.getDataType(),
+				currBuiltinOp = (expr3 == null) ? new BinaryOp(target.getName(), target.getDataType(),
+						target.getValueType(),
+						OpOp2.valueOf(source.getOpCode().name()), expr, expr2) : new TernaryOp(target.getName(),
+						target.getDataType(),
 						target.getValueType(), OpOp3.valueOf(source.getOpCode().name()), expr, expr2, expr3);
 				break;
 
 			case IQM:
 			case MEDIAN:
-				currBuiltinOp = (expr2 == null) ? new UnaryOp(target.getName(), target.getDataType(), target.getValueType(),
-						OpOp1.valueOf(source.getOpCode().name()), expr) : new BinaryOp(target.getName(), target.getDataType(),
+				currBuiltinOp = (expr2 == null) ? new UnaryOp(target.getName(), target.getDataType(),
+						target.getValueType(),
+						OpOp1.valueOf(source.getOpCode().name()), expr) : new BinaryOp(target.getName(),
+						target.getDataType(),
 						target.getValueType(), OpOp2.valueOf(source.getOpCode().name()), expr, expr2);
 				break;
 
@@ -3213,7 +3317,8 @@ public class DMLTranslator {
 			}
 
 			case SOLVE:
-				currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), Hop.OpOp2.SOLVE, expr, expr2);
+				currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(),
+						Hop.OpOp2.SOLVE, expr, expr2);
 				break;
 
 			case INVERSE:
@@ -3229,9 +3334,11 @@ public class DMLTranslator {
 				if (op == null)
 					throw new HopsException("Unsupported outer vector binary operation: " + ((LiteralOp) expr3).getStringValue());
 
-				currBuiltinOp = new BinaryOp(target.getName(), DataType.MATRIX, target.getValueType(), op, expr, expr2);
+				currBuiltinOp = new BinaryOp(target.getName(), DataType.MATRIX, target.getValueType(), op, expr,
+						expr2);
 				((BinaryOp) currBuiltinOp).setOuterVectorOperation(true); //flag op as specific outer vector operation
-				currBuiltinOp.refreshSizeInformation(); //force size reevaluation according to 'outer' flag otherwise danger of incorrect dims
+				currBuiltinOp.refreshSizeInformation(); //force size reevaluation according to 'outer' flag otherwise
+				// danger of incorrect dims
 				break;
 
 			case BIASADD:
@@ -3247,14 +3354,16 @@ public class DMLTranslator {
 			case AVG_POOL:
 			case MAX_POOL: {
 				currBuiltinOp = new DnnOp(target.getName(), DataType.MATRIX, target.getValueType(),
-						OpOpDnn.valueOf(source.getOpCode().name()), getALHopsForPoolingForwardIM2COL(expr, source, 1, hops));
+						OpOpDnn.valueOf(source.getOpCode().name()), getALHopsForPoolingForwardIM2COL(expr, source, 1,
+						hops));
 				setBlockSizeAndRefreshSizeInfo(expr, currBuiltinOp);
 				break;
 			}
 			case AVG_POOL_BACKWARD:
 			case MAX_POOL_BACKWARD: {
 				currBuiltinOp = new DnnOp(target.getName(), DataType.MATRIX, target.getValueType(),
-						OpOpDnn.valueOf(source.getOpCode().name()), getALHopsForConvOpPoolingCOL2IM(expr, source, 1, hops));
+						OpOpDnn.valueOf(source.getOpCode().name()), getALHopsForConvOpPoolingCOL2IM(expr, source, 1,
+						hops));
 				setBlockSizeAndRefreshSizeInfo(expr, currBuiltinOp);
 				break;
 			}
@@ -3271,7 +3380,8 @@ public class DMLTranslator {
 				throw new ParseException("Unsupported builtin function type: " + source.getOpCode());
 		}
 
-		boolean isConvolution = source.getOpCode() == BuiltinFunctionOp.CONV2D || source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_DATA ||
+		boolean isConvolution =
+				source.getOpCode() == BuiltinFunctionOp.CONV2D || source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_DATA ||
 				source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_FILTER ||
 				source.getOpCode() == BuiltinFunctionOp.MAX_POOL || source.getOpCode() == BuiltinFunctionOp.MAX_POOL_BACKWARD ||
 				source.getOpCode() == BuiltinFunctionOp.AVG_POOL || source.getOpCode() == BuiltinFunctionOp.AVG_POOL_BACKWARD;
@@ -3296,21 +3406,24 @@ public class DMLTranslator {
 		HopRewriteUtils.copyLineNumbers(in, out);
 	}
 
-	private ArrayList<Hop> getALHopsForConvOpPoolingCOL2IM(Hop first, BuiltinFunctionExpression source, int skip, HashMap<String, Hop> hops) {
+	private ArrayList<Hop> getALHopsForConvOpPoolingCOL2IM(Hop first, BuiltinFunctionExpression source, int skip,
+														   HashMap<String, Hop> hops) {
 		ArrayList<Hop> ret = new ArrayList<>();
 		ret.add(first);
 		Expression[] allExpr = source.getAllExpr();
 
 		for (int i = skip; i < allExpr.length; i++) {
 			if (i == 11) {
-				ret.add(processExpression(allExpr[7], null, hops)); // Make number of channels of images and filter the same
+				ret.add(processExpression(allExpr[7], null, hops)); // Make number of channels of images and filter
+				// the same
 			} else
 				ret.add(processExpression(allExpr[i], null, hops));
 		}
 		return ret;
 	}
 
-	private ArrayList<Hop> getALHopsForPoolingForwardIM2COL(Hop first, BuiltinFunctionExpression source, int skip, HashMap<String, Hop> hops) {
+	private ArrayList<Hop> getALHopsForPoolingForwardIM2COL(Hop first, BuiltinFunctionExpression source, int skip,
+															HashMap<String, Hop> hops) {
 		ArrayList<Hop> ret = new ArrayList<>();
 		ret.add(first);
 		Expression[] allExpr = source.getAllExpr();
@@ -3330,7 +3443,8 @@ public class DMLTranslator {
 	}
 
 	@SuppressWarnings("unused") //TODO remove if not used
-	private ArrayList<Hop> getALHopsForConvOpPoolingIM2COL(Hop first, BuiltinFunctionExpression source, int skip, HashMap<String, Hop> hops) {
+	private ArrayList<Hop> getALHopsForConvOpPoolingIM2COL(Hop first, BuiltinFunctionExpression source, int skip,
+														   HashMap<String, Hop> hops) {
 		ArrayList<Hop> ret = new ArrayList<Hop>();
 		ret.add(first);
 		Expression[] allExpr = source.getAllExpr();
@@ -3359,7 +3473,8 @@ public class DMLTranslator {
 		return ret;
 	}
 
-	private ArrayList<Hop> getALHopsForConvOp(Hop first, BuiltinFunctionExpression source, int skip, HashMap<String, Hop> hops) {
+	private ArrayList<Hop> getALHopsForConvOp(Hop first, BuiltinFunctionExpression source, int skip, HashMap<String,
+			Hop> hops) {
 		ArrayList<Hop> ret = new ArrayList<>();
 		ret.add(first);
 		Expression[] allExpr = source.getAllExpr();

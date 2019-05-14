@@ -30,7 +30,7 @@ public class BinaryOperator  extends Operator implements Serializable
 {
 	private static final long serialVersionUID = -2547950181558989209L;
 
-	public final ValueFunction fn;
+	public ValueFunction fn;
 
 	public BinaryOperator(ValueFunction p) {
 		//binaryop is sparse-safe iff (0 op 0) == 0

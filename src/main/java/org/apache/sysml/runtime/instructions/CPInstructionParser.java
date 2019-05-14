@@ -96,6 +96,7 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "uarimin" , CPType.AggregateUnary);
 		String2CPInstructionType.put( "uacmin"  , CPType.AggregateUnary);
 		String2CPInstructionType.put( "ua+"     , CPType.AggregateUnary);
+		String2CPInstructionType.put( "uab+"    , CPType.AggregateUnary);
 		String2CPInstructionType.put( "uar+"    , CPType.AggregateUnary);
 		String2CPInstructionType.put( "uac+"    , CPType.AggregateUnary);
 		String2CPInstructionType.put( "ua*"     , CPType.AggregateUnary);
@@ -114,6 +115,7 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "+"    , CPType.Binary);
 		String2CPInstructionType.put( "-"    , CPType.Binary);
 		String2CPInstructionType.put( "*"    , CPType.Binary);
+		String2CPInstructionType.put( "b*"   , CPType.Binary);
 		String2CPInstructionType.put( "/"    , CPType.Binary);
 		String2CPInstructionType.put( "%%"   , CPType.Binary);
 		String2CPInstructionType.put( "%/%"  , CPType.Binary);
@@ -141,7 +143,8 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( ">"    , CPType.Binary);
 		String2CPInstructionType.put( "<="   , CPType.Binary);
 		String2CPInstructionType.put( ">="   , CPType.Binary);
-		
+		String2CPInstructionType.put( "b>="  , CPType.Binary);
+
 		// Builtin Instruction Opcodes 
 		String2CPInstructionType.put( "log"  , CPType.Builtin);
 		String2CPInstructionType.put( "log_nz"  , CPType.Builtin);

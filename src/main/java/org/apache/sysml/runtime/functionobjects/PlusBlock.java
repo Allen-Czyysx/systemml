@@ -17,6 +17,11 @@ public class PlusBlock extends ValueFunction implements Serializable {
 	}
 
 	@Override
+	public ValueFunction getBasicFunction() {
+		return Plus.getPlusFnObject();
+	}
+
+	@Override
 	public double execute(double in1, double in2) {
 		return in1 + in2;
 	}

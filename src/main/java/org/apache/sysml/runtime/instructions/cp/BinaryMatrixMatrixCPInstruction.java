@@ -19,7 +19,9 @@
 
 package org.apache.sysml.runtime.instructions.cp;
 
+import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.functionobjects.MultiplyBlock;
 import org.apache.sysml.runtime.matrix.data.LibCommonsMath;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
@@ -49,8 +51,19 @@ public class BinaryMatrixMatrixCPInstruction extends BinaryCPInstruction {
 		
 		// Perform computation using input matrices, and produce the result matrix
 		BinaryOperator bop = (BinaryOperator) _optr;
-		MatrixBlock retBlock = (MatrixBlock) (inBlock1.binaryOperations (bop, inBlock2, new MatrixBlock()));
-		
+		MatrixBlock retBlock;
+		if (bop.fn.isBlockFn()) {
+			if (bop.fn instanceof MultiplyBlock) {
+				retBlock = new MatrixBlock(inBlock1);
+				retBlock.setSelectBlock(inBlock2.getFilterBlock());
+			} else {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+
+		} else {
+			retBlock = (MatrixBlock) (inBlock1.binaryOperations (bop, inBlock2, new MatrixBlock()));
+		}
+
 		// Release the memory occupied by input matrices
 		ec.releaseMatrixInput(input1.getName(), getExtendedOpcode());
 		ec.releaseMatrixInput(input2.getName(), getExtendedOpcode());

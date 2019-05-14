@@ -169,11 +169,12 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 			constVars.remove(var);
 		}
 
-		predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
-
 		for (StatementBlock block : init) {
 			ids = block.validate(dmlProg, ids, constVars, true);
 		}
+
+		predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
+
 		for (StatementBlock block : before) {
 			ids = block.validate(dmlProg, ids, constVars, true);
 		}
@@ -234,11 +235,12 @@ public class DWhileStatementBlock extends WhileStatementBlock {
 				constVars.remove(var);
 			}
 
-			predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
-
 			for (StatementBlock block : init) {
 				ids = block.validate(dmlProg, ids, constVars, true);
 			}
+
+			predicate.getPredicate().validateExpression(ids.getVariables(), constVars, conditional);
+
 			for (StatementBlock block : before) {
 				ids = block.validate(dmlProg, ids, constVars, true);
 			}

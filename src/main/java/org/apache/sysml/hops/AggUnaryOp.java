@@ -544,13 +544,12 @@ public class AggUnaryOp extends MultiThreadedHop
 		return ret;
 	}
 
-	// TODO added by czh 不确定 GREATEREQUALBLOCK 和 MULTBLOCK 要不要放进这里面
 	private static boolean isCompareOperator(OpOp2 opOp2)
 	{
 		return opOp2 == OpOp2.LESS || opOp2 == OpOp2.LESSEQUAL
 				|| opOp2 == OpOp2.GREATER || opOp2 == OpOp2.GREATEREQUAL
 				|| opOp2 == OpOp2.EQUAL || opOp2 == OpOp2.NOTEQUAL
-				|| opOp2 == OpOp2.GREATEREQUALBLOCK || opOp2 == OpOp2.MULTBLOCK;
+				|| opOp2 == OpOp2.GREATEREQUALBLOCK;
 	}
 
 	private boolean isUnaryAggregateOuterRewriteApplicable() 

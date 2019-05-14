@@ -19,6 +19,8 @@
 
 package org.apache.sysml.runtime.functionobjects;
 
+import org.apache.sysml.parser.ParseException;
+
 import java.io.Serializable;
 
 public abstract class ValueFunction extends FunctionObject implements Serializable
@@ -29,6 +31,10 @@ public abstract class ValueFunction extends FunctionObject implements Serializab
 		return this instanceof GreaterThanEqualsBlock
 				|| this instanceof MultiplyBlock
 				|| this instanceof PlusBlock;
+	}
+
+	public ValueFunction getBasicFunction() {
+		throw new ParseException("Shouldn't be here");
 	}
 	
 }

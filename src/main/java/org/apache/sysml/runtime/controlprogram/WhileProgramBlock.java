@@ -109,7 +109,6 @@ public class WhileProgramBlock extends ProgramBlock
 			//run loop body until predicate becomes false
 			int count = 1;
 			while( executePredicate(ec).getBooleanValue() ) {
-				// TODO added by czh 删
 				long t1 = System.currentTimeMillis();
 
 				//execute all child blocks
@@ -118,7 +117,6 @@ public class WhileProgramBlock extends ProgramBlock
 					_childBlocks.get(i).execute(ec);
 				}
 
-				// TODO added by czh 删
 				System.out.println("while\t" + (System.currentTimeMillis() - t1) / 1000.0 + "\t" + count + "\n");
 				count++;
 			}

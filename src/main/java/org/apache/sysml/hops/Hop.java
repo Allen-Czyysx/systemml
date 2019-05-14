@@ -113,6 +113,7 @@ public abstract class Hop implements ParseInfo
 	// 用于增量迭代
 	String _preOutputName = null;
 	String[] _dVarNames = null;
+	Hop _dHop = null;
 
 	private Lop _lops = null;
 
@@ -126,6 +127,14 @@ public abstract class Hop implements ParseInfo
 		setName(l);
 		setDataType(dt);
 		setValueType(vt);
+	}
+
+	public Hop getDHop() {
+		return _dHop;
+	}
+
+	public void setDHop(Hop dHop) {
+		_dHop = dHop;
 	}
 
 	public String getPreOutputName() {

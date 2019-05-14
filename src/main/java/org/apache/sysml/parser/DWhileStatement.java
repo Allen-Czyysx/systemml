@@ -103,8 +103,12 @@ public class DWhileStatement extends WhileStatement {
 				+ inst.getEndLine() + "_" + inst.getEndColumn();
 	}
 
-	public static String getVarUseDeltaCountName(String varName) {
+	public static String getUseDeltaCountName(String varName) {
 		return "6_useDeltaCount_" + varName;
+	}
+
+	public static String getSelectBlockNum(String varName) {
+		return "7_blockSum_" + varName;
 	}
 
 	@Override

@@ -75,7 +75,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			// run loop body until predicate becomes false
 			int count = 1;
 			while (executePredicate(ec).getBooleanValue()) {
-				// TODO added by czh 删
 				long t1 = System.currentTimeMillis();
 
 				// 执行before
@@ -83,7 +82,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 					pb.execute(ec);
 				}
 
-				// TODO added by czh 删
 				long t2 = System.currentTimeMillis();
 
 				// execute all child blocks
@@ -92,7 +90,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 					_childBlocks.get(i).execute(ec);
 				}
 
-				// TODO added by czh 删
 				long t3 = System.currentTimeMillis();
 
 				// 执行after
@@ -100,7 +97,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 					pb.execute(ec);
 				}
 
-				// TODO added by czh 删
 				long t4 = System.currentTimeMillis();
 				System.out.println("child \t" + (t3 - t2) / 1000.0);
 				System.out.println("after \t" + (t4 - t3) / 1000.0);

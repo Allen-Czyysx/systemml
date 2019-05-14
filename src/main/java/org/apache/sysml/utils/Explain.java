@@ -40,26 +40,8 @@ import org.apache.sysml.hops.codegen.cplan.CNodeMultiAgg;
 import org.apache.sysml.hops.codegen.cplan.CNodeTpl;
 import org.apache.sysml.hops.ipa.FunctionCallGraph;
 import org.apache.sysml.lops.Lop;
-import org.apache.sysml.parser.DMLProgram;
-import org.apache.sysml.parser.ExternalFunctionStatement;
-import org.apache.sysml.parser.ForStatement;
-import org.apache.sysml.parser.ForStatementBlock;
-import org.apache.sysml.parser.FunctionStatement;
-import org.apache.sysml.parser.FunctionStatementBlock;
-import org.apache.sysml.parser.IfStatement;
-import org.apache.sysml.parser.IfStatementBlock;
-import org.apache.sysml.parser.ParForStatementBlock;
-import org.apache.sysml.parser.StatementBlock;
-import org.apache.sysml.parser.WhileStatement;
-import org.apache.sysml.parser.WhileStatementBlock;
-import org.apache.sysml.runtime.controlprogram.ExternalFunctionProgramBlock;
-import org.apache.sysml.runtime.controlprogram.ForProgramBlock;
-import org.apache.sysml.runtime.controlprogram.FunctionProgramBlock;
-import org.apache.sysml.runtime.controlprogram.IfProgramBlock;
-import org.apache.sysml.runtime.controlprogram.ParForProgramBlock;
-import org.apache.sysml.runtime.controlprogram.Program;
-import org.apache.sysml.runtime.controlprogram.ProgramBlock;
-import org.apache.sysml.runtime.controlprogram.WhileProgramBlock;
+import org.apache.sysml.parser.*;
+import org.apache.sysml.runtime.controlprogram.*;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.controlprogram.parfor.stat.InfrastructureAnalyzer;
 import org.apache.sysml.runtime.instructions.Instruction;
@@ -933,76 +915,99 @@ public class Explain
 	//////////////
 	// internal explain RUNTIME
 
-	private static String explainProgramBlock( ProgramBlock pb, int level ) 
-	{
+	private static String explainProgramBlock(ProgramBlock pb, int level) {
 		StringBuilder sb = new StringBuilder();
 		String offset = createOffset(level);
-		
-		if (pb instanceof FunctionProgramBlock )
-		{
-			FunctionProgramBlock fpb = (FunctionProgramBlock)pb;
-			for( ProgramBlock pbc : fpb.getChildBlocks() )
-				sb.append( explainProgramBlock( pbc, level+1) );
-		}
-		else if (pb instanceof WhileProgramBlock)
-		{
+
+		if (pb instanceof FunctionProgramBlock) {
+			FunctionProgramBlock fpb = (FunctionProgramBlock) pb;
+			for (ProgramBlock pbc : fpb.getChildBlocks())
+				sb.append(explainProgramBlock(pbc, level + 1));
+
+		} else if (pb instanceof DWhileProgramBlock) {
+			DWhileProgramBlock dwpb = (DWhileProgramBlock) pb;
+			sb.append(offset);
+			sb.append("DWHILE (lines " + dwpb.getBeginLine() + "-" + dwpb.getEndLine() + ")\n");
+			sb.append(explainInstructions(dwpb.getPredicate(), level + 1));
+
+			sb.append(offset);
+			sb.append("init:\n");
+			for (ProgramBlock pbc : dwpb.getDIterInit()) {
+				sb.append(explainProgramBlock(pbc, level + 1));
+			}
+
+			sb.append(offset);
+			sb.append("before:\n");
+			for (ProgramBlock pbc : dwpb.getDIterBefore()) {
+				sb.append(explainProgramBlock(pbc, level + 1));
+			}
+
+			sb.append(offset);
+			sb.append("body:\n");
+			for (ProgramBlock pbc : dwpb.getChildBlocks()) {
+				sb.append(explainProgramBlock(pbc, level + 1));
+			}
+
+			sb.append(offset);
+			sb.append("after:\n");
+			for (ProgramBlock pbc : dwpb.getDIterAfter()) {
+				sb.append(explainProgramBlock(pbc, level + 1));
+			}
+
+		} else if (pb instanceof WhileProgramBlock) {
 			WhileProgramBlock wpb = (WhileProgramBlock) pb;
 			StatementBlock wsb = pb.getStatementBlock();
 			sb.append(offset);
-			if( wsb != null && !wsb.getUpdateInPlaceVars().isEmpty() )
-				sb.append("WHILE (lines "+wpb.getBeginLine()+"-"+wpb.getEndLine()+") [in-place="+wsb.getUpdateInPlaceVars().toString()+"]\n");
+			if (wsb != null && !wsb.getUpdateInPlaceVars().isEmpty())
+				sb.append("WHILE (lines " + wpb.getBeginLine() + "-" + wpb.getEndLine() + ") [in-place=" + wsb.getUpdateInPlaceVars().toString() + "]\n");
 			else
-				sb.append("WHILE (lines "+wpb.getBeginLine()+"-"+wpb.getEndLine()+")\n");
-			sb.append(explainInstructions(wpb.getPredicate(), level+1));			
-			for( ProgramBlock pbc : wpb.getChildBlocks() )
-				sb.append( explainProgramBlock( pbc, level+1) );
-		}	
-		else if (pb instanceof IfProgramBlock)
-		{
+				sb.append("WHILE (lines " + wpb.getBeginLine() + "-" + wpb.getEndLine() + ")\n");
+			sb.append(explainInstructions(wpb.getPredicate(), level + 1));
+			for (ProgramBlock pbc : wpb.getChildBlocks())
+				sb.append(explainProgramBlock(pbc, level + 1));
+
+		} else if (pb instanceof IfProgramBlock) {
 			IfProgramBlock ipb = (IfProgramBlock) pb;
 			sb.append(offset);
-			sb.append("IF (lines "+ipb.getBeginLine()+"-"+ipb.getEndLine()+")\n");
-			sb.append(explainInstructions(ipb.getPredicate(), level+1));
-			for( ProgramBlock pbc : ipb.getChildBlocksIfBody() ) 
-				sb.append( explainProgramBlock( pbc, level+1) );
-			if( !ipb.getChildBlocksElseBody().isEmpty() )
-			{	
+			sb.append("IF (lines " + ipb.getBeginLine() + "-" + ipb.getEndLine() + ")\n");
+			sb.append(explainInstructions(ipb.getPredicate(), level + 1));
+			for (ProgramBlock pbc : ipb.getChildBlocksIfBody())
+				sb.append(explainProgramBlock(pbc, level + 1));
+			if (!ipb.getChildBlocksElseBody().isEmpty()) {
 				sb.append(offset);
 				sb.append("ELSE\n");
-				for( ProgramBlock pbc : ipb.getChildBlocksElseBody() ) 
-					sb.append( explainProgramBlock( pbc, level+1) );
+				for (ProgramBlock pbc : ipb.getChildBlocksElseBody())
+					sb.append(explainProgramBlock(pbc, level + 1));
 			}
-		}
-		else if (pb instanceof ForProgramBlock) //incl parfor
+
+		} else if (pb instanceof ForProgramBlock) //incl parfor
 		{
 			ForProgramBlock fpb = (ForProgramBlock) pb;
 			StatementBlock fsb = pb.getStatementBlock();
 			sb.append(offset);
-			if( pb instanceof ParForProgramBlock )
-				sb.append("PARFOR (lines "+fpb.getBeginLine()+"-"+fpb.getEndLine()+")\n");
+			if (pb instanceof ParForProgramBlock)
+				sb.append("PARFOR (lines " + fpb.getBeginLine() + "-" + fpb.getEndLine() + ")\n");
 			else {
-				if( fsb != null && !fsb.getUpdateInPlaceVars().isEmpty() )
-					sb.append("FOR (lines "+fpb.getBeginLine()+"-"+fpb.getEndLine()+") [in-place="+fsb.getUpdateInPlaceVars().toString()+"]\n");
+				if (fsb != null && !fsb.getUpdateInPlaceVars().isEmpty())
+					sb.append("FOR (lines " + fpb.getBeginLine() + "-" + fpb.getEndLine() + ") [in-place=" + fsb.getUpdateInPlaceVars().toString() + "]\n");
 				else
-					sb.append("FOR (lines "+fpb.getBeginLine()+"-"+fpb.getEndLine()+")\n");
+					sb.append("FOR (lines " + fpb.getBeginLine() + "-" + fpb.getEndLine() + ")\n");
 			}
-			sb.append(explainInstructions(fpb.getFromInstructions(), level+1));
-			sb.append(explainInstructions(fpb.getToInstructions(), level+1));
-			sb.append(explainInstructions(fpb.getIncrementInstructions(), level+1));
-			for( ProgramBlock pbc : fpb.getChildBlocks() ) 
-				sb.append( explainProgramBlock( pbc, level+1) );
-			
-		}
-		else
-		{
+			sb.append(explainInstructions(fpb.getFromInstructions(), level + 1));
+			sb.append(explainInstructions(fpb.getToInstructions(), level + 1));
+			sb.append(explainInstructions(fpb.getIncrementInstructions(), level + 1));
+			for (ProgramBlock pbc : fpb.getChildBlocks())
+				sb.append(explainProgramBlock(pbc, level + 1));
+
+		} else {
 			sb.append(offset);
-			if( pb.getStatementBlock()!=null )
-				sb.append("GENERIC (lines "+pb.getBeginLine()+"-"+pb.getEndLine()+") [recompile="+pb.getStatementBlock().requiresRecompilation()+"]\n");
+			if (pb.getStatementBlock() != null)
+				sb.append("GENERIC (lines " + pb.getBeginLine() + "-" + pb.getEndLine() + ") [recompile=" + pb.getStatementBlock().requiresRecompilation() + "]\n");
 			else
-				sb.append("GENERIC (lines "+pb.getBeginLine()+"-"+pb.getEndLine()+") \n");
-			sb.append(explainInstructions(pb.getInstructions(), level+1));
+				sb.append("GENERIC (lines " + pb.getBeginLine() + "-" + pb.getEndLine() + ") \n");
+			sb.append(explainInstructions(pb.getInstructions(), level + 1));
 		}
-		
+
 		return sb.toString();
 	}
 

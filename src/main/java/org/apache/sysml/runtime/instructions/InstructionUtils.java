@@ -287,7 +287,7 @@ public class InstructionUtils
 			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
 
 		} else if (opcode.equalsIgnoreCase("uab+")) {
-			AggregateOperator agg = new AggregateOperator(0, null);
+			AggregateOperator agg = new AggregateOperator(0, PlusBlock.getPlusBlockFnObject());
 			aggun = new AggregateUnaryOperator(agg, ReduceAll.getReduceAllFnObject(), numThreads);
 
 		} else if ( opcode.equalsIgnoreCase("uar+") ) {
@@ -514,6 +514,8 @@ public class InstructionUtils
 			return new BinaryOperator(Minus.getMinusFnObject());
 		else if(opcode.equalsIgnoreCase("*"))
 			return new BinaryOperator(Multiply.getMultiplyFnObject());
+		else if(opcode.equalsIgnoreCase("b*"))
+			return new BinaryOperator(MultiplyBlock.getMultiplyBlockFnObject());
 		else if(opcode.equalsIgnoreCase("1-*"))
 			return new BinaryOperator(Minus1Multiply.getMinus1MultiplyFnObject());
 		else if ( opcode.equalsIgnoreCase("*2") ) 

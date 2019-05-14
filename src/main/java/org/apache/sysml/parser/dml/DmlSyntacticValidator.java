@@ -594,10 +594,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	public void exitDWhileStatement(DWhileStatementContext ctx) {
 		DWhileStatement dwst = new DWhileStatement();
 		dwst.setCtxValuesAndFilename(ctx, currentFile);
-
-		// 循环条件
-		ConditionalPredicate predicate = new ConditionalPredicate(ctx.predicate.info.expr);
-		dwst.setPredicate(predicate);
+		Expression predicateExp = ctx.predicate.info.expr;
 
 		// 获得dVarName
 		String names = ctx.dVarList.getText();
@@ -614,18 +611,34 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			String preVarName = DWhileStatement.getPreVarName(dVarName);
 			DataIdentifier var = new DataIdentifier(dVarName);
 			PreDataIdentifier preVar = new PreDataIdentifier(preVarName, dVarName);
+			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(dVarName));
 			DataIdentifier selectVar = new DataIdentifier(DWhileStatement.getSelectName(dVarName));
 			DataIdentifier deltaVar = new DataIdentifier(DWhileStatement.getDeltaName(dVarName));
+			DataIdentifier blockNum = new DataIdentifier(DWhileStatement.getSelectBlockNum(dVarName));
+
+			// 循环条件添加 & blockNum != 0
+			// TODO added by czh 多个怎么办
+			RelationalExpression detectBlockNum = new RelationalExpression(Expression.RelationalOp.NOTEQUAL, dwst);
+			detectBlockNum.setLeft(blockNum);
+			detectBlockNum.setRight(new IntIdentifier(ctx, 0, currentFile));
+			BooleanExpression newPredicateExp = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+			newPredicateExp.setLeft(predicateExp);
+			newPredicateExp.setRight(detectBlockNum);
+			predicateExp = newPredicateExp;
 
 			// Init: 创建useDelta, useDeltaCount
 			// useDelta 标记下次迭代是否使用增量
-			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(dVarName));
 			AssignmentStatement disableUseDelta = new AssignmentStatement(ctx, useDelta,
 					new BooleanIdentifier(ctx, false, currentFile));
 			init.add(getStatementBlock(disableUseDelta));
 
+			// blockNum 筛选块数
+			AssignmentStatement initBlockNum = new AssignmentStatement(ctx, blockNum,
+					new IntIdentifier(ctx, -1, currentFile));
+			init.add(getStatementBlock(initBlockNum));
+
 			// useDeltaCount 记录连续使用增量的次数
-			DataIdentifier useDeltaCount = new DataIdentifier(DWhileStatement.getVarUseDeltaCountName(dVarName));
+			DataIdentifier useDeltaCount = new DataIdentifier(DWhileStatement.getUseDeltaCountName(dVarName));
 			AssignmentStatement initUseDeltaCount = new AssignmentStatement(ctx, useDeltaCount,
 					new IntIdentifier(ctx, -1, currentFile));
 			init.add(getStatementBlock(initUseDeltaCount));
@@ -644,50 +657,65 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			AssignmentStatement assignDelta = new AssignmentStatement(ctx, deltaVar, delta);
 			after.add(getStatementBlock(assignDelta));
 
-			// abs = abs(delta)
-			Expression[] absExps = {deltaVar};
+
+			// TODO added by czh 老select方案, 按最大值的一定比例筛选
+//			// abs = abs(delta)
+//			Expression[] absExps = {deltaVar};
+//			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
+//					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
+//
+//			// max = max(abs)
+//			Expression[] maxArgs = {abs};
+//			BuiltinFunctionExpression max = new BuiltinFunctionExpression(
+//					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
+//
+//			// selectBound = max * ratio
+//			double ratio = Double.parseDouble(ctx.ratio.getText());
+//			BinaryExpression selectBound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
+//			selectBound.setLeft(max);
+//			selectBound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
+//
+//			// select = (abs >= selectBound)
+//			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
+//			select.setLeft(abs);
+//			select.setRight(selectBound);
+
+			// TODO added by czh 新select方案, 按单项的相对差值筛选
+			// abs = abs(delta / preVar)
+			BinaryExpression related = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+			related.setLeft(delta);
+			related.setRight(preVar);
+			Expression[] absExps = {related};
 			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
 
-			// max = max(abs)
-			Expression[] maxArgs = {abs};
-			BuiltinFunctionExpression max = new BuiltinFunctionExpression(
-					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
-
-			// selectBound = max * ratio
-			double ratio = Double.parseDouble(ctx.ratio.getText());
-			BinaryExpression selectBound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
-			selectBound.setLeft(max);
-			selectBound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
-
-			// select = (abs >= selectBound)
+			// select = abs >= ratio
 			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
+			double ratio = Double.parseDouble(ctx.ratio.getText());
 			select.setLeft(abs);
-			select.setRight(selectBound);
-
-			// 记录 select
+			select.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
 			AssignmentStatement assignSelect = new AssignmentStatement(ctx, selectVar, select);
 			after.add(getStatementBlock(assignSelect));
 
 			// blockNum = sumBlock(select)
 			Expression[] blockNumArgs = {selectVar};
-			BuiltinFunctionExpression blockNum = new BuiltinFunctionExpression(
+			BuiltinFunctionExpression sumBlockNum = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.SUMBLOCK, blockNumArgs, currentFile);
+			AssignmentStatement assignBlockNum = new AssignmentStatement(ctx, blockNum, sumBlockNum);
+			after.add(getStatementBlock(assignBlockNum));
 
-			// rowNum = nrow(var)
+			// blockNumBound = nrow(var) / (1000 * ???)
 			Expression[] nrowArgs = {var};
 			BuiltinFunctionExpression rowNum = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.NROW, nrowArgs, currentFile);
-
-			// blockNumBound = rowNum / (1000 * 10)
 			BinaryExpression blockNumBound = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
 			blockNumBound.setLeft(rowNum);
-			// TODO added by czh debug
-//			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 100, currentFile));
-			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
+			// TODO added by czh 代价模型
+			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 2, currentFile));
+//			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
 
 			// deltaCondition = (blockNum <= blockNumBound)
-			// TODO added by czh 暂时, 之后改为代价模型判断
+			// TODO added by czh 代价模型
 			RelationalExpression deltaCondition = new RelationalExpression(Expression.RelationalOp.LESSEQUAL, dwst);
 			deltaCondition.setLeft(blockNum);
 			deltaCondition.setRight(blockNumBound);
@@ -728,13 +756,10 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			ifUseDelta.addStatementBlockElseBody(getStatementBlock(initUseDeltaCount));
 
 			// }
-
-			// TODO added by czh print(blockNum) 删
-//			List<Expression> expList = new ArrayList<>();
-//			expList.add(blockNum);
-//			PrintStatement print = new PrintStatement(ctx, "print", expList, currentFile);
-//			after.add(getStatementBlock(print));
 		}
+
+		ConditionalPredicate predicate = new ConditionalPredicate(predicateExp);
+		dwst.setPredicate(predicate);
 
 		dwst.setDIterInit(StatementBlock.mergeStatementBlocks(init));
 		dwst.setDIterBefore(StatementBlock.mergeStatementBlocks(before));

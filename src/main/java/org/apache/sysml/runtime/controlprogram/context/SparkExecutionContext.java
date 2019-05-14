@@ -706,13 +706,13 @@ public class SparkExecutionContext extends ExecutionContext
 
 	public PartitionedBroadcast<MatrixBlock> getBroadcastForVariable(String varname) {
 		MatrixObject mo = getMatrixObject(varname);
-		mo.getMatrixCharacteristics().name = varname; // TODO added by czh
+		mo.getMatrixCharacteristics().name = varname;
 		return getBroadcastForMatrixObject(mo);
 	}
 
 	public MatrixBlock getBlockForVariable(String varname) {
 		MatrixObject mo = getMatrixObject(varname);
-		mo.getMatrixCharacteristics().name = varname; // TODO added by czh
+		mo.getMatrixCharacteristics().name = varname;
 		return getBlockForMatrixObject(mo);
 	}
 
@@ -968,7 +968,7 @@ public class SparkExecutionContext extends ExecutionContext
 						if (c != 1) {
 							throw new DMLRuntimeException("Unsupported: c = " + c);
 						}
-						out.initFilterBlock(r, c);
+						out.allocateFilterBlock(r, c);
 						flag = false;
 					}
 
