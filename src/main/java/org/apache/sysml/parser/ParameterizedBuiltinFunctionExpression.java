@@ -195,130 +195,132 @@ public class ParameterizedBuiltinFunctionExpression extends DataIdentifier
 	 * statement
 	 */
 	@Override
-	public void validateExpression(HashMap<String, DataIdentifier> ids, HashMap<String, ConstIdentifier> constVars, boolean conditional)
-	{
+	public void validateExpression(HashMap<String, DataIdentifier> ids, HashMap<String, ConstIdentifier> constVars,
+								   boolean conditional) {
 		// validate all input parameters
-		for ( String s : getVarParams().keySet() ) {
+		for (String s : getVarParams().keySet()) {
 			Expression paramExpr = getVarParam(s);
 			if (paramExpr instanceof FunctionCallIdentifier)
-				raiseValidateError("UDF function call not supported as parameter to built-in function call", false);	
+				raiseValidateError("UDF function call not supported as parameter to built-in function call", false);
 			paramExpr.validateExpression(ids, constVars, conditional);
 		}
-		
+
 		String outputName = getTempName();
 		DataIdentifier output = new DataIdentifier(outputName);
 		//output.setProperties(this.getFirstExpr().getOutput());
 		this.setOutput(output);
 
 		// IMPORTANT: for each operation, one must handle unnamed parameters
-		
+
 		switch (this.getOpCode()) {
-		
-		case GROUPEDAGG:
-			validateGroupedAgg(output, conditional);
-			break; 
-			
-		case CDF:
-		case INVCDF:
-		case PNORM:
-		case QNORM:
-		case PT:
-		case QT:
-		case PF:
-		case QF:
-		case PCHISQ:
-		case QCHISQ:
-		case PEXP:
-		case QEXP:
-		case PBINOMIAL:
-		case QBINOMIAL:
-			validateDistributionFunctions(output, conditional);
-			break;
-			
-		case RMEMPTY:
-			validateRemoveEmpty(output, conditional);
-			break;
-		
-		case REPLACE:
-			validateReplace(output, conditional);
-			break;
-		
-		case ORDER:
-			validateOrder(output, conditional);
-			break;
-		
-		case TRANSFORMAPPLY:
-			validateTransformApply(output, conditional);
-			break;
-		
-		case TRANSFORMDECODE:
-			validateTransformDecode(output, conditional);
-			break;
-		
-		case TRANSFORMCOLMAP:
-			validateTransformColmap(output, conditional);
-			break;
-		
-		case TRANSFORMMETA:
-			validateTransformMeta(output, conditional);
-			break;
-			
-		case LOWER_TRI:
-		case UPPER_TRI:
-			validateExtractTriangular(output, getOpCode(), conditional);
-			break;
-			
-		case TOSTRING:
-			validateCastAsString(output, conditional);
-			break;
-		
-		case LIST:
-			validateNamedList(output, conditional);
-			break;
+			case GROUPEDAGG:
+				validateGroupedAgg(output, conditional);
+				break;
 
-		case PARAMSERV:
-			validateParamserv(output, conditional);
-			break;
+			case CDF:
+			case INVCDF:
+			case PNORM:
+			case QNORM:
+			case PT:
+			case QT:
+			case PF:
+			case QF:
+			case PCHISQ:
+			case QCHISQ:
+			case PEXP:
+			case QEXP:
+			case PBINOMIAL:
+			case QBINOMIAL:
+				validateDistributionFunctions(output, conditional);
+				break;
 
-		default: //always unconditional (because unsupported operation)
-			//handle common issue of transformencode
-			if( getOpCode()==ParameterizedBuiltinFunctionOp.TRANSFORMENCODE )
-				raiseValidateError("Parameterized function "+ getOpCode() +" requires a multi-assignment statement "
-						+ "for data and metadata.", false, LanguageErrorCodes.UNSUPPORTED_EXPRESSION);
-			else
-				raiseValidateError("Unsupported parameterized function "+ getOpCode(), 
-						false, LanguageErrorCodes.UNSUPPORTED_EXPRESSION);
+			case RMEMPTY:
+			case REPARTITION:
+				validateRemoveEmpty(output, conditional);
+				break;
+
+			case REPLACE:
+				validateReplace(output, conditional);
+				break;
+
+			case ORDER:
+				validateOrder(output, conditional);
+				break;
+
+			case TRANSFORMAPPLY:
+				validateTransformApply(output, conditional);
+				break;
+
+			case TRANSFORMDECODE:
+				validateTransformDecode(output, conditional);
+				break;
+
+			case TRANSFORMCOLMAP:
+				validateTransformColmap(output, conditional);
+				break;
+
+			case TRANSFORMMETA:
+				validateTransformMeta(output, conditional);
+				break;
+
+			case LOWER_TRI:
+			case UPPER_TRI:
+				validateExtractTriangular(output, getOpCode(), conditional);
+				break;
+
+			case TOSTRING:
+				validateCastAsString(output, conditional);
+				break;
+
+			case LIST:
+				validateNamedList(output, conditional);
+				break;
+
+			case PARAMSERV:
+				validateParamserv(output, conditional);
+				break;
+
+			default: //always unconditional (because unsupported operation)
+				//handle common issue of transformencode
+				if (getOpCode() == ParameterizedBuiltinFunctionOp.TRANSFORMENCODE)
+					raiseValidateError("Parameterized function " + getOpCode() + " requires a multi-assignment " +
+							"statement "
+							+ "for data and metadata.", false, LanguageErrorCodes.UNSUPPORTED_EXPRESSION);
+				else
+					raiseValidateError("Unsupported parameterized function " + getOpCode(),
+							false, LanguageErrorCodes.UNSUPPORTED_EXPRESSION);
 		}
 	}
 
 	@Override
-	public void validateExpression(MultiAssignmentStatement stmt, HashMap<String, DataIdentifier> ids, HashMap<String, ConstIdentifier> constVars, boolean conditional)
-	{
+	public void validateExpression(MultiAssignmentStatement stmt, HashMap<String, DataIdentifier> ids, HashMap<String,
+			ConstIdentifier> constVars, boolean conditional) {
 		// validate all input parameters
-		for ( String s : getVarParams().keySet() ) {
-			Expression paramExpr = getVarParam(s);			
+		for (String s : getVarParams().keySet()) {
+			Expression paramExpr = getVarParam(s);
 			if (paramExpr instanceof FunctionCallIdentifier)
 				raiseValidateError("UDF function call not supported as parameter to built-in function call", false);
 			paramExpr.validateExpression(ids, constVars, conditional);
 		}
-		
+
 		_outputs = new Identifier[stmt.getTargetList().size()];
 		int count = 0;
-		for (DataIdentifier outParam: stmt.getTargetList()){
+		for (DataIdentifier outParam : stmt.getTargetList()) {
 			DataIdentifier tmp = new DataIdentifier(outParam);
 			tmp.setParseInfo(this);
 			_outputs[count++] = tmp;
 		}
-		
-		switch (this.getOpCode()) {	
+
+		switch (this.getOpCode()) {
 			case TRANSFORMENCODE:
 				DataIdentifier out1 = (DataIdentifier) getOutputs()[0];
 				DataIdentifier out2 = (DataIdentifier) getOutputs()[1];
-				
+
 				validateTransformEncode(out1, out2, conditional);
-				break;	
+				break;
 			default: //always unconditional (because unsupported operation)
-				raiseValidateError("Unsupported parameterized function "+ getOpCode(), false, LanguageErrorCodes.INVALID_PARAMETERS);
+				raiseValidateError("Unsupported parameterized function " + getOpCode(), false,
+						LanguageErrorCodes.INVALID_PARAMETERS);
 		}
 	}
 

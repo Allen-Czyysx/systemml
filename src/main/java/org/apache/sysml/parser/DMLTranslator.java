@@ -1970,6 +1970,8 @@ public class DMLTranslator {
 							// delta = left %*% deltaRight
 							AggBinaryOp delta = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
 									originLeft, right.get(1));
+							delta.setNeedCache(true);
+							delta.setPreOutputName(DWhileStatement.getPreOutputNameFromHop(aggBHop));
 							delta.setBlockInfo(originLeft);
 							delta.setParseInfo(aggBHop);
 							delta.setDisableOutputEmpty(true);
@@ -2218,7 +2220,7 @@ public class DMLTranslator {
 				return processParameterizedBuiltinFunctionExpression((ParameterizedBuiltinFunctionExpression) source,
 						target, hops);
 			else if (source instanceof DataExpression) {
-				Hop ae = (Hop) processDataExpression((DataExpression) source, target, hops);
+				Hop ae = processDataExpression((DataExpression) source, target, hops);
 				if (ae instanceof DataOp) {
 					String formatName = ((DataExpression) source).getVarParam(DataExpression.FORMAT_TYPE).toString();
 					((DataOp) ae).setInputFormatType(Expression.convertFormatType(formatName));
@@ -2670,13 +2672,13 @@ public class DMLTranslator {
 
 		// -- construct hops for all input parameters
 		// -- store them in hashmap so that their "name"s are maintained
-		Hop pHop = null;
+		Hop pHop;
 		for (String paramName : source.getVarParams().keySet()) {
 			pHop = processExpression(source.getVarParam(paramName), null, hops);
 			paramHops.put(paramName, pHop);
 		}
 
-		Hop currBuiltinOp = null;
+		Hop currBuiltinOp;
 
 		if (target == null) {
 			target = createTarget(source);
@@ -2704,6 +2706,7 @@ public class DMLTranslator {
 
 			case GROUPEDAGG:
 			case RMEMPTY:
+			case REPARTITION:
 			case REPLACE:
 			case LOWER_TRI:
 			case UPPER_TRI:

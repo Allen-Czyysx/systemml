@@ -103,7 +103,7 @@ public class CumulativeOffsetSPInstruction extends BinarySPInstruction {
 			joined = inData.mapToPair(new RDDCumSplitLookupFunction(inAgg,_initValue, rlen, brlen));
 		}
 		else {
-			//prepare aggregates (cumsplit of offsets) and repartition join with data
+			//prepare aggregates (cumsplit of offsets) and repartitionNonZeros join with data
 			joined = inData.join(sec
 				.getBinaryBlockRDDHandleForVariable(input2.getName())
 				.flatMapToPair(new RDDCumSplitFunction(_initValue, rlen, brlen)));

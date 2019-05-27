@@ -34,13 +34,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.DMLRuntimeException;
+import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
+import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.functionobjects.DiagIndex;
 import org.apache.sysml.runtime.functionobjects.RevIndex;
 import org.apache.sysml.runtime.functionobjects.SortIndex;
 import org.apache.sysml.runtime.functionobjects.SwapIndex;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
+import org.apache.sysml.runtime.matrix.MetaData;
 import org.apache.sysml.runtime.matrix.mapred.IndexedMatrixValue;
 import org.apache.sysml.runtime.matrix.operators.ReorgOperator;
 import org.apache.sysml.runtime.util.CommonThreadPool;
@@ -498,8 +503,8 @@ public class LibMatrixReorg
 	 * @return matrix block
 	 */
 	public static MatrixBlock rmempty(MatrixBlock in, MatrixBlock ret, boolean rows, boolean emptyReturn, MatrixBlock select) {
-		//check for empty inputs 
-		//(the semantics of removeEmpty are that for an empty m-by-n matrix, the output 
+		//check for empty inputs
+		//(the semantics of removeEmpty are that for an empty m-by-n matrix, the output
 		//is an empty 1-by-n or m-by-1 matrix because we don't allow matrices with dims 0)
 		if( in.isEmptyBlock(false) && select == null  ) {
 			int n = emptyReturn ? 1 : 0;
@@ -509,11 +514,217 @@ public class LibMatrixReorg
 				ret.reset(in.rlen, n, in.sparse);
 			return ret;
 		}
-		
+
 		if( rows )
 			return removeEmptyRows(in, ret, select, emptyReturn);
 		else //cols
 			return removeEmptyColumns(in, ret, select, emptyReturn);
+	}
+
+	/**
+	 * 将 select 指定的项集中到几个block中
+	 */
+	public static MatrixBlock repartitionNonZeros(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
+												  MatrixBlock select, String dVarName) {
+		MatrixBlock selectOrder = new MatrixBlock(in.rlen, in.clen, in.rlen * in.clen);
+		selectOrder._orderNum = select.nonZeros;
+		selectOrder.allocateDenseBlock();
+		DenseBlock orderBlock = selectOrder.denseBlock;
+
+		int n = (int) Math.ceil((double) select.nonZeros / 1000) * 1000;
+		if (rows) {
+			if (in.clen != 1) {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+
+			ret.reset(n, 1, n);
+			ret.allocateDenseBlock();
+			DenseBlock retBlock = ret.denseBlock;
+
+			int curRow = 0;
+			if (select.sparse) {
+				for (Iterator<IJV> it = select.sparseBlock.getIterator(); it.hasNext();) {
+					IJV ijv = it.next();
+					double v = ijv.getV();
+					int i = ijv.getI();
+					if (v != 0) {
+						retBlock.set(curRow, 0, in.getValue(i, 0));
+						orderBlock.set(i, 0, curRow == 0 ? -1 : curRow);
+						curRow++;
+					} else {
+						orderBlock.set(i, 0, 0);
+					}
+				}
+
+			} else {
+				for (int i = 0; i < in.rlen; i++) {
+					double v = select.denseBlock.get(i, 0);
+					if (v != 0) {
+						retBlock.set(curRow, 0, in.getValue(i, 0));
+						orderBlock.set(i, 0, curRow == 0 ? -1 : curRow);
+						curRow++;
+					} else {
+						orderBlock.set(i, 0, 0);
+					}
+				}
+			}
+
+		} else {
+			if (in.rlen != 1) {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+
+			ret.reset(1, n, n);
+			ret.allocateDenseBlock();
+			DenseBlock retBlock = ret.denseBlock;
+
+			int curCol = 0;
+			if (select.sparse) {
+				for (Iterator<IJV> it = select.sparseBlock.getIterator(); it.hasNext();) {
+					IJV ijv = it.next();
+					double v = ijv.getV();
+					int j = ijv.getJ();
+					if (v != 0) {
+						retBlock.set(0, curCol, in.getValue(0, j));
+						orderBlock.set(j, 0, curCol == 0 ? -1 : curCol);
+						curCol++;
+					} else {
+						orderBlock.set(j, 0, 0);
+					}
+				}
+
+			} else {
+				for (int j = 0; j < in.clen; j++) {
+					double v = select.denseBlock.get(0, j);
+					if (v != 0) {
+						retBlock.set(0, curCol, in.getValue(0, j));
+						orderBlock.set(j, 0, curCol == 0 ? -1 : curCol);
+						curCol++;
+					} else {
+						orderBlock.set(j, 0, 0);
+					}
+				}
+			}
+		}
+
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		if (!ec.containsVariable(orderName)) {
+			MatrixObject orderMB = new MatrixObject(Expression.ValueType.INT, "",
+					new MetaData(selectOrder.getMatrixCharacteristics()));
+			ec.setVariable(orderName, orderMB);
+		}
+		ec.getMatrixObject(orderName).setBroadcastHandle(null);
+		ec.setMatrixOutput(orderName, selectOrder);
+
+		return ret;
+	}
+
+	/**
+	 * TODO added by czh 没改filterblock
+	 *
+	 * 恢复顺序
+	 */
+	public static MatrixBlock recoverRepartition(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
+												 String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		MatrixBlock order = ec.getMatrixObject(orderName).acquireReadAndRelease();
+
+		if (rows) {
+			if (in.clen != 1) {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+
+			int n = order.rlen;
+			ret.reset(n, 1, n);
+
+			if (in.isEmpty()) {
+				return ret;
+			}
+
+			if (in.sparse) {
+				throw new DMLRuntimeException("Shouldn't be here");
+
+			} else {
+				ret.allocateDenseBlock();
+				for (int i = 0; i < order.rlen; i++) {
+					int newI = (int) order.getValue(i, 0);
+					if (newI == 0) {
+						continue;
+					}
+
+					double v = in.getValue(newI == -1 ? 0 : newI, 0);
+					ret.setValue(i, 0, v);
+				}
+			}
+
+		} else {
+			// TODO added by czh
+			throw new DMLRuntimeException("Shouldn't be here");
+		}
+
+		return ret;
+	}
+
+	/**
+	 * 按顺序repartition
+	 */
+	public static MatrixBlock repartitionByOrder(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
+												 String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		MatrixBlock order = ec.getMatrixObject(orderName).acquireReadAndRelease();
+
+		if (rows) {
+			if (in.clen != 1) {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+
+			int n = (int) Math.ceil((double) order._orderNum / 1000) * 1000;
+			ret.reset(n, 1, n);
+
+			if (in.isEmpty()) {
+				return ret;
+			}
+
+			if (in.sparse) {
+				throw new DMLRuntimeException("Shouldn't be here");
+
+			} else {
+				ret.allocateDenseBlock();
+				for (int i = 0; i < in.rlen; i++) {
+					int newI = (int) order.getValue(i, 0);
+					boolean isFiltered = in.getSelectBlock() != null && in.getSelectBlock().getData(i / 1000) == 0;
+					if (newI == 0 || isFiltered) {
+						continue;
+					}
+
+					double v = in.getValue(i, 0);
+					ret.setValue(newI == -1 ? 0 : newI, 0, v);
+				}
+			}
+
+		} else {
+			// TODO added by czh
+			throw new DMLRuntimeException("Shouldn't be here");
+		}
+
+		return ret;
+	}
+
+	private static MatrixBlock getNewBlockOrder(MatrixBlock oldOrder, MatrixBlock newOrder) {
+		MatrixBlock ret = new MatrixBlock(oldOrder.rlen, 1, oldOrder.rlen);
+		ret.allocateDenseBlock();
+		DenseBlock block = ret.denseBlock;
+
+		for (int i = 0; i < oldOrder.rlen; i++) {
+			int newI = (int) oldOrder.getValue(i, 0);
+			if (newI == 0) {
+				continue;
+			}
+			double v = newOrder.getValue(i, 0);
+			block.set(newI == -1 ? 0 : newI, 0, v);
+		}
+
+		return ret;
 	}
 
 	/**

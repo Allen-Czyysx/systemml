@@ -5,6 +5,7 @@ import org.apache.sysml.runtime.DMLScriptException;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
+import org.apache.sysml.runtime.instructions.spark.MapmmSPInstruction;
 
 import java.util.ArrayList;
 
@@ -67,6 +68,11 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			// prepare update in-place variables
 			MatrixObject.UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 
+			// TODO added by czh
+			MapmmSPInstruction.flag = true;
+			MapmmSPInstruction.hasRepartitioned = false;
+			MapmmSPInstruction.hasFiltered = false;
+
 			// 执行init
 			for (ProgramBlock pb : _dIterInit) {
 				pb.execute(ec);
@@ -103,6 +109,9 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\t" + count + "\n");
 				count++;
 			}
+
+			// TODO added by czh
+			MapmmSPInstruction.flag = false;
 
 			// reset update-in-place variables
 			resetUpdateInPlaceVariableFlags(ec, flags);

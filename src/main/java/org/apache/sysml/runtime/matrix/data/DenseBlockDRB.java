@@ -207,7 +207,12 @@ public class DenseBlockDRB extends DenseBlock
 	public DenseBlock set(int rl, int ru, int cl, int cu, DenseBlock db) {
 		double[] a = db.valuesAt(0);
 		if( cl == 0 && cu == clen)
-			System.arraycopy(a, 0, data, rl*clen+cl, (int)db.size());
+			try {
+				System.arraycopy(a, 0, data, rl * clen + cl,
+						Math.min(data.length - rl * clen - cl, (int) db.size()));
+			} catch (Exception e) {
+				System.out.println(123);
+			}
 		else {
 			int len = cu - cl;
 			for(int i=rl, ix1=0, ix2=rl*clen+cl; i<ru; i++, ix1+=len, ix2+=clen)

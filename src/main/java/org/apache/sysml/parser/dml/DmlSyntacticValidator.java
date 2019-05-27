@@ -28,6 +28,7 @@ import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.sysml.conf.CompilerConfig.ConfigType;
 import org.apache.sysml.conf.ConfigurationManager;
+import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.*;
 import org.apache.sysml.parser.common.CommonSyntacticValidator;
 import org.apache.sysml.parser.common.CustomErrorListener;
@@ -90,19 +91,31 @@ import org.apache.sysml.runtime.util.UtilFunctions;
 
 public class DmlSyntacticValidator extends CommonSyntacticValidator implements DmlListener {
 
-	public DmlSyntacticValidator(CustomErrorListener errorListener, Map<String,String> argVals, String sourceNamespace, Set<String> prepFunctions) {
+	public DmlSyntacticValidator(CustomErrorListener errorListener, Map<String, String> argVals,
+								 String sourceNamespace, Set<String> prepFunctions) {
 		super(errorListener, argVals, sourceNamespace, prepFunctions);
 	}
 
-	@Override public String namespaceResolutionOp() { return "::"; }
-	@Override public String trueStringLiteral() { return "TRUE"; }
-	@Override public String falseStringLiteral() { return "FALSE"; }
+	@Override
+	public String namespaceResolutionOp() {
+		return "::";
+	}
+
+	@Override
+	public String trueStringLiteral() {
+		return "TRUE";
+	}
+
+	@Override
+	public String falseStringLiteral() {
+		return "FALSE";
+	}
 
 	protected ArrayList<ParameterExpression> getParameterExpressionList(List<ParameterizedExpressionContext> paramExprs) {
 		ArrayList<ParameterExpression> retVal = new ArrayList<>();
-		for(ParameterizedExpressionContext ctx : paramExprs) {
+		for (ParameterizedExpressionContext ctx : paramExprs) {
 			String paramName = null;
-			if(ctx.paramName != null && ctx.paramName.getText() != null && !ctx.paramName.getText().isEmpty()) {
+			if (ctx.paramName != null && ctx.paramName.getText() != null && !ctx.paramName.getText().isEmpty()) {
 				paramName = ctx.paramName.getText();
 			}
 			ParameterExpression myArg = new ParameterExpression(paramName, ctx.paramVal.info.expr);
@@ -113,23 +126,23 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void enterEveryRule(ParserRuleContext arg0) {
-		if(arg0 instanceof StatementContext) {
-			if(((StatementContext) arg0).info == null) {
+		if (arg0 instanceof StatementContext) {
+			if (((StatementContext) arg0).info == null) {
 				((StatementContext) arg0).info = new StatementInfo();
 			}
 		}
-		if(arg0 instanceof FunctionStatementContext) {
-			if(((FunctionStatementContext) arg0).info == null) {
+		if (arg0 instanceof FunctionStatementContext) {
+			if (((FunctionStatementContext) arg0).info == null) {
 				((FunctionStatementContext) arg0).info = new StatementInfo();
 			}
 		}
-		if(arg0 instanceof ExpressionContext) {
-			if(((ExpressionContext) arg0).info == null) {
+		if (arg0 instanceof ExpressionContext) {
+			if (((ExpressionContext) arg0).info == null) {
 				((ExpressionContext) arg0).info = new ExpressionInfo();
 			}
 		}
-		if(arg0 instanceof DataIdentifierContext) {
-			if(((DataIdentifierContext) arg0).dataInfo == null) {
+		if (arg0 instanceof DataIdentifierContext) {
+			if (((DataIdentifierContext) arg0).dataInfo == null) {
 				((DataIdentifierContext) arg0).dataInfo = new ExpressionInfo();
 			}
 		}
@@ -160,6 +173,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	public void exitMultDivExpression(MultDivExpressionContext ctx) {
 		binaryExpressionHelper(ctx, ctx.left.info, ctx.right.info, ctx.info, ctx.op.getText());
 	}
+
 	@Override
 	public void exitPowerExpression(PowerExpressionContext ctx) {
 		binaryExpressionHelper(ctx, ctx.left.info, ctx.right.info, ctx.info, ctx.op.getText());
@@ -263,50 +277,45 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		setFileLineColumn(ctx.dataInfo.expr, ctx);
 
 		try {
-			ArrayList< ArrayList<Expression> > exprList = new ArrayList<>();
+			ArrayList<ArrayList<Expression>> exprList = new ArrayList<>();
 
 			ArrayList<Expression> rowIndices = new ArrayList<>();
 			ArrayList<Expression> colIndices = new ArrayList<>();
 
 
-			if(!isRowLower && !isRowUpper) {
+			if (!isRowLower && !isRowUpper) {
 				// both not set
-				rowIndices.add(null); rowIndices.add(null);
-			}
-			else if(isRowLower && isRowUpper) {
+				rowIndices.add(null);
+				rowIndices.add(null);
+			} else if (isRowLower && isRowUpper) {
 				// both set
 				rowIndices.add(rowLower.expr);
 				rowIndices.add(rowUpper.expr);
-			}
-			else if(isRowLower && !isRowUpper) {
+			} else if (isRowLower && !isRowUpper) {
 				// only row set
 				rowIndices.add(rowLower.expr);
-			}
-			else {
+			} else {
 				notifyErrorListeners("incorrect index expression for row", ctx.start);
 				return;
 			}
 
-			if(!isColLower && !isColUpper) {
+			if (!isColLower && !isColUpper) {
 				// both not set
-				colIndices.add(null); colIndices.add(null);
-			}
-			else if(isColLower && isColUpper) {
+				colIndices.add(null);
+				colIndices.add(null);
+			} else if (isColLower && isColUpper) {
 				colIndices.add(colLower.expr);
 				colIndices.add(colUpper.expr);
-			}
-			else if(isColLower && !isColUpper) {
+			} else if (isColLower && !isColUpper) {
 				colIndices.add(colLower.expr);
-			}
-			else {
+			} else {
 				notifyErrorListeners("incorrect index expression for column", ctx.start);
 				return;
 			}
 			exprList.add(rowIndices);
 			exprList.add(colIndices);
 			((IndexedIdentifier) ctx.dataInfo.expr).setIndices(exprList);
-		}
-		catch(Exception e) {
+		} catch (Exception e) {
 			notifyErrorListeners("cannot set the indices", ctx.start);
 			return;
 		}
@@ -327,22 +336,20 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		handleCommandlineArgumentExpression(ctx);
 	}
 
-	private void handleCommandlineArgumentExpression(DataIdentifierContext ctx)
-	{
+	private void handleCommandlineArgumentExpression(DataIdentifierContext ctx) {
 		String varName = ctx.getText().trim();
 		fillExpressionInfoCommandLineParameters(ctx, varName, ctx.dataInfo);
 
-		if(ctx.dataInfo.expr == null) {
-			if(!(ctx.parent instanceof IfdefAssignmentStatementContext)) {
+		if (ctx.dataInfo.expr == null) {
+			if (!(ctx.parent instanceof IfdefAssignmentStatementContext)) {
 				String msg = "The parameter " + varName + " either needs to be passed "
 						+ "through commandline or initialized to default value.";
-				if( ConfigurationManager.getCompilerConfigFlag(ConfigType.IGNORE_UNSPECIFIED_ARGS) ) {
+				if (ConfigurationManager.getCompilerConfigFlag(ConfigType.IGNORE_UNSPECIFIED_ARGS)) {
 					ctx.dataInfo.expr = getConstIdFromString(ctx, " ");
 					if (!ConfigurationManager.getCompilerConfigFlag(ConfigType.MLCONTEXT)) {
 						raiseWarning(msg, ctx.start);
 					}
-				}
-				else {
+				} else {
 					notifyErrorListeners(msg, ctx.start);
 				}
 			}
@@ -367,19 +374,18 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			_f2NS.get().put(scriptID, namespace);
 			try {
 				prog = (new DMLParserWrapper()).doParse(filePath,
-					_tScripts.get().get(filePath), getQualifiedNamespace(namespace), argVals);
-			}
-			catch (ParseException e) {
+						_tScripts.get().get(filePath), getQualifiedNamespace(namespace), argVals);
+			} catch (ParseException e) {
 				notifyErrorListeners(e.getMessage(), ctx.start);
 				return;
 			}
-			if(prog == null) {
-				notifyErrorListeners("One or more errors found during importing a program from file " + filePath, ctx.start);
+			if (prog == null) {
+				notifyErrorListeners("One or more errors found during importing a program from file " + filePath,
+						ctx.start);
 				return;
 			}
 			setupContextInfo(ctx.info, namespace, filePath, ctx.filePath.getText(), prog);
-		}
-		else {
+		} else {
 			// Skip redundant parsing (to prevent potential infinite recursion) and
 			// create empty program for this context to allow processing to continue.
 			prog = new DMLProgram();
@@ -393,11 +399,12 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitAssignmentStatement(AssignmentStatementContext ctx) {
-		if(ctx.targetList == null) {
+		if (ctx.targetList == null) {
 			notifyErrorListeners("incorrect parsing for assignment", ctx.start);
 			return;
 		}
-		exitAssignmentStatementHelper(ctx, ctx.targetList.getText(), ctx.targetList.dataInfo, ctx.targetList.start, ctx.source.info, ctx.info);
+		exitAssignmentStatementHelper(ctx, ctx.targetList.getText(), ctx.targetList.dataInfo, ctx.targetList.start,
+				ctx.source.info, ctx.info);
 	}
 
 
@@ -406,14 +413,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	// -----------------------------------------------------------------
 
 	@Override
-	public ConvertedDMLSyntax convertToDMLSyntax(ParserRuleContext ctx, String namespace, String functionName, ArrayList<ParameterExpression> paramExpression, Token fnName) {
+	public ConvertedDMLSyntax convertToDMLSyntax(ParserRuleContext ctx, String namespace, String functionName,
+												 ArrayList<ParameterExpression> paramExpression, Token fnName) {
 		return new ConvertedDMLSyntax(namespace, functionName, paramExpression);
 	}
 
 
 	@Override
 	protected Expression handleLanguageSpecificFunction(ParserRuleContext ctx, String functionName,
-			ArrayList<ParameterExpression> paramExpressions) {
+														ArrayList<ParameterExpression> paramExpressions) {
 		return null;
 	}
 
@@ -421,7 +429,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	@Override
 	public void exitFunctionCallAssignmentStatement(FunctionCallAssignmentStatementContext ctx) {
 
-		Set<String> printStatements = new  HashSet<>();
+		Set<String> printStatements = new HashSet<>();
 		printStatements.add("print");
 		printStatements.add("stop");
 		printStatements.add("assert");
@@ -429,9 +437,10 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		Set<String> outputStatements = new HashSet<>();
 		outputStatements.add("write");
 
-		String [] fnNames = getQualifiedNames (ctx.name.getText());
+		String[] fnNames = getQualifiedNames(ctx.name.getText());
 		if (fnNames == null) {
-			String errorMsg = "incorrect function name (only namespace " + namespaceResolutionOp() + " functionName allowed. Hint: If you are trying to use builtin functions, you can skip the namespace)";
+			String errorMsg = "incorrect function name (only namespace " + namespaceResolutionOp() + " functionName " +
+					"allowed. Hint: If you are trying to use builtin functions, you can skip the namespace)";
 			notifyErrorListeners(errorMsg, ctx.name);
 			return;
 		}
@@ -442,8 +451,9 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		castAsScalarDeprecationCheck(functionName, ctx);
 
 		boolean hasLHS = ctx.targetList != null;
-		functionCallAssignmentStatementHelper(ctx, printStatements, outputStatements, hasLHS ? ctx.targetList.dataInfo.expr : null, ctx.info, ctx.name,
-	 			hasLHS ? ctx.targetList.start : null, namespace, functionName, paramExpression, hasLHS);
+		functionCallAssignmentStatementHelper(ctx, printStatements, outputStatements, hasLHS ?
+						ctx.targetList.dataInfo.expr : null, ctx.info, ctx.name,
+				hasLHS ? ctx.targetList.start : null, namespace, functionName, paramExpression, hasLHS);
 	}
 
 	// TODO: remove this when castAsScalar has been removed from DML/PYDML
@@ -457,8 +467,11 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	public void exitBuiltinFunctionExpression(BuiltinFunctionExpressionContext ctx) {
 		// Double verification: verify passed function name is a (non-parameterized) built-in function.
 		String[] names = getQualifiedNames(ctx.name.getText());
-		if(names == null) {
-			notifyErrorListeners("incorrect function name (only namespace " + namespaceResolutionOp() + " functionName allowed. Hint: If you are trying to use builtin functions, you can skip the namespace)", ctx.name);
+		if (names == null) {
+			notifyErrorListeners("incorrect function name (only namespace " + namespaceResolutionOp() + " " +
+							"functionName" +
+							" allowed. Hint: If you are trying to use builtin functions, you can skip the namespace)",
+					ctx.name);
 			return;
 		}
 		String namespace = names[0];
@@ -467,18 +480,18 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ArrayList<ParameterExpression> paramExpression = getParameterExpressionList(ctx.paramExprs);
 		castAsScalarDeprecationCheck(functionName, ctx);
 
-		ConvertedDMLSyntax convertedSyntax = convertToDMLSyntax(ctx, namespace, functionName, paramExpression, ctx.name);
-		if(convertedSyntax == null) {
+		ConvertedDMLSyntax convertedSyntax = convertToDMLSyntax(ctx, namespace, functionName, paramExpression,
+				ctx.name);
+		if (convertedSyntax == null) {
 			return;
-		}
-		else {
+		} else {
 			functionName = convertedSyntax.functionName;
 			paramExpression = convertedSyntax.paramExpression;
 		}
 
 		// handle built-in functions
 		ctx.info.expr = buildForBuiltInFunction(ctx, functionName, paramExpression);
-		if( ctx.info.expr != null )
+		if (ctx.info.expr != null)
 			return;
 
 		// handle user-defined functions
@@ -490,19 +503,20 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	public void exitFunctionCallMultiAssignmentStatement(
 			FunctionCallMultiAssignmentStatementContext ctx) {
 		String[] names = getQualifiedNames(ctx.name.getText());
-		if(names == null) {
-			notifyErrorListeners("incorrect function name (only namespace.functionName allowed. Hint: If you are trying to use builtin functions, you can skip the namespace)", ctx.name);
+		if (names == null) {
+			notifyErrorListeners("incorrect function name (only namespace.functionName allowed. Hint: If you are " +
+					"trying to use builtin functions, you can skip the namespace)", ctx.name);
 			return;
 		}
 		String namespace = names[0];
 		String functionName = names[1];
 
 		ArrayList<ParameterExpression> paramExpression = getParameterExpressionList(ctx.paramExprs);
-		ConvertedDMLSyntax convertedSyntax = convertToDMLSyntax(ctx, namespace, functionName, paramExpression, ctx.name);
-		if(convertedSyntax == null) {
+		ConvertedDMLSyntax convertedSyntax = convertToDMLSyntax(ctx, namespace, functionName, paramExpression,
+				ctx.name);
+		if (convertedSyntax == null) {
 			return;
-		}
-		else {
+		} else {
 			namespace = convertedSyntax.namespace;
 			functionName = convertedSyntax.functionName;
 			paramExpression = convertedSyntax.paramExpression;
@@ -513,26 +527,26 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		functCall.setFunctionNamespace(namespace);
 
 		final ArrayList<DataIdentifier> targetList = new ArrayList<>();
-		for(DataIdentifierContext dataCtx : ctx.targetList) {
-			if(dataCtx.dataInfo.expr instanceof DataIdentifier) {
+		for (DataIdentifierContext dataCtx : ctx.targetList) {
+			if (dataCtx.dataInfo.expr instanceof DataIdentifier) {
 				targetList.add((DataIdentifier) dataCtx.dataInfo.expr);
-			}
-			else {
+			} else {
 				notifyErrorListeners("incorrect type for variable ", dataCtx.start);
 				return;
 			}
 		}
 
-		if(namespace.equals(DMLProgram.DEFAULT_NAMESPACE)) {
+		if (namespace.equals(DMLProgram.DEFAULT_NAMESPACE)) {
 			Expression e = buildForBuiltInFunction(ctx, functionName, paramExpression);
-			if( e != null ) {
+			if (e != null) {
 				setMultiAssignmentStatement(targetList, e, ctx, ctx.info);
 				return;
 			}
 		}
 
 		// Override default namespace for imported non-built-in function
-		String inferNamespace = (sourceNamespace != null && sourceNamespace.length() > 0 && DMLProgram.DEFAULT_NAMESPACE.equals(namespace)) ? sourceNamespace : namespace;
+		String inferNamespace =
+				(sourceNamespace != null && sourceNamespace.length() > 0 && DMLProgram.DEFAULT_NAMESPACE.equals(namespace)) ? sourceNamespace : namespace;
 		functCall.setFunctionNamespace(inferNamespace);
 
 		setMultiAssignmentStatement(targetList, functCall, ctx, ctx.info);
@@ -554,15 +568,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ifStmt.setConditionalPredicate(predicate);
 		ifStmt.setCtxValuesAndFilename(ctx, currentFile);
 
-		if(ctx.ifBody.size() > 0) {
-			for(StatementContext stmtCtx : ctx.ifBody) {
+		if (ctx.ifBody.size() > 0) {
+			for (StatementContext stmtCtx : ctx.ifBody) {
 				ifStmt.addStatementBlockIfBody(getStatementBlock(stmtCtx.info.stmt));
 			}
 			ifStmt.mergeStatementBlocksIfBody();
 		}
 
-		if(ctx.elseBody.size() > 0) {
-			for(StatementContext stmtCtx : ctx.elseBody) {
+		if (ctx.elseBody.size() > 0) {
+			for (StatementContext stmtCtx : ctx.elseBody) {
 				ifStmt.addStatementBlockElseBody(getStatementBlock(stmtCtx.info.stmt));
 			}
 			ifStmt.mergeStatementBlocksElseBody();
@@ -579,8 +593,8 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		whileStmt.setPredicate(predicate);
 		whileStmt.setCtxValuesAndFilename(ctx, currentFile);
 
-		if(ctx.body.size() > 0) {
-			for(StatementContext stmtCtx : ctx.body) {
+		if (ctx.body.size() > 0) {
+			for (StatementContext stmtCtx : ctx.body) {
 				whileStmt.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
 			}
 			whileStmt.mergeStatementBlocks();
@@ -602,7 +616,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		String[] dVarNames = names.split(",");
 		dwst.setDVarNames(dVarNames);
 
-		// init, before, after
 		ArrayList<StatementBlock> init = new ArrayList<>();
 		ArrayList<StatementBlock> before = new ArrayList<>();
 		ArrayList<StatementBlock> after = new ArrayList<>();
@@ -612,42 +625,85 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			DataIdentifier var = new DataIdentifier(dVarName);
 			PreDataIdentifier preVar = new PreDataIdentifier(preVarName, dVarName);
 			DataIdentifier useDelta = new DataIdentifier(DWhileStatement.getVarUseDeltaName(dVarName));
-			DataIdentifier selectVar = new DataIdentifier(DWhileStatement.getSelectName(dVarName));
+			DataIdentifier selectBlock = new DataIdentifier(DWhileStatement.getSelectName(dVarName));
 			DataIdentifier deltaVar = new DataIdentifier(DWhileStatement.getDeltaName(dVarName));
-			DataIdentifier blockNum = new DataIdentifier(DWhileStatement.getSelectBlockNum(dVarName));
+			DataIdentifier blockNum = new DataIdentifier(DWhileStatement.getSelectBlockNumName(dVarName));
+			DataIdentifier preBlockNum = new DataIdentifier(DWhileStatement.getPreBlockNumName(dVarName));
+			DataIdentifier repartitionPreBlockNum =
+					new DataIdentifier(DWhileStatement.getRepartitionPreBlockNumName(dVarName));
+			DataIdentifier useFilter = new DataIdentifier(DWhileStatement.getUseFilterName(dVarName));
+			DataIdentifier useRepartition = new DataIdentifier(DWhileStatement.getUseRepartitionName(dVarName));
+			DataIdentifier repartitionSelectVar =
+					new DataIdentifier(DWhileStatement.getRepartitionSelectName(dVarName));
+			DataIdentifier absVar = new DataIdentifier(DWhileStatement.getAbsName(dVarName));
+			DataIdentifier useRepartitionCount =
+					new DataIdentifier(DWhileStatement.getUseRepartitionCountName(dVarName));
 
-			// 循环条件添加 & blockNum != 0
+
+			// 循环条件: 添加 & blockNum != 0
 			// TODO added by czh 多个怎么办
 			RelationalExpression detectBlockNum = new RelationalExpression(Expression.RelationalOp.NOTEQUAL, dwst);
 			detectBlockNum.setLeft(blockNum);
-			detectBlockNum.setRight(new IntIdentifier(ctx, 0, currentFile));
+			detectBlockNum.setRight(new IntIdentifier(0));
 			BooleanExpression newPredicateExp = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
 			newPredicateExp.setLeft(predicateExp);
 			newPredicateExp.setRight(detectBlockNum);
 			predicateExp = newPredicateExp;
 
-			// Init: 创建useDelta, useDeltaCount
+
+			// Init: 创建useDelta, useDeltaCount, ...
 			// useDelta 标记下次迭代是否使用增量
 			AssignmentStatement disableUseDelta = new AssignmentStatement(ctx, useDelta,
-					new BooleanIdentifier(ctx, false, currentFile));
+					new BooleanIdentifier(false));
 			init.add(getStatementBlock(disableUseDelta));
 
-			// blockNum 筛选块数
-			AssignmentStatement initBlockNum = new AssignmentStatement(ctx, blockNum,
-					new IntIdentifier(ctx, -1, currentFile));
+			// blockNum = nrow(var) / 1000
+			Expression[] nrowArgs = {var};
+			BuiltinFunctionExpression rowNum = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.NROW, nrowArgs, currentFile);
+			BinaryExpression maxBlockNum = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+			maxBlockNum.setLeft(rowNum);
+			maxBlockNum.setRight(new IntIdentifier(ctx, OptimizerUtils.DEFAULT_BLOCKSIZE, currentFile));
+			AssignmentStatement initBlockNum = new AssignmentStatement(ctx, blockNum, maxBlockNum);
 			init.add(getStatementBlock(initBlockNum));
 
-			// useDeltaCount 记录连续使用增量的次数
-			DataIdentifier useDeltaCount = new DataIdentifier(DWhileStatement.getUseDeltaCountName(dVarName));
-			AssignmentStatement initUseDeltaCount = new AssignmentStatement(ctx, useDeltaCount,
-					new IntIdentifier(ctx, -1, currentFile));
-			init.add(getStatementBlock(initUseDeltaCount));
+			// preBlockNum = Long.MAX_VALUE
+			AssignmentStatement initPreBlockNum = new AssignmentStatement(ctx, preBlockNum, maxBlockNum);
+			init.add(getStatementBlock(initPreBlockNum));
+
+			// repartitionPreBlockNum = nrow(var) / 1000
+			AssignmentStatement initRepartitionPreBlockNum =
+					new AssignmentStatement(ctx, repartitionPreBlockNum, maxBlockNum);
+			init.add(getStatementBlock(initRepartitionPreBlockNum));
+
+			// useFilter = false
+			AssignmentStatement enableFilter = new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(true));
+			init.add(getStatementBlock(enableFilter));
+
+			// useRepartition = false
+			AssignmentStatement disableRepartition = new AssignmentStatement(ctx, useRepartition,
+					new BooleanIdentifier(false));
+			init.add(getStatementBlock(disableRepartition));
+
+			// useRepartitionCount = 1
+			AssignmentStatement initUseRepartitionCount = new AssignmentStatement(ctx, useRepartitionCount,
+					new IntIdentifier(1));
+			init.add(getStatementBlock(initUseRepartitionCount));
+
 
 			// Before: 记录input旧值
 			AssignmentStatement assignPreDVar = new AssignmentStatement(ctx, preVar, var);
 			before.add(getStatementBlock(assignPreDVar));
 
+
 			// After: 计算input增量, 为下一次迭代做准备
+			// 重置
+			AssignmentStatement disableFilter =
+					new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(false));
+			after.add(getStatementBlock(disableRepartition));
+			after.add(getStatementBlock(disableFilter));
+			after.add(getStatementBlock(disableUseDelta));
+
 			// delta = var - preVar
 			BinaryExpression delta = new BinaryExpression(Expression.BinaryOp.MINUS, dwst);
 			delta.setLeft(var);
@@ -657,30 +713,6 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			AssignmentStatement assignDelta = new AssignmentStatement(ctx, deltaVar, delta);
 			after.add(getStatementBlock(assignDelta));
 
-
-			// TODO added by czh 老select方案, 按最大值的一定比例筛选
-//			// abs = abs(delta)
-//			Expression[] absExps = {deltaVar};
-//			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
-//					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
-//
-//			// max = max(abs)
-//			Expression[] maxArgs = {abs};
-//			BuiltinFunctionExpression max = new BuiltinFunctionExpression(
-//					ctx, Expression.BuiltinFunctionOp.MAX, maxArgs, currentFile);
-//
-//			// selectBound = max * ratio
-//			double ratio = Double.parseDouble(ctx.ratio.getText());
-//			BinaryExpression selectBound = new BinaryExpression(Expression.BinaryOp.MULT, dwst);
-//			selectBound.setLeft(max);
-//			selectBound.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
-//
-//			// select = (abs >= selectBound)
-//			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
-//			select.setLeft(abs);
-//			select.setRight(selectBound);
-
-			// TODO added by czh 新select方案, 按单项的相对差值筛选
 			// abs = abs(delta / preVar)
 			BinaryExpression related = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
 			related.setLeft(delta);
@@ -688,31 +720,103 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			Expression[] absExps = {related};
 			BuiltinFunctionExpression abs = new BuiltinFunctionExpression(
 					ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
+			AssignmentStatement assignAbs = new AssignmentStatement(ctx, absVar, abs);
+			after.add(getStatementBlock(assignAbs));
 
 			// select = abs >= ratio
 			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
 			double ratio = Double.parseDouble(ctx.ratio.getText());
-			select.setLeft(abs);
-			select.setRight(new DoubleIdentifier(ctx, ratio, currentFile));
-			AssignmentStatement assignSelect = new AssignmentStatement(ctx, selectVar, select);
+			select.setLeft(absVar);
+			select.setRight(new DoubleIdentifier(ratio));
+			AssignmentStatement assignSelect = new AssignmentStatement(ctx, selectBlock, select);
 			after.add(getStatementBlock(assignSelect));
 
-			// blockNum = sumBlock(select)
-			Expression[] blockNumArgs = {selectVar};
-			BuiltinFunctionExpression sumBlockNum = new BuiltinFunctionExpression(
-					ctx, Expression.BuiltinFunctionOp.SUMBLOCK, blockNumArgs, currentFile);
+			// blockNum = sumBlock(selectBlock)
+			Expression[] blockNumArgs = {selectBlock};
+			BuiltinFunctionExpression sumBlockNum = new BuiltinFunctionExpression(ctx,
+					Expression.BuiltinFunctionOp.SUMBLOCK, blockNumArgs, currentFile);
 			AssignmentStatement assignBlockNum = new AssignmentStatement(ctx, blockNum, sumBlockNum);
 			after.add(getStatementBlock(assignBlockNum));
 
-			// blockNumBound = nrow(var) / (1000 * ???)
-			Expression[] nrowArgs = {var};
-			BuiltinFunctionExpression rowNum = new BuiltinFunctionExpression(
-					ctx, Expression.BuiltinFunctionOp.NROW, nrowArgs, currentFile);
+			// 判断是否 repartition
+			{
+				// TODO added by czh 再分区 delta, 暂时不再分区 var, 所以须固定使用增量
+				IfStatement ifRepartition = new IfStatement();
+				after.add(getStatementBlock(ifRepartition));
+
+				RelationalExpression selectNew = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+				selectNew.setLeft(absVar);
+				selectNew.setRight(new DoubleIdentifier(ratio));
+				Expression[] sumArgs = {selectNew};
+				BuiltinFunctionExpression sum =
+						new BuiltinFunctionExpression(ctx, Expression.BuiltinFunctionOp.SUM, sumArgs, currentFile);
+				BinaryExpression blockNumAfterRepartition = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+				blockNumAfterRepartition.setLeft(sum);
+				blockNumAfterRepartition.setRight(new IntIdentifier(1000));
+				BinaryExpression div = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+				div.setLeft(repartitionPreBlockNum);
+				div.setRight(blockNumAfterRepartition);
+				BinaryExpression r = new BinaryExpression(Expression.BinaryOp.POW, dwst);
+				// TODO adde by czh 原3
+				r.setLeft(new DoubleIdentifier(1000000));
+				r.setRight(useRepartitionCount);
+				RelationalExpression repartitionCondition =
+						new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+				repartitionCondition.setLeft(div);
+				repartitionCondition.setRight(r);
+				ifRepartition.setConditionalPredicate(new ConditionalPredicate(repartitionCondition));
+
+				AssignmentStatement enableRepartition =
+						new AssignmentStatement(ctx, useRepartition, new BooleanIdentifier(true));
+				RelationalExpression repartitionSelect =
+						new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+				repartitionSelect.setLeft(absVar);
+				repartitionSelect.setRight(new DoubleIdentifier(ratio));
+				AssignmentStatement assignRepartitionSelect =
+						new AssignmentStatement(ctx, repartitionSelectVar, repartitionSelect);
+				BinaryExpression addUseRepartitionCount = new BinaryExpression(Expression.BinaryOp.PLUS, dwst);
+				addUseRepartitionCount.setLeft(useRepartitionCount);
+				addUseRepartitionCount.setRight(new IntIdentifier(1));
+				AssignmentStatement assignRepartitionCount =
+						new AssignmentStatement(ctx, useRepartitionCount, addUseRepartitionCount);
+				AssignmentStatement assignRepartitionPreBlockNum =
+						new AssignmentStatement(ctx, repartitionPreBlockNum, blockNumAfterRepartition);
+				ifRepartition.addStatementBlockIfBody(getStatementBlock(enableRepartition));
+				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionSelect));
+				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionCount));
+				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionPreBlockNum));
+			}
+
+			// 判断是否 filter
+			{
+				IfStatement ifFilter = new IfStatement();
+				after.add(getStatementBlock(ifFilter));
+
+				BinaryExpression div = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+				div.setLeft(preBlockNum);
+				div.setRight(blockNum);
+				RelationalExpression compare = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+				compare.setLeft(div);
+				// TODO adde by czh
+				compare.setRight(new IntIdentifier(3));
+				BooleanExpression not = new BooleanExpression(Expression.BooleanOp.NOT, dwst);
+				not.setLeft(useRepartition);
+				BooleanExpression and = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+				and.setLeft(compare);
+				and.setRight(not);
+				ifFilter.setConditionalPredicate(new ConditionalPredicate(and));
+
+				AssignmentStatement assignPreBlockNum = new AssignmentStatement(ctx, preBlockNum, blockNum);
+				ifFilter.addStatementBlockIfBody(getStatementBlock(assignPreBlockNum));
+				ifFilter.addStatementBlockIfBody(getStatementBlock(enableFilter));
+			}
+
+			// blockNumBound = nrow(var) / (DEFAULT_BLOCKSIZE * ???)
 			BinaryExpression blockNumBound = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
 			blockNumBound.setLeft(rowNum);
 			// TODO added by czh 代价模型
-			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 2, currentFile));
-//			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
+//			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 2, currentFile));
+			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
 
 			// deltaCondition = (blockNum <= blockNumBound)
 			// TODO added by czh 代价模型
@@ -730,30 +834,14 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			// lightDelta = delta * select
 			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULTBLOCK, dwst);
 			lightDelta.setLeft(deltaVar);
-			lightDelta.setRight(selectVar);
+			lightDelta.setRight(selectBlock);
 			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, deltaVar, lightDelta);
 			ifUseDelta.addStatementBlockIfBody(getStatementBlock(assignLightDelta));
 
 			// useDelta = true
 			AssignmentStatement enableUseDelta = new AssignmentStatement(
-					ctx, useDelta, new BooleanIdentifier(ctx, true, currentFile));
+					ctx, useDelta, new BooleanIdentifier(true));
 			ifUseDelta.addStatementBlockIfBody(getStatementBlock(enableUseDelta));
-
-			// useDeltaCount++
-			BinaryExpression useDeltaCountPlusOne = new BinaryExpression(Expression.BinaryOp.PLUS, dwst);
-			useDeltaCountPlusOne.setLeft(useDeltaCount);
-			useDeltaCountPlusOne.setRight(new IntIdentifier(ctx, 1, currentFile));
-			AssignmentStatement assignUseDeltaCount = new AssignmentStatement(
-					ctx, useDeltaCount, useDeltaCountPlusOne);
-			ifUseDelta.addStatementBlockIfBody(getStatementBlock(assignUseDeltaCount));
-
-			// } else { 停止增量迭代
-
-			// useDelta = false
-			ifUseDelta.addStatementBlockElseBody(getStatementBlock(disableUseDelta));
-
-			// useDeltaCount = -1
-			ifUseDelta.addStatementBlockElseBody(getStatementBlock(initUseDeltaCount));
 
 			// }
 		}
@@ -784,15 +872,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		DataIdentifier iterVar = new DataIdentifier(ctx.iterVar.getText());
 		HashMap<String, String> parForParamValues = null;
 		Expression incrementExpr = null; //1/-1
-		if(ctx.iterPred.info.increment != null) {
+		if (ctx.iterPred.info.increment != null) {
 			incrementExpr = ctx.iterPred.info.increment;
 		}
 		IterablePredicate predicate = new IterablePredicate(ctx, iterVar, ctx.iterPred.info.from, ctx.iterPred.info.to,
 				incrementExpr, parForParamValues, currentFile);
 		forStmt.setPredicate(predicate);
 
-		if(ctx.body.size() > 0) {
-			for(StatementContext stmtCtx : ctx.body) {
+		if (ctx.body.size() > 0) {
+			for (StatementContext stmtCtx : ctx.body) {
 				forStmt.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
 			}
 			forStmt.mergeStatementBlocks();
@@ -806,24 +894,24 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 		DataIdentifier iterVar = new DataIdentifier(ctx.iterVar.getText());
 		HashMap<String, String> parForParamValues = new HashMap<>();
-		if(ctx.parForParams != null && ctx.parForParams.size() > 0) {
-			for(StrictParameterizedExpressionContext parForParamCtx : ctx.parForParams) {
+		if (ctx.parForParams != null && ctx.parForParams.size() > 0) {
+			for (StrictParameterizedExpressionContext parForParamCtx : ctx.parForParams) {
 				String paramVal = parForParamCtx.paramVal.getText();
-				if( argVals.containsKey(paramVal) )
+				if (argVals.containsKey(paramVal))
 					paramVal = argVals.get(paramVal);
 				parForParamValues.put(parForParamCtx.paramName.getText(), paramVal);
 			}
 		}
 
 		Expression incrementExpr = null; //1/-1
-		if( ctx.iterPred.info.increment != null ) {
+		if (ctx.iterPred.info.increment != null) {
 			incrementExpr = ctx.iterPred.info.increment;
 		}
 		IterablePredicate predicate = new IterablePredicate(ctx, iterVar, ctx.iterPred.info.from, ctx.iterPred.info.to,
 				incrementExpr, parForParamValues, currentFile);
 		parForStmt.setPredicate(predicate);
-		if(ctx.body.size() > 0) {
-			for(StatementContext stmtCtx : ctx.body) {
+		if (ctx.body.size() > 0) {
+			for (StatementContext stmtCtx : ctx.body) {
 				parForStmt.addStatementBlock(getStatementBlock(stmtCtx.info.stmt));
 			}
 			parForStmt.mergeStatementBlocks();
@@ -833,16 +921,16 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	private ArrayList<DataIdentifier> getFunctionParametersNoAssign(List<TypedArgNoAssignContext> ctx) {
 		ArrayList<DataIdentifier> retVal = new ArrayList<>(ctx.size());
-		for(TypedArgNoAssignContext paramCtx : ctx) {
+		for (TypedArgNoAssignContext paramCtx : ctx) {
 			DataIdentifier dataId = new DataIdentifier(paramCtx.paramName.getText());
 			String dataType = (paramCtx.paramType == null || paramCtx.paramType.dataType() == null
-				|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
-				"scalar" : paramCtx.paramType.dataType().getText();
+					|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
+					"scalar" : paramCtx.paramType.dataType().getText();
 			String valueType = paramCtx.paramType.valueType().getText();
 
 			//check and assign data type
 			checkValidDataType(dataType, paramCtx.start);
-			if( !setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true) )
+			if (!setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true))
 				return null;
 			retVal.add(dataId);
 		}
@@ -851,16 +939,16 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	private ArrayList<DataIdentifier> getFunctionParametersAssign(List<TypedArgAssignContext> ctx) {
 		ArrayList<DataIdentifier> retVal = new ArrayList<>(ctx.size());
-		for(TypedArgAssignContext paramCtx : ctx) {
+		for (TypedArgAssignContext paramCtx : ctx) {
 			DataIdentifier dataId = new DataIdentifier(paramCtx.paramName.getText());
 			String dataType = (paramCtx.paramType == null || paramCtx.paramType.dataType() == null
-				|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
-				"scalar" : paramCtx.paramType.dataType().getText();
+					|| paramCtx.paramType.dataType().getText() == null || paramCtx.paramType.dataType().getText().isEmpty()) ?
+					"scalar" : paramCtx.paramType.dataType().getText();
 			String valueType = paramCtx.paramType.valueType().getText();
 
 			//check and assign data type
 			checkValidDataType(dataType, paramCtx.start);
-			if( !setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true) )
+			if (!setDataAndValueType(dataId, dataType, valueType, paramCtx.start, false, true))
 				return null;
 			retVal.add(dataId);
 		}
@@ -869,7 +957,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	private ArrayList<Expression> getFunctionDefaults(List<TypedArgAssignContext> ctx) {
 		return new ArrayList<>(ctx.stream().map(arg ->
-			(arg.paramVal!=null)?arg.paramVal.info.expr:null).collect(Collectors.toList()));
+				(arg.paramVal != null) ? arg.paramVal.info.expr : null).collect(Collectors.toList()));
 	}
 
 	@Override
@@ -881,13 +969,13 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitIterablePredicateSeqExpression(IterablePredicateSeqExpressionContext ctx) {
-		if(!ctx.ID().getText().equals("seq")) {
+		if (!ctx.ID().getText().equals("seq")) {
 			notifyErrorListeners("incorrect function:\'" + ctx.ID().getText() + "\'. expected \'seq\'", ctx.start);
 			return;
 		}
 		ctx.info.from = ctx.from.info.expr;
 		ctx.info.to = ctx.to.info.expr;
-		if(ctx.increment != null && ctx.increment.info != null)
+		if (ctx.increment != null && ctx.increment.info != null)
 			ctx.info.increment = ctx.increment.info.expr;
 	}
 
@@ -905,17 +993,16 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		functionStmt.setInputDefaults(getFunctionDefaults(ctx.inputParams));
 		functionStmt.setOutputParams(getFunctionParametersNoAssign(ctx.outputParams));
 
-		if(ctx.body.size() > 0) {
+		if (ctx.body.size() > 0) {
 			// handle function body
 			// Create arraylist of one statement block
 			ArrayList<StatementBlock> body = new ArrayList<>();
-			for(StatementContext stmtCtx : ctx.body) {
+			for (StatementContext stmtCtx : ctx.body) {
 				body.add(getStatementBlock(stmtCtx.info.stmt));
 			}
 			functionStmt.setBody(body);
 			functionStmt.mergeStatementBlocks();
-		}
-		else {
+		} else {
 			notifyErrorListeners("functions with no statements are not allowed", ctx.start);
 			return;
 		}
@@ -936,20 +1023,20 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		// set other parameters
 		HashMap<String, String> otherParams = new HashMap<>();
 		boolean atleastOneClassName = false;
-		for(StrictParameterizedKeyValueStringContext otherParamCtx : ctx.otherParams){
+		for (StrictParameterizedKeyValueStringContext otherParamCtx : ctx.otherParams) {
 			String paramName = otherParamCtx.paramName.getText();
 			String val = "";
 			String text = otherParamCtx.paramVal.getText();
 			// First unquote the string
-			if(	(text.startsWith("\"") && text.endsWith("\"")) ||
-				(text.startsWith("\'") && text.endsWith("\'"))) {
-				if(text.length() > 2) {
-					val = text.substring(1, text.length()-1);
+			if ((text.startsWith("\"") && text.endsWith("\"")) ||
+					(text.startsWith("\'") && text.endsWith("\'"))) {
+				if (text.length() > 2) {
+					val = text.substring(1, text.length() - 1);
 				}
 				// Empty value allowed
-			}
-			else {
-				notifyErrorListeners("the value of user parameter for external function should be of type string", ctx.start);
+			} else {
+				notifyErrorListeners("the value of user parameter for external function should be of type string",
+						ctx.start);
 				return;
 			}
 			otherParams.put(paramName, val);
@@ -980,33 +1067,34 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitIfdefAssignmentStatement(IfdefAssignmentStatementContext ctx) {
-		if(!ctx.commandLineParam.getText().startsWith("$")) {
-			notifyErrorListeners("the first argument of ifdef function should be a commandline argument parameter (which starts with $)", ctx.commandLineParam.start);
+		if (!ctx.commandLineParam.getText().startsWith("$")) {
+			notifyErrorListeners("the first argument of ifdef function should be a commandline argument parameter " +
+					"(which starts with $)", ctx.commandLineParam.start);
 			return;
 		}
 
-		if(ctx.targetList == null) {
+		if (ctx.targetList == null) {
 			notifyErrorListeners("ifdef assignment needs an lvalue ", ctx.start);
 			return;
 		}
 		String targetListText = ctx.targetList.getText();
-		if(targetListText.startsWith("$")) {
-			notifyErrorListeners("lhs of ifdef function cannot be a commandline parameters. Use local variable instead", ctx.start);
+		if (targetListText.startsWith("$")) {
+			notifyErrorListeners("lhs of ifdef function cannot be a commandline parameters. Use local variable " +
+					"instead", ctx.start);
 			return;
 		}
 
 		DataIdentifier target = null;
-		if(ctx.targetList.dataInfo.expr instanceof DataIdentifier) {
+		if (ctx.targetList.dataInfo.expr instanceof DataIdentifier) {
 			target = (DataIdentifier) ctx.targetList.dataInfo.expr;
 			Expression source = null;
-			if(ctx.commandLineParam.dataInfo.expr != null) {
+			if (ctx.commandLineParam.dataInfo.expr != null) {
 				// Since commandline parameter is set
 				// The check of following is done in fillExpressionInfoCommandLineParameters:
 				// Command line param cannot be empty string
 				// If you want to pass space, please quote it
 				source = ctx.commandLineParam.dataInfo.expr;
-			}
-			else {
+			} else {
 				source = ctx.source.info.expr;
 			}
 
@@ -1017,8 +1105,7 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 				return;
 			}
 
-		}
-		else {
+		} else {
 			notifyErrorListeners("incorrect lvalue in ifdef function ", ctx.targetList.start);
 			return;
 		}
@@ -1026,15 +1113,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 
 	@Override
 	public void exitAccumulatorAssignmentStatement(AccumulatorAssignmentStatementContext ctx) {
-		if(ctx.targetList == null) {
+		if (ctx.targetList == null) {
 			notifyErrorListeners("incorrect parsing for accumulator assignment", ctx.start);
 			return;
 		}
 		//process as default assignment statement
 		exitAssignmentStatementHelper(ctx, ctx.targetList.getText(),
-			ctx.targetList.dataInfo, ctx.targetList.start, ctx.source.info, ctx.info);
+				ctx.targetList.dataInfo, ctx.targetList.start, ctx.source.info, ctx.info);
 		//mark as accumulator
-		((AssignmentStatement)ctx.info.stmt).setAccumulator(true);
+		((AssignmentStatement) ctx.info.stmt).setAccumulator(true);
 	}
 
 	@Override
@@ -1047,129 +1134,246 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 	// 			Not overridden
 	// -----------------------------------------------------------------
 
-	@Override public void visitTerminal(TerminalNode node) {}
-
-	@Override public void visitErrorNode(ErrorNode node) {}
-
-	@Override public void exitEveryRule(ParserRuleContext ctx) {}
-
-	@Override public void enterModIntDivExpression(ModIntDivExpressionContext ctx) {}
-
-	@Override public void enterExternalFunctionDefExpression(ExternalFunctionDefExpressionContext ctx) {}
-
-	@Override public void enterBooleanNotExpression(BooleanNotExpressionContext ctx) {}
-
-	@Override public void enterPowerExpression(PowerExpressionContext ctx) {}
-
-	@Override public void enterInternalFunctionDefExpression(InternalFunctionDefExpressionContext ctx) {}
-
-	@Override public void enterBuiltinFunctionExpression(BuiltinFunctionExpressionContext ctx) {}
-
-	@Override public void enterConstIntIdExpression(ConstIntIdExpressionContext ctx) {}
-
-	@Override public void enterAtomicExpression(AtomicExpressionContext ctx) {}
-
-	@Override public void enterIfdefAssignmentStatement(IfdefAssignmentStatementContext ctx) {}
-
-	@Override public void enterAccumulatorAssignmentStatement(AccumulatorAssignmentStatementContext ctx) {}
-
-	@Override public void enterConstStringIdExpression(ConstStringIdExpressionContext ctx) {}
-
-	@Override public void enterConstTrueExpression(ConstTrueExpressionContext ctx) {}
-
-	@Override public void enterParForStatement(ParForStatementContext ctx) {}
-
-	@Override public void enterUnaryExpression(UnaryExpressionContext ctx) {}
-
-	@Override public void enterImportStatement(ImportStatementContext ctx) {}
-
-	@Override public void enterPathStatement(PathStatementContext ctx) {}
-
-	@Override public void enterWhileStatement(WhileStatementContext ctx) {}
-
-	@Override public void enterDWhileStatement(DmlParser.DWhileStatementContext ctx) {}
-
-	@Override public void enterCommandlineParamExpression(CommandlineParamExpressionContext ctx) {}
-
-	@Override public void enterFunctionCallAssignmentStatement(FunctionCallAssignmentStatementContext ctx) {}
-
-	@Override public void enterAddSubExpression(AddSubExpressionContext ctx) {}
-
-	@Override public void enterIfStatement(IfStatementContext ctx) {}
-
-	@Override public void enterConstDoubleIdExpression(ConstDoubleIdExpressionContext ctx) {}
-
-	@Override public void enterMatrixMulExpression(MatrixMulExpressionContext ctx) {}
-
-	@Override public void enterMatrixDataTypeCheck(MatrixDataTypeCheckContext ctx) {}
-
-	@Override public void enterCommandlinePositionExpression(CommandlinePositionExpressionContext ctx) {}
-
-	@Override public void enterIterablePredicateColonExpression(IterablePredicateColonExpressionContext ctx) {}
-
-	@Override public void enterAssignmentStatement(AssignmentStatementContext ctx) {}
-
-	@Override public void enterValueType(ValueTypeContext ctx) {}
-
-	@Override public void exitValueType(ValueTypeContext ctx) {}
-
-	@Override public void enterMl_type(Ml_typeContext ctx) {}
-
-	@Override public void exitMl_type(Ml_typeContext ctx) {}
-
-	@Override public void enterBooleanAndExpression(BooleanAndExpressionContext ctx) {}
-
-	@Override public void enterForStatement(ForStatementContext ctx) {}
-
-	@Override public void enterRelationalExpression(RelationalExpressionContext ctx) {}
-
-	@Override public void enterTypedArgNoAssign(TypedArgNoAssignContext ctx) {}
-
-	@Override public void exitTypedArgNoAssign(TypedArgNoAssignContext ctx) {}
-
-	@Override public void enterTypedArgAssign(TypedArgAssignContext ctx) {}
-
-	@Override public void exitTypedArgAssign(TypedArgAssignContext ctx) {}
-
-	@Override public void enterStrictParameterizedExpression(StrictParameterizedExpressionContext ctx) {}
-
-	@Override public void exitStrictParameterizedExpression(StrictParameterizedExpressionContext ctx) {}
-
-	@Override public void enterMultDivExpression(MultDivExpressionContext ctx) {}
-
-	@Override public void enterConstFalseExpression(ConstFalseExpressionContext ctx) {}
-
-	@Override public void enterStrictParameterizedKeyValueString(StrictParameterizedKeyValueStringContext ctx) {}
-
-	@Override public void exitStrictParameterizedKeyValueString(StrictParameterizedKeyValueStringContext ctx) {}
-
-	@Override public void enterProgramroot(ProgramrootContext ctx) {}
-
-	@Override public void exitProgramroot(ProgramrootContext ctx) {}
-
-	@Override public void enterDataIdExpression(DataIdExpressionContext ctx) {}
-
-	@Override public void enterIndexedExpression(IndexedExpressionContext ctx) {}
-
-	@Override public void enterParameterizedExpression(ParameterizedExpressionContext ctx) {}
-
-	@Override public void exitParameterizedExpression(ParameterizedExpressionContext ctx) {}
-
-	@Override public void enterFunctionCallMultiAssignmentStatement(FunctionCallMultiAssignmentStatementContext ctx) {}
-
-	@Override public void enterIterablePredicateSeqExpression(IterablePredicateSeqExpressionContext ctx) {}
-
-	@Override public void enterSimpleDataIdentifierExpression(SimpleDataIdentifierExpressionContext ctx) {}
-
-	@Override public void enterBooleanOrExpression(BooleanOrExpressionContext ctx) {}
+	@Override
+	public void visitTerminal(TerminalNode node) {
+	}
 
 	@Override
-	public void enterMultiIdExpression(MultiIdExpressionContext ctx) { }
+	public void visitErrorNode(ErrorNode node) {
+	}
+
+	@Override
+	public void exitEveryRule(ParserRuleContext ctx) {
+	}
+
+	@Override
+	public void enterModIntDivExpression(ModIntDivExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterExternalFunctionDefExpression(ExternalFunctionDefExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterBooleanNotExpression(BooleanNotExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterPowerExpression(PowerExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterInternalFunctionDefExpression(InternalFunctionDefExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterBuiltinFunctionExpression(BuiltinFunctionExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterConstIntIdExpression(ConstIntIdExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterAtomicExpression(AtomicExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterIfdefAssignmentStatement(IfdefAssignmentStatementContext ctx) {
+	}
+
+	@Override
+	public void enterAccumulatorAssignmentStatement(AccumulatorAssignmentStatementContext ctx) {
+	}
+
+	@Override
+	public void enterConstStringIdExpression(ConstStringIdExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterConstTrueExpression(ConstTrueExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterParForStatement(ParForStatementContext ctx) {
+	}
+
+	@Override
+	public void enterUnaryExpression(UnaryExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterImportStatement(ImportStatementContext ctx) {
+	}
+
+	@Override
+	public void enterPathStatement(PathStatementContext ctx) {
+	}
+
+	@Override
+	public void enterWhileStatement(WhileStatementContext ctx) {
+	}
+
+	@Override
+	public void enterDWhileStatement(DmlParser.DWhileStatementContext ctx) {
+	}
+
+	@Override
+	public void enterCommandlineParamExpression(CommandlineParamExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterFunctionCallAssignmentStatement(FunctionCallAssignmentStatementContext ctx) {
+	}
+
+	@Override
+	public void enterAddSubExpression(AddSubExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterIfStatement(IfStatementContext ctx) {
+	}
+
+	@Override
+	public void enterConstDoubleIdExpression(ConstDoubleIdExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterMatrixMulExpression(MatrixMulExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterMatrixDataTypeCheck(MatrixDataTypeCheckContext ctx) {
+	}
+
+	@Override
+	public void enterCommandlinePositionExpression(CommandlinePositionExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterIterablePredicateColonExpression(IterablePredicateColonExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterAssignmentStatement(AssignmentStatementContext ctx) {
+	}
+
+	@Override
+	public void enterValueType(ValueTypeContext ctx) {
+	}
+
+	@Override
+	public void exitValueType(ValueTypeContext ctx) {
+	}
+
+	@Override
+	public void enterMl_type(Ml_typeContext ctx) {
+	}
+
+	@Override
+	public void exitMl_type(Ml_typeContext ctx) {
+	}
+
+	@Override
+	public void enterBooleanAndExpression(BooleanAndExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterForStatement(ForStatementContext ctx) {
+	}
+
+	@Override
+	public void enterRelationalExpression(RelationalExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterTypedArgNoAssign(TypedArgNoAssignContext ctx) {
+	}
+
+	@Override
+	public void exitTypedArgNoAssign(TypedArgNoAssignContext ctx) {
+	}
+
+	@Override
+	public void enterTypedArgAssign(TypedArgAssignContext ctx) {
+	}
+
+	@Override
+	public void exitTypedArgAssign(TypedArgAssignContext ctx) {
+	}
+
+	@Override
+	public void enterStrictParameterizedExpression(StrictParameterizedExpressionContext ctx) {
+	}
+
+	@Override
+	public void exitStrictParameterizedExpression(StrictParameterizedExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterMultDivExpression(MultDivExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterConstFalseExpression(ConstFalseExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterStrictParameterizedKeyValueString(StrictParameterizedKeyValueStringContext ctx) {
+	}
+
+	@Override
+	public void exitStrictParameterizedKeyValueString(StrictParameterizedKeyValueStringContext ctx) {
+	}
+
+	@Override
+	public void enterProgramroot(ProgramrootContext ctx) {
+	}
+
+	@Override
+	public void exitProgramroot(ProgramrootContext ctx) {
+	}
+
+	@Override
+	public void enterDataIdExpression(DataIdExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterIndexedExpression(IndexedExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterParameterizedExpression(ParameterizedExpressionContext ctx) {
+	}
+
+	@Override
+	public void exitParameterizedExpression(ParameterizedExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterFunctionCallMultiAssignmentStatement(FunctionCallMultiAssignmentStatementContext ctx) {
+	}
+
+	@Override
+	public void enterIterablePredicateSeqExpression(IterablePredicateSeqExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterSimpleDataIdentifierExpression(SimpleDataIdentifierExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterBooleanOrExpression(BooleanOrExpressionContext ctx) {
+	}
+
+	@Override
+	public void enterMultiIdExpression(MultiIdExpressionContext ctx) {
+	}
 
 	@Override
 	public void exitMultiIdExpression(MultiIdExpressionContext ctx) {
 		ArrayList<Expression> values = new ArrayList<>();
-		for(ExpressionContext elem : ctx.targetList) {
+		for (ExpressionContext elem : ctx.targetList) {
 			values.add(elem.info.expr);
 		}
 		ctx.info.expr = new ExpressionList(values);

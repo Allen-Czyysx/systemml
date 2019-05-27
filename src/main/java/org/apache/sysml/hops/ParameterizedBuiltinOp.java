@@ -39,6 +39,7 @@ import org.apache.sysml.lops.ParameterizedBuiltin;
 import org.apache.sysml.lops.RepMat;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
+import org.apache.sysml.parser.ParseException;
 import org.apache.sysml.parser.Statement;
 import org.apache.sysml.runtime.controlprogram.ParForProgramBlock.PDataPartitionFormat;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
@@ -160,7 +161,7 @@ public class ParameterizedBuiltinOp extends MultiThreadedHop
 			inputlops.put(cur.getKey(), getInput().get(cur.getValue()).constructLops());
 
 		switch( _op ) {
-			case GROUPEDAGG: { 
+			case GROUPEDAGG: {
 				ExecType et = optFindExecType();
 				constructLopsGroupedAggregate(inputlops, et);
 				break;
@@ -169,12 +170,20 @@ public class ParameterizedBuiltinOp extends MultiThreadedHop
 				ExecType et = optFindExecType();
 				constructLopsRemoveEmpty(inputlops, et);
 				break;
-			} 
+			}
+			case REPARTITION: {
+				_dim1 = _input.get(0)._dim1;
+				_dim2 = _input.get(0)._dim2;
+				ExecType et = optFindExecType();
+				constructLopsRepartition(inputlops, et);
+				break;
+			}
+
 			case REXPAND: {
 				ExecType et = optFindExecType();
 				constructLopsRExpand(inputlops, et);
 				break;
-			} 
+			}
 			case CDF:
 			case INVCDF: 
 			case REPLACE:
@@ -608,7 +617,7 @@ public class ParameterizedBuiltinOp extends MultiThreadedHop
 					setOutputDimensions(rmEmpty);
 					setLineNumbers(rmEmpty);
 				}
-				//b) general case: repartition-based rmempty
+				//b) general case: repartitionNonZeros-based rmempty
 				else
 				{
 					boolean requiresRep = ((clen>bclen || clen<=0) &&  rmRows)
@@ -736,6 +745,18 @@ public class ParameterizedBuiltinOp extends MultiThreadedHop
 			setLops(pbilop);
 			
 			//NOTE: in contrast to mr, replication and aggregation handled instruction-local
+		}
+	}
+
+	private void constructLopsRepartition(HashMap<String, Lop> inputlops, ExecType et) {
+		if (et == ExecType.CP) {
+			ParameterizedBuiltin pbilop = new ParameterizedBuiltin(inputlops, HopsParameterizedBuiltinLops.get(_op),
+					getDataType(), getValueType(), et);
+			setOutputDimensions(pbilop);
+			setLineNumbers(pbilop);
+			setLops(pbilop);
+		} else {
+			throw new ParseException("Shouldn't be here");
 		}
 	}
 

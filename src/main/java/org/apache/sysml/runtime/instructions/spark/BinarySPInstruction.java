@@ -23,11 +23,14 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.StorageLevels;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.BinaryM.VectorType;
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.Expression;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
+import org.apache.sysml.runtime.functionobjects.Divide;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.cp.ScalarObject;
@@ -40,8 +43,10 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
+import scala.Tuple2;
 
 import java.util.Arrays;
+import java.util.List;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
@@ -383,4 +388,26 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 				throw new DMLRuntimeException("Input matrices are not aligned to blocksize boundaries. Wrong append selected");
 		}
 	}
+
+	/**
+	 * @return 当前是否需要 cache
+	 */
+	boolean needCacheNow(SparkExecutionContext sec) {
+//		if (_needCache) {
+//			if (_dVarNames != null) {
+//				for (String dVarName : _dVarNames) {
+//					String countName = DWhileStatement.getUseDeltaCountName(dVarName);
+//					long count = sec.getScalarInput(countName, Expression.ValueType.INT, false).getLongValue();
+//					if (count >= DWhileStatement.CACHE_PERIOD) {
+//						return true;
+//					}
+//				}
+//			} else {
+//				return true;
+//			}
+//		}
+
+		return false;
+	}
+
 }

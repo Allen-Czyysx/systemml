@@ -19,6 +19,8 @@
 
 package org.apache.sysml.runtime.instructions.spark;
 
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.functionobjects.IndexFunction;
@@ -66,6 +68,9 @@ public abstract class ComputationSPInstruction extends SPInstruction {
 			else
 				mcOut.set(mc1.getRows(), mc1.getCols(), mc1.getRowsPerBlock(), mc1.getColsPerBlock());
 		}
+		if (mcOut.getRowsPerBlock() == -1 || mcOut.getColsPerBlock() == -1) {
+			mcOut.set(mcOut.getRows(), mcOut.getCols(), mc1.getRowsPerBlock(), mc1.getColsPerBlock());
+		}
 	}
 
 	protected void updateBinaryOutputMatrixCharacteristics(SparkExecutionContext sec) {
@@ -104,4 +109,5 @@ public abstract class ComputationSPInstruction extends SPInstruction {
 				mcOut.set(1, mc1.getCols(), mc1.getRowsPerBlock(), mc1.getColsPerBlock());
 		}
 	}
+
 }

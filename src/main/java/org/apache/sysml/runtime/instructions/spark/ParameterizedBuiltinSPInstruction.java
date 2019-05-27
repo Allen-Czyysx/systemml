@@ -463,7 +463,7 @@ public class ParameterizedBuiltinSPInstruction extends ComputationSPInstruction 
 			long brlen = mcIn.getRowsPerBlock();
 			long bclen = mcIn.getColsPerBlock();
 			
-			//repartition input vector for higher degree of parallelism 
+			//repartitionNonZeros input vector for higher degree of parallelism
 			//(avoid scenarios where few input partitions create huge outputs)
 			MatrixCharacteristics mcTmp = new MatrixCharacteristics(dirRows?lmaxVal:mcIn.getRows(),
 					dirRows?mcIn.getRows():lmaxVal, (int)brlen, (int)bclen, mcIn.getRows());

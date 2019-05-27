@@ -33,6 +33,7 @@ import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.spark.data.RDDObject;
 import org.apache.sysml.runtime.instructions.spark.functions.CopyFrameBlockFunction;
 import org.apache.sysml.runtime.instructions.spark.functions.CreateSparseBlockFunction;
+import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyBlocksFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.InputInfo;
@@ -101,7 +102,7 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 		JavaPairRDD<?,?> out = null;
 		if( !in.getStorageLevel().equals( _level ) ) 
 		{
-			//determine need for coalesce or repartition, and csr conversion
+			//determine need for coalesce or repartitionNonZeros, and csr conversion
 			int numPartitions = SparkUtils.getNumPreferredPartitions(mcIn, in);
 			boolean coalesce = ( 1.2*numPartitions < in.getNumPartitions()
 				&& !SparkUtils.isHashPartitioned(in) && in.getNumPartitions()
@@ -111,14 +112,17 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 			boolean mcsr2csr = input1.getDataType()==DataType.MATRIX 
 				&& OptimizerUtils.checkSparseBlockCSRConversion(mcIn)
 				&& !_level.equals(Checkpoint.SER_STORAGE_LEVEL);
-			
+
+			// TODO added by czh
+//			in = ((JavaPairRDD<MatrixIndexes,MatrixBlock>) in).filter(new FilterNonEmptyBlocksFunction());
+
 			//checkpoint pre-processing rdd operations
 			if( coalesce ) {
 				//merge partitions without shuffle if too many partitions
 				out = in.coalesce( numPartitions );
 			}
 			else if( repartition ) {
-				//repartition to preferred size as multiple of default parallelism
+				//repartitionNonZeros to preferred size as multiple of default parallelism
 				out = in.repartition(UtilFunctions.roundToNext(numPartitions,
 					SparkExecutionContext.getDefaultParallelism(true)));
 			}

@@ -43,10 +43,12 @@ import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.lops.MMTSJ.MMTSJType;
 import org.apache.sysml.lops.MapMultChain.ChainType;
 import org.apache.sysml.lops.PartialAggregate.CorrectionLocationType;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.caching.CacheBlock;
 import org.apache.sysml.runtime.controlprogram.caching.LazyWriteBuffer;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
+import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.functionobjects.Builtin;
 import org.apache.sysml.runtime.functionobjects.Builtin.BuiltinCode;
 import org.apache.sysml.runtime.functionobjects.CM;
@@ -143,7 +145,9 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	FilterBlock selectBlock = null;
 	
 	//sparse-block-specific attributes (allocation only)
-	protected int estimatedNNzsPerRow = -1; 
+	protected int estimatedNNzsPerRow = -1;
+
+	long _orderNum = -1;
 	
 	////////
 	// Matrix Constructors
@@ -569,6 +573,15 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	////////
 	// Data handling
+
+
+	public long getOrderNum() {
+		return _orderNum;
+	}
+
+	public void setOrderNum(long orderNum) {
+		_orderNum = orderNum;
+	}
 
 	public void setSelectBlock(FilterBlock select) {
 		selectBlock = select;
@@ -4957,7 +4970,9 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	public MatrixBlock aggregateBinaryOperations(MatrixBlock m1, MatrixBlock m2, MatrixBlock ret, AggregateBinaryOperator op) {
 		//check input types, dimensions, configuration
 		if( m1.clen != m2.rlen ) {
-			throw new RuntimeException("Dimensions do not match for matrix multiplication ("+m1.clen+"!="+m2.rlen+").");
+			// TODO added by czh
+			m1.clen = Math.min(m1.clen, m2.rlen);
+//			throw new RuntimeException("Dimensions do not match for matrix multiplication ("+m1.clen+"!="+m2.rlen+").");
 		}
 		if( !(op.binaryFn instanceof Multiply && op.aggOp.increOp.fn instanceof Plus) ) {
 			throw new DMLRuntimeException("Unsupported binary aggregate operation: ("+op.binaryFn+", "+op.aggOp+").");
@@ -5113,6 +5128,14 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	public MatrixBlock removeEmptyOperations( MatrixBlock ret, boolean rows, boolean emptyReturn) {
 		return removeEmptyOperations(ret, rows, emptyReturn, null);
+	}
+
+	public MatrixBlock repartitionOperations(ExecutionContext ec, MatrixBlock ret, boolean rows, MatrixBlock select,
+											 String name) {
+		if (DWhileStatement.isDWhileTmpVar(name)) {
+			name = DWhileStatement.getDVarNameFromTmpVar(name);
+		}
+		return LibMatrixReorg.repartitionNonZeros(ec, this, ret, rows, select, DWhileStatement.getDVarNameFromTmpVar(name));
 	}
 
 	public MatrixBlock rexpandOperations( MatrixBlock ret, double max, boolean rows, boolean cast, boolean ignore, int k ) {

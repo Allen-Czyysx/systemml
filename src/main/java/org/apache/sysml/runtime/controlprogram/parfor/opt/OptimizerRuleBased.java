@@ -123,7 +123,7 @@ import org.apache.sysml.yarn.ropt.YarnClusterAnalyzer;
  * - 15) rewrite disable caching (prevent sparse serialization)
  * - 16) rewrite enable runtime piggybacking
  * - 17) rewrite inject spark loop checkpointing 
- * - 18) rewrite inject spark repartition (for zipmm)
+ * - 18) rewrite inject spark repartitionNonZeros (for zipmm)
  * - 19) rewrite set spark eager rdd caching 
  * - 20) rewrite set result merge
  * - 21) rewrite set recompile memory budget
@@ -312,7 +312,7 @@ public class OptimizerRuleBased extends Optimizer
 				//rewrite 17: checkpoint injection for parfor loop body
 				rewriteInjectSparkLoopCheckpointing( pn );
 				
-				//rewrite 18: repartition read-only inputs for zipmm 
+				//rewrite 18: repartitionNonZeros read-only inputs for zipmm
 				rewriteInjectSparkRepartition( pn, ec.getVariables() );
 				
 				//rewrite 19: eager caching for checkpoint rdds
@@ -1902,7 +1902,7 @@ public class OptimizerRuleBased extends Optimizer
 	}
 	
 	///////
-	//REWRITE inject spark repartition for zipmm
+	//REWRITE inject spark repartitionNonZeros for zipmm
 	///
 
 	protected void rewriteInjectSparkRepartition(OptNode n, LocalVariableMap vars) 
@@ -1946,7 +1946,7 @@ public class OptimizerRuleBased extends Optimizer
 		}
 		
 		_numEvaluatedPlans++;
-		LOG.debug(getOptMode()+" OPT: rewrite 'inject spark input repartition' - result="
+		LOG.debug(getOptMode()+" OPT: rewrite 'inject spark input repartitionNonZeros' - result="
 			+ret.size()+" ("+Arrays.toString(ret.toArray())+")" );
 	}
 
@@ -2006,7 +2006,7 @@ public class OptimizerRuleBased extends Optimizer
 					MatrixObject mo = (MatrixObject)dat;
 					MatrixCharacteristics mc = mo.getMatrixCharacteristics();
 					RDDObject rdd = mo.getRDDHandle();
-					if( (rpVars==null || !rpVars.contains(var)) //not a repartition var
+					if( (rpVars==null || !rpVars.contains(var)) //not a repartitionNonZeros var
 						&& rdd.rHasCheckpointRDDChilds()        //is cached rdd 
 						&& _lm / n.getK() <                     //is out-of-core dataset
 						OptimizerUtils.estimateSizeExactSparsity(mc))

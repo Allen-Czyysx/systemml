@@ -190,24 +190,25 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "rbind",  CPType.BuiltinNary);
 		String2CPInstructionType.put( "eval",   CPType.BuiltinNary);
 		String2CPInstructionType.put( "list",   CPType.BuiltinNary);
-		
+
 		// Parameterized Builtin Functions
-		String2CPInstructionType.put("paramserv", 		CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "nvlist",  CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "cdf",            CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "invcdf",         CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "groupedagg",     CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "rmempty" ,       CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "replace",        CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "lowertri",       CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "uppertri",       CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "rexpand",        CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "toString",       CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "transformapply", CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "transformdecode",CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "transformcolmap",CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "transformmeta",  CPType.ParameterizedBuiltin);
-		String2CPInstructionType.put( "transformencode",CPType.MultiReturnParameterizedBuiltin);
+		String2CPInstructionType.put("paramserv", 		 CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "nvlist",          CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "cdf",             CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "invcdf",          CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "groupedagg",      CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "rmempty" ,        CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "repartitionNonZeros",     CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "replace",         CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "lowertri",        CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "uppertri",        CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "rexpand",         CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "toString",        CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "transformapply",  CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "transformdecode", CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "transformcolmap", CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "transformmeta",   CPType.ParameterizedBuiltin);
+		String2CPInstructionType.put( "transformencode", CPType.MultiReturnParameterizedBuiltin);
 		
 		// Ternary Instruction Opcodes
 		String2CPInstructionType.put( "+*",      CPType.Ternary);

@@ -1199,7 +1199,8 @@ public abstract class Hop implements ParseInfo
 		INVALID, CDF, INVCDF, GROUPEDAGG, RMEMPTY, REPLACE, REXPAND,
 		LOWER_TRI, UPPER_TRI,
 		TRANSFORMAPPLY, TRANSFORMDECODE, TRANSFORMCOLMAP, TRANSFORMMETA,
-		TOSTRING, LIST, PARAMSERV
+		TOSTRING, LIST, PARAMSERV,
+		REPARTITION,
 	}
 
 	public enum FileFormatTypes {
@@ -1518,6 +1519,7 @@ public abstract class Hop implements ParseInfo
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.CDF, ParameterizedBuiltin.OperationTypes.CDF);
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.INVCDF, ParameterizedBuiltin.OperationTypes.INVCDF);
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.RMEMPTY, ParameterizedBuiltin.OperationTypes.RMEMPTY);
+		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.REPARTITION, ParameterizedBuiltin.OperationTypes.REPARTITION);
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.REPLACE, ParameterizedBuiltin.OperationTypes.REPLACE);
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.REXPAND, ParameterizedBuiltin.OperationTypes.REXPAND);
 		HopsParameterizedBuiltinLops.put(ParamBuiltinOp.LOWER_TRI, ParameterizedBuiltin.OperationTypes.LOWER_TRI);

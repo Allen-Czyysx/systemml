@@ -1,13 +1,12 @@
 package org.apache.sysml.parser;
 
 import org.apache.sysml.hops.Hop;
+import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
 
 import java.util.ArrayList;
 
 public class DWhileStatement extends WhileStatement {
-
-	public static final int CACHE_PERIOD = 10;
 
 	private String[] _dVarNames;
 
@@ -61,6 +60,8 @@ public class DWhileStatement extends WhileStatement {
 		_dIterAfter = dIterAfter;
 	}
 
+	//// 常驻变量名工具
+
 	public static boolean isDVar(String name, String[] curDVars) {
 		for (String curDVarName : curDVars) {
 			if (name.equals(curDVarName)) {
@@ -70,11 +71,20 @@ public class DWhileStatement extends WhileStatement {
 		return false;
 	}
 
+	public static boolean isDVar(String name, ExecutionContext ec) {
+		return ec.containsVariable(getPreVarName(name));
+	}
+
 	public static boolean isDWhileTmpVar(String varName) {
 		if (varName == null) {
 			return false;
 		}
 		return Character.isDigit(varName.charAt(0));
+	}
+
+	public static String getDVarNameFromTmpVar(String deltaName) {
+		String[] strs = deltaName.split("_");
+		return strs[strs.length - 1];
 	}
 
 	public static String getPreVarName(String varName) {
@@ -103,12 +113,44 @@ public class DWhileStatement extends WhileStatement {
 				+ inst.getEndLine() + "_" + inst.getEndColumn();
 	}
 
-	public static String getUseDeltaCountName(String varName) {
-		return "6_useDeltaCount_" + varName;
+	public static String getUseRepartitionCountName(String varName) {
+		return "7_useRepartitionCount_" + varName;
 	}
 
-	public static String getSelectBlockNum(String varName) {
-		return "7_blockSum_" + varName;
+	public static String getSelectBlockNumName(String varName) {
+		return "8_blockNum_" + varName;
+	}
+
+	public static String getRepartitionPreBlockNumName(String varName) {
+		return "9_repartitionPreBlockNum_" + varName;
+	}
+
+	public static String getRepartitionOrderName(String varName) {
+		return "10_repartitionOrder_" + varName;
+	}
+
+	public static String getUseRepartitionName(String varName) {
+		return "11_useRepartition_" + varName;
+	}
+
+	public static String getRepartitionSelectName(String varName) {
+		return "12_repartitionSelect_" + varName;
+	}
+
+	public static String getAbsName(String varName) {
+		return "13_abs_" + varName;
+	}
+
+	public static String getRepartitionBlockOrderName(String varName) {
+		return "10_repartitionBlockOrder_" + varName;
+	}
+
+	public static String getPreBlockNumName(String varName) {
+		return "11_preBlockNum_" + varName;
+	}
+
+	public static String getUseFilterName(String varName) {
+		return "12_useFilter_" + varName;
 	}
 
 	@Override

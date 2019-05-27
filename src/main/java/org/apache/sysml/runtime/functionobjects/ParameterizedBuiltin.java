@@ -43,7 +43,8 @@ public class ParameterizedBuiltin extends ValueFunction {
 	private static final long serialVersionUID = -5966242955816522697L;
 
 	public enum ParameterizedBuiltinCode {
-		CDF, INVCDF, RMEMPTY, REPLACE, REXPAND, LOWER_TRI, UPPER_TRI, TRANSFORMAPPLY, TRANSFORMDECODE, PARAMSERV
+		CDF, INVCDF, RMEMPTY, REPLACE, REXPAND, LOWER_TRI, UPPER_TRI, TRANSFORMAPPLY, TRANSFORMDECODE, PARAMSERV,
+		REPARTITION,
 	}
 
 	public enum ProbabilityDistributionCode {
@@ -59,6 +60,7 @@ public class ParameterizedBuiltin extends ValueFunction {
 		String2ParameterizedBuiltinCode.put("cdf", ParameterizedBuiltinCode.CDF);
 		String2ParameterizedBuiltinCode.put("invcdf", ParameterizedBuiltinCode.INVCDF);
 		String2ParameterizedBuiltinCode.put("rmempty", ParameterizedBuiltinCode.RMEMPTY);
+		String2ParameterizedBuiltinCode.put("repartitionNonZeros", ParameterizedBuiltinCode.REPARTITION);
 		String2ParameterizedBuiltinCode.put("replace", ParameterizedBuiltinCode.REPLACE);
 		String2ParameterizedBuiltinCode.put("lowertri", ParameterizedBuiltinCode.LOWER_TRI);
 		String2ParameterizedBuiltinCode.put("uppertri", ParameterizedBuiltinCode.UPPER_TRI);
@@ -103,98 +105,85 @@ public class ParameterizedBuiltin extends ValueFunction {
 		ParameterizedBuiltinCode code = String2ParameterizedBuiltinCode.get(str);
 
 		switch (code) {
-		case CDF:
-			// str2 will point the appropriate distribution
-			ProbabilityDistributionCode dcode = String2DistCode.get(str2.toLowerCase());
+			case CDF:
+				// str2 will point the appropriate distribution
+				ProbabilityDistributionCode dcode = String2DistCode.get(str2.toLowerCase());
 
-			switch (dcode) {
-			case NORMAL:
-				if (normalObj == null)
-					normalObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return normalObj;
-			case EXP:
-				if (expObj == null)
-					expObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return expObj;
-			case CHISQ:
-				if (chisqObj == null)
-					chisqObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return chisqObj;
-			case F:
-				if (fObj == null)
-					fObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return fObj;
-			case T:
-				if (tObj == null)
-					tObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return tObj;
-			case BINOMIAL:
-				if (binomialObj == null)
-					binomialObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
-				return binomialObj;
+				switch (dcode) {
+					case NORMAL:
+						if (normalObj == null)
+							normalObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return normalObj;
+					case EXP:
+						if (expObj == null)
+							expObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return expObj;
+					case CHISQ:
+						if (chisqObj == null)
+							chisqObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return chisqObj;
+					case F:
+						if (fObj == null)
+							fObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return fObj;
+					case T:
+						if (tObj == null)
+							tObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return tObj;
+					case BINOMIAL:
+						if (binomialObj == null)
+							binomialObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.CDF, dcode);
+						return binomialObj;
+					default:
+						throw new DMLRuntimeException("Invalid distribution code: " + dcode);
+				}
+
+			case INVCDF:
+				// str2 will point the appropriate distribution
+				ProbabilityDistributionCode distcode = String2DistCode.get(str2.toLowerCase());
+
+				switch (distcode) {
+					case NORMAL:
+						if (inormalObj == null)
+							inormalObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return inormalObj;
+					case EXP:
+						if (iexpObj == null)
+							iexpObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return iexpObj;
+					case CHISQ:
+						if (ichisqObj == null)
+							ichisqObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return ichisqObj;
+					case F:
+						if (ifObj == null)
+							ifObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return ifObj;
+					case T:
+						if (itObj == null)
+							itObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return itObj;
+					case BINOMIAL:
+						if (ibinomialObj == null)
+							ibinomialObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
+						return ibinomialObj;
+					default:
+						throw new DMLRuntimeException("Invalid distribution code: " + distcode);
+				}
+
+			case RMEMPTY:
+			case REPARTITION:
+			case REPLACE:
+			case LOWER_TRI:
+			case UPPER_TRI:
+			case REXPAND:
+			case TRANSFORMAPPLY:
+			case TRANSFORMDECODE:
+			case PARAMSERV:
+				return new ParameterizedBuiltin(code);
+
 			default:
-				throw new DMLRuntimeException("Invalid distribution code: " + dcode);
-			}
-
-		case INVCDF:
-			// str2 will point the appropriate distribution
-			ProbabilityDistributionCode distcode = String2DistCode.get(str2.toLowerCase());
-
-			switch (distcode) {
-			case NORMAL:
-				if (inormalObj == null)
-					inormalObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return inormalObj;
-			case EXP:
-				if (iexpObj == null)
-					iexpObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return iexpObj;
-			case CHISQ:
-				if (ichisqObj == null)
-					ichisqObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return ichisqObj;
-			case F:
-				if (ifObj == null)
-					ifObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return ifObj;
-			case T:
-				if (itObj == null)
-					itObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return itObj;
-			case BINOMIAL:
-				if (ibinomialObj == null)
-					ibinomialObj = new ParameterizedBuiltin(ParameterizedBuiltinCode.INVCDF, distcode);
-				return ibinomialObj;
-			default:
-				throw new DMLRuntimeException("Invalid distribution code: " + distcode);
-			}
-
-		case RMEMPTY:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.RMEMPTY);
-
-		case REPLACE:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.REPLACE);
-
-		case LOWER_TRI:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.LOWER_TRI);
-
-		case UPPER_TRI:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.UPPER_TRI);
-
-		case REXPAND:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.REXPAND);
-
-		case TRANSFORMAPPLY:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.TRANSFORMAPPLY);
-
-		case TRANSFORMDECODE:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.TRANSFORMDECODE);
-
-		case PARAMSERV:
-			return new ParameterizedBuiltin(ParameterizedBuiltinCode.PARAMSERV);
-
-		default:
-			throw new DMLRuntimeException("Invalid parameterized builtin code: " + code);
+				throw new DMLRuntimeException("Invalid parameterized builtin code: " + code);
 		}
 	}
 

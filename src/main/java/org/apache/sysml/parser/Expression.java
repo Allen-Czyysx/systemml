@@ -165,6 +165,7 @@ public abstract class Expression implements ParseInfo
 		TOSTRING, // The "toString" method for DML; named arguments accepted to format output
 		LIST, // named argument lists; unnamed lists become builtin function
 		PARAMSERV,
+		REPARTITION,
 		INVALID
 	}
 	

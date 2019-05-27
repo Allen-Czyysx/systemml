@@ -617,7 +617,7 @@ public class SparkExecutionContext extends ExecutionContext
 					pmb.clearBlocks();
 			}
 			
-			bret = new PartitionedBroadcast<>(ret, mo.getMatrixCharacteristics());
+			bret = new PartitionedBroadcast<>(ret, mo.getMatrixCharacteristics(), mb.getSelectBlock() != null);
 			// create the broadcast handle if the matrix or frame has never been broadcasted
 			if (mo.getBroadcastHandle() == null) {
 				mo.setBroadcastHandle(new BroadcastObject<MatrixBlock>());
@@ -1374,7 +1374,7 @@ public class SparkExecutionContext extends ExecutionContext
 				in = in.coalesce( numPartitions );
 		}
 
-		//repartition rdd (force creation of shuffled rdd via merge), note: without deep copy albeit
+		//repartitionNonZeros rdd (force creation of shuffled rdd via merge), note: without deep copy albeit
 		//executed on the original data, because there will be no merge, i.e., no key duplicates
 		JavaPairRDD<MatrixIndexes,MatrixBlock> out = RDDAggregateUtils.mergeByKey(in, false);
 

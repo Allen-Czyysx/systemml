@@ -191,7 +191,7 @@ public class OptimizerConstrained extends OptimizerRuleBased
 				//rewrite 17: checkpoint injection for parfor loop body
 				super.rewriteInjectSparkLoopCheckpointing( pn );
 
-				//rewrite 18: repartition read-only inputs for zipmm 
+				//rewrite 18: repartitionNonZeros read-only inputs for zipmm
 				super.rewriteInjectSparkRepartition( pn, ec.getVariables() );
 
 				//rewrite 19: eager caching for checkpoint rdds

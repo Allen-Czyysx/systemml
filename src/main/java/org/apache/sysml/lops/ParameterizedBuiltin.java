@@ -38,7 +38,8 @@ public class ParameterizedBuiltin extends Lop
 	public enum OperationTypes { 
 		CDF, INVCDF, RMEMPTY, REPLACE, REXPAND, LOWER_TRI, UPPER_TRI,
 		TRANSFORMAPPLY, TRANSFORMDECODE, TRANSFORMCOLMAP, TRANSFORMMETA,
-		TOSTRING, LIST, PARAMSERV
+		TOSTRING, LIST, PARAMSERV,
+		REPARTITION,
 	}
 	
 	private OperationTypes _operation;
@@ -168,7 +169,25 @@ public class ParameterizedBuiltin extends Lop
 				}
 				
 				break;
-			
+
+			case REPARTITION:
+				sb.append("repartitionNonZeros");
+				sb.append(OPERAND_DELIMITOR);
+				for (String s : _inputParams.keySet()) {
+					sb.append(s);
+					sb.append(NAME_VALUE_SEPARATOR);
+
+					Lop iLop = _inputParams.get(s);
+					if (s.equals("target") || s.equals("select")) {
+						sb.append(iLop.getOutputParameters().getLabel());
+					} else {
+						sb.append(iLop.prepScalarLabel());
+					}
+
+					sb.append(OPERAND_DELIMITOR);
+				}
+				break;
+
 			case REPLACE: {
 				sb.append( "replace" );
 				sb.append( OPERAND_DELIMITOR );
