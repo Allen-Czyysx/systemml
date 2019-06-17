@@ -225,6 +225,14 @@ public class DmlPreprocessor implements DmlListener {
 	public void exitMatrixMulExpression(MatrixMulExpressionContext ctx) {}
 
 	@Override
+	public void enterSpecialMatrixMulExpression(DmlParser.SpecialMatrixMulExpressionContext ctx) {
+	}
+
+	@Override
+	public void exitSpecialMatrixMulExpression(DmlParser.SpecialMatrixMulExpressionContext ctx) {
+	}
+
+	@Override
 	public void enterModIntDivExpression(ModIntDivExpressionContext ctx) {}
 
 	@Override

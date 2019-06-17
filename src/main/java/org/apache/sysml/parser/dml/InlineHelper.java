@@ -380,6 +380,10 @@ public class InlineHelper extends CommonSyntacticValidator implements DmlListene
 	}
 
 	@Override
+	public void enterSpecialMatrixMulExpression(DmlParser.SpecialMatrixMulExpressionContext ctx) {
+	}
+
+	@Override
 	public void enterMl_type(Ml_typeContext ctx) {
 		
 		
@@ -658,6 +662,10 @@ public class InlineHelper extends CommonSyntacticValidator implements DmlListene
 	public void exitMatrixMulExpression(MatrixMulExpressionContext ctx) {
 		
 		
+	}
+
+	@Override
+	public void exitSpecialMatrixMulExpression(DmlParser.SpecialMatrixMulExpressionContext ctx) {
 	}
 
 	@Override

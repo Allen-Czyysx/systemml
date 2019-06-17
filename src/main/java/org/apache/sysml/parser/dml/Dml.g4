@@ -137,6 +137,8 @@ expression returns [ org.apache.sysml.parser.common.ExpressionInfo info ]
     //| left=expression op=':' right=expression             # SequenceExpression
     // matrix multiply
     | left=expression op='%*%' right=expression           # MatrixMulExpression
+    // special matrix multiply
+    | left=expression op='%^%' right=expression           # SpecialMatrixMulExpression
     // modulus and integer division
     | left=expression op=('%/%' | '%%' ) right=expression # ModIntDivExpression
     // arithmetic multiply and divide
