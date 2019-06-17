@@ -674,6 +674,7 @@ public class PlanSelectionFuseCostBased extends PlanSelection
 		else if( current instanceof BinaryOp ) {
 			switch( ((BinaryOp)current).getOp() ) {
 				case MULT: 
+				case SMULT:
 				case PLUS:
 				case MINUS:
 				case MIN:

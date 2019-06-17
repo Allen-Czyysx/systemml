@@ -5130,12 +5130,14 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		return removeEmptyOperations(ret, rows, emptyReturn, null);
 	}
 
+	// TODO added by czh
 	public MatrixBlock repartitionOperations(ExecutionContext ec, MatrixBlock ret, boolean rows, MatrixBlock select,
 											 String name) {
-		if (DWhileStatement.isDWhileTmpVar(name)) {
-			name = DWhileStatement.getDVarNameFromTmpVar(name);
-		}
-		return LibMatrixReorg.repartitionNonZeros(ec, this, ret, rows, select, DWhileStatement.getDVarNameFromTmpVar(name));
+//		if (DWhileStatement.isDWhileTmpVar(name)) {
+//			name = DWhileStatement.getDVarNameFromTmpVar(name);
+//		}
+//		return LibMatrixReorg.repartitionNonZeros(ec, this, ret, rows, select, DWhileStatement.getDVarNameFromTmpVar(name));
+		return null;
 	}
 
 	public MatrixBlock rexpandOperations( MatrixBlock ret, double max, boolean rows, boolean cast, boolean ignore, int k ) {

@@ -1150,6 +1150,7 @@ public abstract class Hop implements ParseInfo
 		MINUS1_MULT, //1-X*Y
 		BITWAND, BITWOR, BITWXOR, BITWSHIFTL, BITWSHIFTR, //bitwise operations
 		GREATEREQUALBLOCK, MULTBLOCK, // 以块做比较
+		SMULT,
 	}
 
 	// Operations that require 3 operands
@@ -1289,6 +1290,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsB.put(OpOp2.PLUS, Binary.OperationTypes.ADD);
 		HopsOpOp2LopsB.put(OpOp2.MINUS, Binary.OperationTypes.SUBTRACT);
 		HopsOpOp2LopsB.put(OpOp2.MULT, Binary.OperationTypes.MULTIPLY);
+		HopsOpOp2LopsB.put(OpOp2.SMULT, Binary.OperationTypes.SMULTIPLY);
 		HopsOpOp2LopsB.put(OpOp2.DIV, Binary.OperationTypes.DIVIDE);
 		HopsOpOp2LopsB.put(OpOp2.MODULUS, Binary.OperationTypes.MODULUS);
 		HopsOpOp2LopsB.put(OpOp2.INTDIV, Binary.OperationTypes.INTDIV);
@@ -1576,6 +1578,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2String.put(OpOp2.BITWSHIFTR, "bitwShiftR");
 		HopsOpOp2String.put(OpOp2.GREATEREQUALBLOCK, "b>=");
 		HopsOpOp2String.put(OpOp2.MULTBLOCK, "b*");
+		HopsOpOp2String.put(OpOp2.SMULT, "s*");
 	}
 
 	public static String getBinaryOpCode(OpOp2 op) {
@@ -1926,6 +1929,7 @@ public abstract class Hop implements ParseInfo
 					{
 						case PLUS:	ret = lret + rret; break;
 						case MULT:  ret = lret * rret; break;
+						case SMULT:  ret = lret * rret; break;
 						case MIN:   ret = Math.min(lret, rret); break;
 						case MAX:   ret = Math.max(lret, rret); break;
 						default:    ret = Long.MAX_VALUE;

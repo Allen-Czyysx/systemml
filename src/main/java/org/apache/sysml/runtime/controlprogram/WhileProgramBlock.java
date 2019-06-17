@@ -107,8 +107,10 @@ public class WhileProgramBlock extends ProgramBlock
 			UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 			
 			//run loop body until predicate becomes false
+			// TODO added by czh
 			int count = 1;
 			while( executePredicate(ec).getBooleanValue() ) {
+				// TODO added by czh
 				long t1 = System.currentTimeMillis();
 
 				//execute all child blocks
@@ -117,6 +119,7 @@ public class WhileProgramBlock extends ProgramBlock
 					_childBlocks.get(i).execute(ec);
 				}
 
+				// TODO added by czh
 				System.out.println("while\t" + (System.currentTimeMillis() - t1) / 1000.0 + "\t" + count + "\n");
 				count++;
 			}

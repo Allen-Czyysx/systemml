@@ -40,10 +40,12 @@ import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.functionobjects.DiagIndex;
 import org.apache.sysml.runtime.functionobjects.RevIndex;
 import org.apache.sysml.runtime.functionobjects.SortIndex;
 import org.apache.sysml.runtime.functionobjects.SwapIndex;
+import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.MetaData;
 import org.apache.sysml.runtime.matrix.mapred.IndexedMatrixValue;
@@ -524,33 +526,39 @@ public class LibMatrixReorg
 	/**
 	 * 将 select 指定的项集中到几个block中
 	 */
-	public static MatrixBlock repartitionNonZeros(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
-												  MatrixBlock select, String dVarName) {
+	public static MatrixBlock repartitionNonZeros(SparkExecutionContext sec, MatrixBlock in, boolean rows,
+												  MatrixBlock select, String dVarName, int partitionNum,
+												  MatrixCharacteristics mc) {
+		MatrixBlock ret = new MatrixBlock();
 		MatrixBlock selectOrder = new MatrixBlock(in.rlen, in.clen, in.rlen * in.clen);
 		selectOrder._orderNum = select.nonZeros;
 		selectOrder.allocateDenseBlock();
 		DenseBlock orderBlock = selectOrder.denseBlock;
+		RowPartitioner partitioner = new RowPartitioner(mc, partitionNum);
 
-		int n = (int) Math.ceil((double) select.nonZeros / 1000) * 1000;
 		if (rows) {
 			if (in.clen != 1) {
 				throw new DMLRuntimeException("Shouldn't be here");
 			}
 
-			ret.reset(n, 1, n);
+			ret.reset(in.getNumRows(), 1, in.getNumRows());
 			ret.allocateDenseBlock();
 			DenseBlock retBlock = ret.denseBlock;
 
-			int curRow = 0;
+			int[] curRow = new int[partitioner._ncparts];
+			for (int r = 0; r < partitioner._ncparts; r++) {
+				curRow[r] += r * partitioner._cbPerPart * partitioner._numColumnsPerBlock;
+			}
 			if (select.sparse) {
 				for (Iterator<IJV> it = select.sparseBlock.getIterator(); it.hasNext();) {
 					IJV ijv = it.next();
 					double v = ijv.getV();
 					int i = ijv.getI();
 					if (v != 0) {
-						retBlock.set(curRow, 0, in.getValue(i, 0));
-						orderBlock.set(i, 0, curRow == 0 ? -1 : curRow);
-						curRow++;
+						int newI = curRow[partitioner.getColBound(i)];
+						retBlock.set(newI, 0, in.getValue(i, 0));
+						orderBlock.set(i, 0, newI == 0 ? -1 : newI);
+						curRow[partitioner.getColBound(i)]++;
 					} else {
 						orderBlock.set(i, 0, 0);
 					}
@@ -560,9 +568,10 @@ public class LibMatrixReorg
 				for (int i = 0; i < in.rlen; i++) {
 					double v = select.denseBlock.get(i, 0);
 					if (v != 0) {
-						retBlock.set(curRow, 0, in.getValue(i, 0));
-						orderBlock.set(i, 0, curRow == 0 ? -1 : curRow);
-						curRow++;
+						int newI = curRow[partitioner.getColBound(i)];
+						retBlock.set(newI, 0, in.getValue(i, 0));
+						orderBlock.set(i, 0, newI == 0 ? -1 : newI);
+						curRow[partitioner.getColBound(i)]++;
 					} else {
 						orderBlock.set(i, 0, 0);
 					}
@@ -570,51 +579,18 @@ public class LibMatrixReorg
 			}
 
 		} else {
-			if (in.rlen != 1) {
-				throw new DMLRuntimeException("Shouldn't be here");
-			}
-
-			ret.reset(1, n, n);
-			ret.allocateDenseBlock();
-			DenseBlock retBlock = ret.denseBlock;
-
-			int curCol = 0;
-			if (select.sparse) {
-				for (Iterator<IJV> it = select.sparseBlock.getIterator(); it.hasNext();) {
-					IJV ijv = it.next();
-					double v = ijv.getV();
-					int j = ijv.getJ();
-					if (v != 0) {
-						retBlock.set(0, curCol, in.getValue(0, j));
-						orderBlock.set(j, 0, curCol == 0 ? -1 : curCol);
-						curCol++;
-					} else {
-						orderBlock.set(j, 0, 0);
-					}
-				}
-
-			} else {
-				for (int j = 0; j < in.clen; j++) {
-					double v = select.denseBlock.get(0, j);
-					if (v != 0) {
-						retBlock.set(0, curCol, in.getValue(0, j));
-						orderBlock.set(j, 0, curCol == 0 ? -1 : curCol);
-						curCol++;
-					} else {
-						orderBlock.set(j, 0, 0);
-					}
-				}
-			}
+			// TODO added by czh
+			throw new DMLRuntimeException("Shouldn't be here");
 		}
 
 		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
-		if (!ec.containsVariable(orderName)) {
+		if (!sec.containsVariable(orderName)) {
 			MatrixObject orderMB = new MatrixObject(Expression.ValueType.INT, "",
 					new MetaData(selectOrder.getMatrixCharacteristics()));
-			ec.setVariable(orderName, orderMB);
+			sec.setVariable(orderName, orderMB);
 		}
-		ec.getMatrixObject(orderName).setBroadcastHandle(null);
-		ec.setMatrixOutput(orderName, selectOrder);
+		sec.cleanupBroadcastByDWhile(sec.getMatrixObject(orderName));
+		sec.setMatrixOutput(orderName, selectOrder);
 
 		return ret;
 	}
@@ -678,8 +654,7 @@ public class LibMatrixReorg
 				throw new DMLRuntimeException("Shouldn't be here");
 			}
 
-			int n = (int) Math.ceil((double) order._orderNum / 1000) * 1000;
-			ret.reset(n, 1, n);
+			ret.reset(in.getNumRows(), 1, in.getNumRows());
 
 			if (in.isEmpty()) {
 				return ret;

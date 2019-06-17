@@ -38,8 +38,7 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 			}
 
 			if (blkIn.isInSparseFormat()) {
-				SparseBlock in = blkIn.getSparseBlock();
-				for (Iterator<IJV> it = in.getIterator(); it.hasNext(); ) {
+				for (Iterator<IJV> it = blkIn.getSparseBlockIterator(); it.hasNext(); ) {
 					IJV ijv = it.next();
 					int i = ijv.getI();
 					int j = ijv.getJ();
@@ -55,7 +54,6 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 				}
 
 			} else {
-				DenseBlock in = blkIn.getDenseBlock();
 				for (int j = 0; j < blkIn.getNumColumns(); j++) {
 					int newGlobalJ = (int) colOrder.getValue(j, 0);
 
@@ -64,7 +62,7 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 					}
 
 					for (int i = 0; i < blkIn.getNumRows(); i++) {
-						double v = in.get(i, j);
+						double v = blkIn.getValue(i, j);
 						setValueToMap(blkOut, getIndexes(blockI, newGlobalJ == -1 ? 0 : newGlobalJ), i,
 								getIndexInBlock(newGlobalJ == -1 ? 0 : newGlobalJ), v, false);
 					}

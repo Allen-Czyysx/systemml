@@ -69,7 +69,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 			MatrixObject.UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 
 			// TODO added by czh
-			MapmmSPInstruction.flag = true;
 			MapmmSPInstruction.hasRepartitioned = false;
 			MapmmSPInstruction.hasFiltered = false;
 
@@ -109,9 +108,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\t" + count + "\n");
 				count++;
 			}
-
-			// TODO added by czh
-			MapmmSPInstruction.flag = false;
 
 			// reset update-in-place variables
 			resetUpdateInPlaceVariableFlags(ec, flags);

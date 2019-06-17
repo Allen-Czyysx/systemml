@@ -121,9 +121,9 @@ public class RmmSPInstruction extends BinarySPInstruction {
 	{
 		private static final long serialVersionUID = 3577072668341033932L;
 		
-		private long _len = -1;
-		private long _blen = -1;
-		private boolean _left = false;
+		private long _len;
+		private long _blen;
+		private boolean _left;
 		
 		public RmmReplicateFunction(long len, long blen, boolean left)
 		{

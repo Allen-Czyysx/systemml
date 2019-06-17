@@ -31,9 +31,9 @@ import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.BooleanObject;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.spark.data.RDDObject;
+import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.instructions.spark.functions.CopyFrameBlockFunction;
 import org.apache.sysml.runtime.instructions.spark.functions.CreateSparseBlockFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyBlocksFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.InputInfo;
@@ -113,22 +113,37 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 				&& OptimizerUtils.checkSparseBlockCSRConversion(mcIn)
 				&& !_level.equals(Checkpoint.SER_STORAGE_LEVEL);
 
-			// TODO added by czh
-//			in = ((JavaPairRDD<MatrixIndexes,MatrixBlock>) in).filter(new FilterNonEmptyBlocksFunction());
-
 			//checkpoint pre-processing rdd operations
 			if( coalesce ) {
 				//merge partitions without shuffle if too many partitions
-				out = in.coalesce( numPartitions );
+				// TODO added by czh
+				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
+					System.out.println("checkpoint in coalesce. " + this + ". # partition = " + numPartitions);
+					out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+				} else {
+					out = in.coalesce(numPartitions);
+				}
 			}
 			else if( repartition ) {
 				//repartitionNonZeros to preferred size as multiple of default parallelism
-				out = in.repartition(UtilFunctions.roundToNext(numPartitions,
-					SparkExecutionContext.getDefaultParallelism(true)));
+//				out = in.repartition(UtilFunctions.roundToNext(numPartitions,
+//					SparkExecutionContext.getDefaultParallelism(true)));
+				// TODO added by czh
+//				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
+					System.out.println("checkpoint in repartition. " + this);
+					out = in.partitionBy(new RowPartitioner(mcIn, UtilFunctions.roundToNext(numPartitions,
+							SparkExecutionContext.getDefaultParallelism(true))));
+//				}
 			}
 			else if( !mcsr2csr ) {
 				//since persist is an in-place marker for a storage level, we 
-				//apply a narrow shallow copy to allow for short-circuit collects 
+				//apply a narrow shallow copy to allow for short-circuit collects
+				// TODO added by czh
+				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
+					System.out.println("checkpoint in !mcsr2csr. " + this + ". # partition = " + in.getNumPartitions()
+							+ ". preferred # partition = " + numPartitions);
+					in = in.partitionBy(new RowPartitioner(mcIn, in.getNumPartitions()));
+				}
 				if( input1.getDataType() == DataType.MATRIX )
 					out = SparkUtils.copyBinaryBlockMatrix(
 						(JavaPairRDD<MatrixIndexes,MatrixBlock>)in, false);

@@ -405,7 +405,7 @@ public class AggBinaryOp extends MultiThreadedHop
 	
 
 	public boolean isMatrixMultiply() {
-		return ( this.innerOp == OpOp2.MULT && this.outerOp == AggOp.SUM );			
+		return (innerOp == OpOp2.MULT || innerOp == OpOp2.SMULT) && outerOp == AggOp.SUM;
 	}
 	
 	private boolean isOuterProduct() {
@@ -540,7 +540,8 @@ public class AggBinaryOp extends MultiThreadedHop
 				
 			//check mapmultchain patterns
 			//t(X)%*%(w*(X%*%v))
-			if( in2 instanceof BinaryOp && ((BinaryOp)in2).getOp()==OpOp2.MULT )
+			if (in2 instanceof BinaryOp
+					&& (((BinaryOp) in2).getOp() == OpOp2.MULT || ((BinaryOp) in2).getOp() == OpOp2.SMULT))
 			{
 				Hop in3b = in2.getInput().get(1);
 				if( in3b instanceof AggBinaryOp )
@@ -719,15 +720,12 @@ public class AggBinaryOp extends MultiThreadedHop
 		setLops(tsmm);
 	}
 
-	private void constructSparkLopsMapMM(MMultMethod method)
-	{
-		Lop mapmult = null;
-		if( isLeftTransposeRewriteApplicable(false, false) ) 
-		{
+	private void constructSparkLopsMapMM(MMultMethod method) {
+		Lop mapmult;
+
+		if (isLeftTransposeRewriteApplicable(false, false)) {
 			mapmult = constructSparkLopsMapMMWithLeftTransposeRewrite();
-		}
-		else
-		{
+		} else {
 			// If number of columns is smaller than block size then explicit aggregation is not required.
 			// i.e., entire matrix multiplication can be performed in the mappers.
 			boolean needAgg = requiresAggregation(method); 
@@ -735,10 +733,15 @@ public class AggBinaryOp extends MultiThreadedHop
 			_outputEmptyBlocks = !OptimizerUtils.allowsToFilterEmptyBlockOutputs(this); 
 			
 			//core matrix mult
-			mapmult = new MapMult( getInput().get(0).constructLops(), getInput().get(1).constructLops(), 
+			mapmult = new MapMult(getInput().get(0).constructLops(), getInput().get(1).constructLops(),
 					                getDataType(), getValueType(), (method==MMultMethod.MAPMM_R), false, 
 					                _outputEmptyBlocks, aggtype);	
 		}
+
+		if (innerOp == OpOp2.SMULT) {
+			mapmult.setSpecial(true);
+		}
+
 		setOutputDimensions(mapmult);
 		setLineNumbers(mapmult);
 		setLops(mapmult);	

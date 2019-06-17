@@ -132,6 +132,8 @@ public abstract class Lop
 	String _preOutputName = null;
 	String[] _dVarNames = null;
 
+	boolean _isSpecial = false;
+
 	/**
 	 * Constructor to be invoked by base class.
 	 * 
@@ -147,6 +149,14 @@ public abstract class Lop
 		outputs = new ArrayList<>();
 		outParams = new OutputParameters();
 		lps = new LopProperties();
+	}
+
+	public boolean isSpecial() {
+		return _isSpecial;
+	}
+
+	public void setSpecial(boolean isSpecial) {
+		_isSpecial = isSpecial;
 	}
 
 	public String[] getDVarNames() {

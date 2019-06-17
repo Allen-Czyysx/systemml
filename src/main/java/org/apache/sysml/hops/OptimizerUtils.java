@@ -1100,6 +1100,7 @@ public class OptimizerUtils
 					ret = worstcase ? Math.min(1, sp1 + sp2) :
 						sp1 + sp2 - sp1 * sp2; break;
 				case MULT:
+				case SMULT:
 				case AND:
 					ret = worstcase ? Math.min(sp1, sp2) :
 						sp1 * sp2; break;
@@ -1126,6 +1127,7 @@ public class OptimizerUtils
 					ret = (1 - (1-sp1)*(1-sp2));
 					break;
 				case MULT:
+				case SMULT:
 					// result[i,j] != 0 iff A[i,j] !=0 && B[i,j] != 0
 					// worst case estimate = min(sp1,sp2)
 					ret = sp1 * sp2;
@@ -1165,6 +1167,7 @@ public class OptimizerUtils
 				return n1 * n2
 					- (n1-nnz1) * (n2-nnz2);
 			case MULT:
+			case SMULT:
 			case AND:
 				return nnz1 * nnz2;
 			default:
@@ -1410,6 +1413,7 @@ public class OptimizerUtils
 				case PLUS:	ret = lret + rret; break;
 				case MINUS:	ret = lret - rret; break;
 				case MULT:  ret = lret * rret; break;
+				case SMULT: ret = lret * rret; break;
 				case DIV:   ret = lret / rret; break;
 				case MIN:   ret = Math.min(lret, rret); break;
 				case MAX:   ret = Math.max(lret, rret); break;
@@ -1445,6 +1449,7 @@ public class OptimizerUtils
 				case PLUS:	ret = lret + rret; break;
 				case MINUS:	ret = lret - rret; break;
 				case MULT:  ret = lret * rret; break;
+				case SMULT: ret = lret * rret; break;
 				case DIV:   ret = lret / rret; break;
 				case MIN:   ret = Math.min(lret, rret); break;
 				case MAX:   ret = Math.max(lret, rret); break;

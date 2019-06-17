@@ -153,6 +153,10 @@ public class DWhileStatement extends WhileStatement {
 		return "12_useFilter_" + varName;
 	}
 
+	public static String getSelectNumName(String varName) {
+		return "13_selectNum_" + varName;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();

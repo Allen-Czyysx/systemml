@@ -167,6 +167,13 @@ public class MapMult extends Lop
 		if( getExecType() == ExecType.SPARK ) {
 			sb.append(Lop.OPERAND_DELIMITOR);
 			sb.append(_aggtype.toString());
+
+			sb.append(Lop.OPERAND_DELIMITOR);
+			if (_isSpecial) {
+				sb.append(true);
+			} else {
+				sb.append(false);
+			}
 		}
 
 		setCacheInfoToInst(sb);

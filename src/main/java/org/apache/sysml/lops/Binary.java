@@ -39,6 +39,7 @@ public class Binary extends Lop
 		MAX, MIN, POW, SOLVE, NOTSUPPORTED,
 		BW_AND, BW_OR, BW_XOR, BW_SHIFTL, BW_SHIFTR, //Bitwise operations
 		GREATER_THAN_OR_EQUALS_BLOCK, AND_BLOCK, // 以块做比较
+		SMULTIPLY,
 	}
 
 	private OperationTypes operation;

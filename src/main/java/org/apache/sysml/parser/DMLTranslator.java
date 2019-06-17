@@ -672,7 +672,8 @@ public class DMLTranslator {
 				}
 
 				if (!fstmt.getBody().isEmpty()) {
-					throw new LopsException(fstmt.printErrorLocation() + "ExternalFunctionStatementBlock should have " +
+					throw new LopsException(fstmt.printErrorLocation() + "ExternalFunctionStatementBlock should have" +
+							" " +
 							"no statement blocks in body");
 				}
 			} else {
@@ -1187,7 +1188,8 @@ public class DMLTranslator {
 					long actualDim2 = (var instanceof IndexedIdentifier) ? ((IndexedIdentifier) var).getOrigDim2() :
 							var.getDim2();
 					DataOp read = new DataOp(var.getName(), var.getDataType(), var.getValueType(),
-							DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2, var.getNnz(), var.getRowsInBlock(),
+							DataOpTypes.TRANSIENTREAD, null, actualDim1, actualDim2, var.getNnz(),
+							var.getRowsInBlock(),
 							var.getColumnsInBlock());
 					read.setParseInfo(var);
 					ids.put(varName, read);
@@ -1983,15 +1985,16 @@ public class DMLTranslator {
 							DataOp pre = constructReadOpforVar(preVar);
 
 							// TODO added by czh 处理误差
-							// unfixed = pre + delta
-							BinaryOp unfixed = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
-							unfixed.setBlockInfo(aggBHop);
-							unfixed.setParseInfo(aggBHop);
-							unfixed.setDisableRecord(true);
+//							// unfixed = pre + delta
+//							BinaryOp unfixed = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
+//							unfixed.setBlockInfo(aggBHop);
+//							unfixed.setParseInfo(aggBHop);
+//							unfixed.setDisableRecord(true);
+//							// newHop = max(unfixed, 0)
+//							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.MAX, unfixed,
+//									new LiteralOp(0));
 
-							// newHop = max(unfixed, 0)
-							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.MAX, unfixed,
-									new LiteralOp(0));
+							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
 
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
@@ -2007,9 +2010,34 @@ public class DMLTranslator {
 					}
 
 				} else if (!updated.containsVariable(rightName)) {
-					throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
-				}
+					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb, curDVarNames);
+					if (left.size() == 1) {
+						// 原计划: left %*% right
+						AggBinaryOp newHop = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
+								left.get(0), originRight);
+						newHop.setBlockInfo(aggBHop);
+						newHop.setParseInfo(aggBHop);
+						dHops.add(newHop);
 
+					} else {
+						throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+					}
+
+				} else {
+					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb, curDVarNames);
+					ArrayList<Hop> right = dIterForEachHop(originRight, true, dwsb, curDVarNames);
+					if (left.size() == 1 && right.size() == 1) {
+						// 原计划: left %*% right
+						AggBinaryOp newHop = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
+								left.get(0), right.get(0));
+						newHop.setBlockInfo(aggBHop);
+						newHop.setParseInfo(aggBHop);
+						dHops.add(newHop);
+
+					} else {
+						throw new ParseException("shouldn't be here. dIterForEachHop: " + hop.getOpString());
+					}
+				}
 
 			} else {
 				// 原计划
@@ -2032,6 +2060,69 @@ public class DMLTranslator {
 						params);
 				newHop.setBlockInfo(pHop);
 				newHop.setParseInfo(pHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
+			}
+		}
+
+		// 转置操作
+		else if (hop instanceof ReorgOp) {
+			ReorgOp rHop = (ReorgOp) hop;
+			ReOrgOp opType = rHop.getOp();
+
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				ReorgOp newHop = new ReorgOp(varName, dataType, valueType, opType, input);
+				newHop.setBlockInfo(rHop);
+				newHop.setParseInfo(rHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
+			}
+		}
+
+		// 左索引操作
+		else if (hop instanceof LeftIndexingOp) {
+			LeftIndexingOp lixHop = (LeftIndexingOp) hop;
+
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop matrixLeft = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				Hop matrixRight = dIterForEachHop(inputs.get(1), false, dwsb, curDVarNames).get(0);
+				Hop rowL = dIterForEachHop(inputs.get(2), false, dwsb, curDVarNames).get(0);
+				Hop rowU = dIterForEachHop(inputs.get(3), false, dwsb, curDVarNames).get(0);
+				Hop colL = dIterForEachHop(inputs.get(4), false, dwsb, curDVarNames).get(0);
+				Hop colU = dIterForEachHop(inputs.get(5), false, dwsb, curDVarNames).get(0);
+				LeftIndexingOp newHop = new LeftIndexingOp(varName, dataType, valueType, matrixLeft, matrixRight, rowL,
+						rowU, colL, colU, lixHop.isRowLowerEqualsUpper(), lixHop.isColLowerEqualsUpper());
+				newHop.setBlockInfo(lixHop);
+				newHop.setParseInfo(lixHop);
+				newHop.setDisableRecord(true);
+				dHops.add(newHop);
+			}
+		}
+
+		// 右索引操作
+		else if (hop instanceof IndexingOp) {
+			IndexingOp rixHop = (IndexingOp) hop;
+
+			if (false) {
+				// 增量计划
+			} else {
+				// 原计划
+				Hop matrix = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
+				Hop rowL = dIterForEachHop(inputs.get(1), false, dwsb, curDVarNames).get(0);
+				Hop rowU = dIterForEachHop(inputs.get(2), false, dwsb, curDVarNames).get(0);
+				Hop colL = dIterForEachHop(inputs.get(3), false, dwsb, curDVarNames).get(0);
+				Hop colU = dIterForEachHop(inputs.get(4), false, dwsb, curDVarNames).get(0);
+				IndexingOp newHop = new IndexingOp(varName, dataType, valueType, matrix, rowL, rowU, colL, colU,
+						rixHop.isRowLowerEqualsUpper(), rixHop.isColLowerEqualsUpper());
+				newHop.setBlockInfo(rixHop);
+				newHop.setParseInfo(rixHop);
 				newHop.setDisableRecord(true);
 				dHops.add(newHop);
 			}
@@ -2454,6 +2545,9 @@ public class DMLTranslator {
 					right);
 		} else if (source.getOpCode() == Expression.BinaryOp.MATMULT) {
 			currBop = new AggBinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.MULT,
+					AggOp.SUM, left, right);
+		} else if (source.getOpCode() == Expression.BinaryOp.SMATMULT) {
+			currBop = new AggBinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.SMULT,
 					AggOp.SUM, left, right);
 		} else if (source.getOpCode() == Expression.BinaryOp.POW) {
 			currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), OpOp2.POW, left,
@@ -3149,7 +3243,8 @@ public class DMLTranslator {
 						break;
 
 					default:
-						throw new ParseException("Invalid number of arguments " + numTableArgs + " to table() function" +
+						throw new ParseException("Invalid number of arguments " + numTableArgs + " to table() " +
+								"function" +
 								".");
 				}
 				break;
@@ -3385,9 +3480,9 @@ public class DMLTranslator {
 
 		boolean isConvolution =
 				source.getOpCode() == BuiltinFunctionOp.CONV2D || source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_DATA ||
-				source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_FILTER ||
-				source.getOpCode() == BuiltinFunctionOp.MAX_POOL || source.getOpCode() == BuiltinFunctionOp.MAX_POOL_BACKWARD ||
-				source.getOpCode() == BuiltinFunctionOp.AVG_POOL || source.getOpCode() == BuiltinFunctionOp.AVG_POOL_BACKWARD;
+						source.getOpCode() == BuiltinFunctionOp.CONV2D_BACKWARD_FILTER ||
+						source.getOpCode() == BuiltinFunctionOp.MAX_POOL || source.getOpCode() == BuiltinFunctionOp.MAX_POOL_BACKWARD ||
+						source.getOpCode() == BuiltinFunctionOp.AVG_POOL || source.getOpCode() == BuiltinFunctionOp.AVG_POOL_BACKWARD;
 		if (!isConvolution) {
 			// Since the dimension of output doesnot match that of input variable for these operations
 			setIdentifierParams(currBuiltinOp, source.getOutput());

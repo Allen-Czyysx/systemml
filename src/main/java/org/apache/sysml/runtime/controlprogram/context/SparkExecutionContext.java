@@ -1269,6 +1269,48 @@ public class SparkExecutionContext extends ExecutionContext
 		}
 	}
 
+	public void cleanupBroadcastByDWhile(CacheableData<?> mo) {
+		mo.clearData();
+
+		if (mo.getBroadcastHandle() != null) {
+			BroadcastObject bob = mo.getBroadcastHandle();
+			if (bob.isPartitionedBroadcastValid()) {
+				if (bob.getPartitionedBroadcast() != null) {
+					bob.getPartitionedBroadcast().destroy();
+				}
+			}
+
+			if (bob.isNonPartitionedBroadcastValid()) {
+				if (bob.getNonPartitionedBroadcast() != null) {
+					cleanupBroadcastVariable(bob.getNonPartitionedBroadcast());
+				}
+			}
+			CacheableData.addBroadcastSize(-bob.getNonPartitionedBroadcastSize());
+		}
+	}
+
+	public void unpersistBroadcastByDWhile(CacheableData<?> mo) {
+		mo.clearData();
+
+		if (mo.getBroadcastHandle() != null) {
+			BroadcastObject bob = mo.getBroadcastHandle();
+			if (bob.isPartitionedBroadcastValid()) {
+				if (bob.getPartitionedBroadcast() != null) {
+					bob.getPartitionedBroadcast().unpersist();
+				}
+			}
+
+			if (bob.isNonPartitionedBroadcastValid()) {
+				if (bob.getNonPartitionedBroadcast() != null) {
+					unpersistBroadcastVariable(bob.getNonPartitionedBroadcast());
+				}
+			}
+			CacheableData.addBroadcastSize(-bob.getNonPartitionedBroadcastSize());
+		}
+
+		mo.setBroadcastHandle(null);
+	}
+
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void rCleanupLineageObject(LineageObject lob)
 		throws IOException
@@ -1331,6 +1373,13 @@ public class SparkExecutionContext extends ExecutionContext
 		//from the executors), this call also deletes related data from the driver.
 		if( bvar.isValid() ) {
 			bvar.destroy( !ASYNCHRONOUS_VAR_DESTROY );
+		}
+	}
+
+	public static void unpersistBroadcastVariable(Broadcast<?> bvar)
+	{
+		if( bvar.isValid() ) {
+			bvar.unpersist( !ASYNCHRONOUS_VAR_DESTROY );
 		}
 	}
 

@@ -622,7 +622,8 @@ public class BinaryOp extends MultiThreadedHop
 			Hop right = getInput().get(1);
 			if( op==OpOp2.POW && right instanceof LiteralOp && ((LiteralOp)right).getDoubleValue()==2.0  )
 				ot = Unary.OperationTypes.POW2;
-			else if( op==OpOp2.MULT && right instanceof LiteralOp && ((LiteralOp)right).getDoubleValue()==2.0  )
+			else if ((op == OpOp2.MULT || op == OpOp2.SMULT) && right instanceof LiteralOp
+					&& ((LiteralOp) right).getDoubleValue() == 2.0)
 				ot = Unary.OperationTypes.MULTIPLY2;
 			else //general case
 				ot = HopsOpOp2LopsU.get(op);
@@ -662,7 +663,7 @@ public class BinaryOp extends MultiThreadedHop
 				boolean isLeftXGt0 = isLeftXGt && potentialZero != null
 					&& HopRewriteUtils.isLiteralOfValue(potentialZero, 0);
 				
-				if(op == OpOp2.MULT && isLeftXGt0 && 
+				if ((op == OpOp2.MULT || op == OpOp2.SMULT) && isLeftXGt0 &&
 					!getInput().get(0).isVector() && !getInput().get(1).isVector()
 					&& getInput().get(0).dimsKnown() && getInput().get(1).dimsKnown()) {
 					binary = new DnnTransform(getInput().get(0).getInput().get(0).constructLops(), 
@@ -1607,7 +1608,8 @@ public class BinaryOp extends MultiThreadedHop
 				|| op == OpOp2.AND || op == OpOp2.OR || op == OpOp2.XOR
 				|| op == OpOp2.BITWAND || op == OpOp2.BITWOR || op == OpOp2.BITWXOR
 				|| op == OpOp2.BITWSHIFTL || op == OpOp2.BITWSHIFTR
-				|| op == OpOp2.GREATEREQUALBLOCK || op == OpOp2.MULTBLOCK;
+				|| op == OpOp2.GREATEREQUALBLOCK || op == OpOp2.MULTBLOCK
+				|| op == OpOp2.SMULT;
 	}
 	
 	public boolean isPPredOperation() {

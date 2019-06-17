@@ -162,4 +162,10 @@ public class PartitionedBroadcast<T extends CacheBlock> implements Serializable
 		for( Broadcast<PartitionedBlock<T>> bvar : _pbc )
 			SparkExecutionContext.cleanupBroadcastVariable(bvar);
 	}
+
+	public void unpersist() {
+		for( Broadcast<PartitionedBlock<T>> bvar : _pbc )
+			SparkExecutionContext.unpersistBroadcastVariable(bvar);
+	}
+
 }
