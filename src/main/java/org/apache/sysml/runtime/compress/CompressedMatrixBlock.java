@@ -2033,9 +2033,12 @@ public class CompressedMatrixBlock extends MatrixBlock implements Externalizable
 
 	@Override
 	public MatrixBlock slice(int rl, int ru, int cl, int cu, CacheBlock ret) {
-		printDecompressWarning("slice");
-		MatrixBlock tmp = isCompressed() ? decompress() : this;
-		return tmp.slice(rl, ru, cl, cu, ret);
+		// TODO added by czh 删
+		throw new DMLRuntimeException("!!!");
+
+//		printDecompressWarning("slice");
+//		MatrixBlock tmp = isCompressed() ? decompress() : this;
+//		return tmp.slice(rl, ru, cl, cu, ret);
 	}
 
 	@Override

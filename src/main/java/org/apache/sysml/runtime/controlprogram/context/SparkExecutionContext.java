@@ -74,13 +74,7 @@ import org.apache.sysml.runtime.instructions.spark.utils.RDDAggregateUtils;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.io.IOUtilFunctions;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
-import org.apache.sysml.runtime.matrix.data.FrameBlock;
-import org.apache.sysml.runtime.matrix.data.InputInfo;
-import org.apache.sysml.runtime.matrix.data.MatrixBlock;
-import org.apache.sysml.runtime.matrix.data.MatrixCell;
-import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
-import org.apache.sysml.runtime.matrix.data.OutputInfo;
-import org.apache.sysml.runtime.matrix.data.SparseBlock;
+import org.apache.sysml.runtime.matrix.data.*;
 import org.apache.sysml.runtime.matrix.mapred.MRJobConfiguration;
 import org.apache.sysml.runtime.util.MapReduceTool;
 import org.apache.sysml.runtime.util.UtilFunctions;
@@ -603,6 +597,14 @@ public class SparkExecutionContext extends ExecutionContext
 			PartitionedBlock<MatrixBlock> pmb = new PartitionedBlock<>(mb, brlen, bclen);
 			mo.release();
 
+//			// TODO added by czh debug
+//			int mm = 0;
+//			for (CacheBlock partBlock : pmb.getPartBlocks()) {
+//				MatrixBlock partMatrixBlock = (MatrixBlock) partBlock;
+//				mm += partMatrixBlock.getInMemorySize();
+//			}
+//			System.out.println("bcast mem size: " + mm);
+
 			//determine coarse-grained partitioning
 			int numPerPart = PartitionedBroadcast.computeBlocksPerPartition(mo.getNumRows(), mo.getNumColumns(), brlen, bclen);
 			int numParts = (int) Math.ceil((double) pmb.getNumRowBlocks() * pmb.getNumColumnBlocks() / numPerPart);
@@ -617,7 +619,7 @@ public class SparkExecutionContext extends ExecutionContext
 					pmb.clearBlocks();
 			}
 			
-			bret = new PartitionedBroadcast<>(ret, mo.getMatrixCharacteristics(), mb.getSelectBlock() != null);
+			bret = new PartitionedBroadcast<>(ret, mo.getMatrixCharacteristics());
 			// create the broadcast handle if the matrix or frame has never been broadcasted
 			if (mo.getBroadcastHandle() == null) {
 				mo.setBroadcastHandle(new BroadcastObject<MatrixBlock>());
@@ -964,16 +966,16 @@ public class SparkExecutionContext extends ExecutionContext
 						out.clean();
 						int r = (int) Math.ceil(rlen * 1.0 / brlen);
 						int c = (int) Math.ceil(clen * 1.0 / bclen);
-						// TODO added by czh 暂不支持 c != 1
-						if (c != 1) {
-							throw new DMLRuntimeException("Unsupported: c = " + c);
-						}
 						out.allocateFilterBlock(r, c);
 						flag = false;
 					}
 
-					int data = block.getFilterBlock().getData(0);
-					out.getFilterBlock().setData((int) ix.getRowIndex() - 1, data);
+					FilterBlock filterBlock = block.getFilterBlock();
+					int data = 0;
+					if (!filterBlock.isEmpty()) {
+						data = filterBlock.getData(0, 0);
+					}
+					out.getFilterBlock().setData((int) ix.getRowIndex() - 1, (int) ix.getColumnIndex() - 1, data);
 					aNnz += data != 0 ? 1 : 0;
 
 				} else {
@@ -1013,7 +1015,7 @@ public class SparkExecutionContext extends ExecutionContext
 			} else {
 				out.setNonZeros(aNnz);
 				if (aNnz == 0) {
-					out.getFilterBlock().initData(0);
+					out.getFilterBlock().initData();
 				}
 			}
 		}

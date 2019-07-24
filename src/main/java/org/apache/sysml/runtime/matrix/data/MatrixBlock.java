@@ -147,7 +147,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	//sparse-block-specific attributes (allocation only)
 	protected int estimatedNNzsPerRow = -1;
 
-	long _orderNum = -1;
+	long _orderNum = -1; // TODO added by czh 删
 	
 	////////
 	// Matrix Constructors
@@ -379,8 +379,8 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 		rlen = r;
 		clen = c;
-		filterBlock = new FilterBlock();
-		filterBlock.initData(r * c);
+		filterBlock = new FilterBlock(r, c);
+		filterBlock.initData();
 	}
 
 	public MatrixBlock allocateDenseBlock() {
@@ -585,6 +585,33 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	public void setSelectBlock(FilterBlock select) {
 		selectBlock = select;
+	}
+
+	public void setSelectBlock(MatrixBlock select) {
+		if (select.clen != 1) {
+			throw new DMLRuntimeException("Should not be here");
+		}
+
+		if (select.sparseBlock != null) {
+			selectBlock = new FilterBlock(select.rlen, 1);
+			selectBlock.initData();
+			for (Iterator<IJV> it = select.getSparseBlockIterator(); it.hasNext(); ) {
+				IJV ijv = it.next();
+				selectBlock.setData(ijv.getI(), ijv.getJ(), (int) ijv.getV());
+			}
+
+		} else if (select.denseBlock != null) {
+			double[] doubleData = select.denseBlock.valuesAt(0);
+			int[] data = new int[doubleData.length];
+			for (int i = 0; i < doubleData.length; i++) {
+				data[i] = (int) doubleData[i];
+			}
+			selectBlock = new FilterBlock(select.rlen, 1, data);
+
+		} else {
+			selectBlock = new FilterBlock(select.rlen, 1);
+			selectBlock.initData();
+		}
 	}
 
 	public FilterBlock getSelectBlock() {
@@ -1404,7 +1431,11 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		sparse = that.sparse;
 		estimatedNNzsPerRow = that.estimatedNNzsPerRow;
 		if (!that.filterBlock.isEmpty()) {
-			filterBlock = new FilterBlock(that.filterBlock.getData().clone());
+			try {
+				filterBlock = that.filterBlock.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new DMLRuntimeException(e);
+			}
 		}
 	}
 	
@@ -1948,10 +1979,13 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	}
 
 	private void readFilterBlock(DataInput in) throws IOException {
-		int l = in.readInt();
-		filterBlock.initData(l);
-		for (int i = 0; i < l; i++) {
-			filterBlock.setData(i, in.readInt());
+		int rNum = in.readInt();
+		int cNum = in.readInt();
+		filterBlock.initData(rNum, cNum);
+		for (int i = 0; i < rNum; i++) {
+			for (int j = 0; j < cNum; j++) {
+				filterBlock.setData(i, j, in.readInt());
+			}
 		}
 	}
 
@@ -2128,9 +2162,14 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	private void writeFilterBlock(DataOutput out) throws IOException  {
 		out.writeByte(BlockType.FILTER_BLOCK.ordinal());
-		out.writeInt(filterBlock.getDataNum());
-		for (int i = 0; i < filterBlock.getDataNum(); i++) {
-			out.writeInt(filterBlock.getData(i));
+		int rNum = filterBlock.getRowNum();
+		int cNum = filterBlock.getColNum();
+		out.writeInt(rNum);
+		out.writeInt(cNum);
+		for (int i = 0; i < rNum; i++) {
+			for (int j = 0; j < cNum; j++) {
+				out.writeInt(filterBlock.getData(i, j));
+			}
 		}
 	}
 
@@ -3980,7 +4019,8 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 					"must be within matrix dimensions [" + getNumRows() + "," + getNumColumns() + "]");
 		}
 
-		if (selectBlock != null && selectBlock.getData(rl / OptimizerUtils.DEFAULT_BLOCKSIZE) == 0) {
+		int blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+		if (selectBlock != null && selectBlock.getData(rl / blockSize, cl / blockSize) == 0) {
 			return new MatrixBlock(ru - rl + 1, cu - cl + 1, true);
 		}
 
@@ -4020,22 +4060,20 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	private void sliceFilter(int rl, int ru, int cl, int cu, MatrixBlock dest) {
 		if (!isFilterBlock()) {
-			return;
-		}
-
-		if (cl != cu) {
-			throw new DMLRuntimeException("Shouldn't be here");
+			throw new DMLRuntimeException("Should not be here");
 		}
 
 		dest.allocateFilterBlock();
-		int[] destData;
-		try {
-			destData = Arrays.copyOfRange(filterBlock.getData(), rl, rlen);
-		} catch (Exception e) {
-			throw new DMLRuntimeException("srcLength = " + filterBlock.getData().length + ", rl = " + rl +
-					", ru = " + ru + ", dest.rlen = " + dest.rlen, e);
+
+		for (int i = rl; i <= ru; i++) {
+			try {
+				System.arraycopy(filterBlock.getData(), i * clen + cl, dest.filterBlock.getData(),
+						(i - rl) * clen, cu - cl + 1);
+			} catch (Exception e) {
+				throw new DMLRuntimeException("srcLength = " + filterBlock.getData().length + ", rl = " + rl + ", ru = "
+						+ ru + ", clen = " + clen, e);
+			}
 		}
-		dest.filterBlock.setData(destData);
 	}
 
 	private void sliceSparse(int rl, int ru, int cl, int cu, boolean deep, MatrixBlock dest) {
@@ -4969,13 +5007,11 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 
 	public MatrixBlock aggregateBinaryOperations(MatrixBlock m1, MatrixBlock m2, MatrixBlock ret, AggregateBinaryOperator op) {
 		//check input types, dimensions, configuration
-		if( m1.clen != m2.rlen ) {
-			// TODO added by czh
-			m1.clen = Math.min(m1.clen, m2.rlen);
-//			throw new RuntimeException("Dimensions do not match for matrix multiplication ("+m1.clen+"!="+m2.rlen+").");
+		if( m1.clen != m2.rlen) {
+			throw new RuntimeException("Dimensions do not match for matrix multiplication (" + m1.clen + "!=" + m2.rlen + ").");
 		}
-		if( !(op.binaryFn instanceof Multiply && op.aggOp.increOp.fn instanceof Plus) ) {
-			throw new DMLRuntimeException("Unsupported binary aggregate operation: ("+op.binaryFn+", "+op.aggOp+").");
+		if (!(op.binaryFn instanceof Multiply && op.aggOp.increOp.fn instanceof Plus)) {
+			throw new DMLRuntimeException("Unsupported binary aggregate operation: (" + op.binaryFn + ", " + op.aggOp + ").");
 		}
 		
 		//setup meta data (dimensions, sparsity)

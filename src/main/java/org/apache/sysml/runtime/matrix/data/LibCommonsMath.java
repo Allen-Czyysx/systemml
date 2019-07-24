@@ -239,9 +239,15 @@ public class LibCommonsMath
 	private static MatrixBlock computeMatrixInverse(Array2DRowRealMatrix in) {
 		if ( !in.isSquare() )
 			throw new DMLRuntimeException("Input to inv() must be square matrix -- given: a " + in.getRowDimension() + "x" + in.getColumnDimension() + " matrix.");
-		
-		QRDecomposition qrdecompose = new QRDecomposition(in);
-		DecompositionSolver solver = qrdecompose.getSolver();
+
+		// TODO added by czh 暂时改成了用cholesky分解, 仅用于ALS中对对称正定矩阵使用
+//		QRDecomposition qrdecompose = new QRDecomposition(in);
+//		DecompositionSolver solver = qrdecompose.getSolver();
+//		RealMatrix inverseMatrix = solver.getInverse();
+
+		CholeskyDecomposition cholesky = new CholeskyDecomposition(in, 1e-14,
+				CholeskyDecomposition.DEFAULT_ABSOLUTE_POSITIVITY_THRESHOLD);
+		DecompositionSolver solver = cholesky.getSolver();
 		RealMatrix inverseMatrix = solver.getInverse();
 
 		return DataConverter.convertToMatrixBlock(inverseMatrix.getData());

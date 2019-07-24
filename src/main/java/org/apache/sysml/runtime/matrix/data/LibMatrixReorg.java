@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
+import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.DMLRuntimeException;
@@ -45,6 +46,7 @@ import org.apache.sysml.runtime.functionobjects.DiagIndex;
 import org.apache.sysml.runtime.functionobjects.RevIndex;
 import org.apache.sysml.runtime.functionobjects.SortIndex;
 import org.apache.sysml.runtime.functionobjects.SwapIndex;
+import org.apache.sysml.runtime.instructions.spark.MapmmSPInstruction;
 import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.MetaData;
@@ -523,63 +525,90 @@ public class LibMatrixReorg
 			return removeEmptyColumns(in, ret, select, emptyReturn);
 	}
 
+
 	/**
-	 * 将 select 指定的项集中到几个block中
+	 * 将 select 指定的项按 isRow 集中到几个block中
+	 * TODO added by czh select 没用
 	 */
-	public static MatrixBlock repartitionNonZeros(SparkExecutionContext sec, MatrixBlock in, boolean rows,
-												  MatrixBlock select, String dVarName, int partitionNum,
-												  MatrixCharacteristics mc) {
-		MatrixBlock ret = new MatrixBlock();
-		MatrixBlock selectOrder = new MatrixBlock(in.rlen, in.clen, in.rlen * in.clen);
-		selectOrder._orderNum = select.nonZeros;
+	public static MatrixBlock repartitionNonZeros(SparkExecutionContext sec, MatrixBlock in, boolean isRow,
+												  String dVarName, int partitionNum, MatrixCharacteristics mc) {
+		MatrixBlock ret;
+		String selectName = DWhileStatement.getSelectName(dVarName);
+		MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
+		MatrixBlock selectOrder = new MatrixBlock(in.rlen, 1, false);
 		selectOrder.allocateDenseBlock();
 		DenseBlock orderBlock = selectOrder.denseBlock;
 		RowPartitioner partitioner = new RowPartitioner(mc, partitionNum);
 
-		if (rows) {
-			if (in.clen != 1) {
-				throw new DMLRuntimeException("Shouldn't be here");
-			}
+		if (isRow) {
+			ret = new MatrixBlock(in.getNumRows(), in.getNumColumns(), in.sparse);
+			ret.allocateBlock();
 
-			ret.reset(in.getNumRows(), 1, in.getNumRows());
-			ret.allocateDenseBlock();
-			DenseBlock retBlock = ret.denseBlock;
-
-			int[] curRow = new int[partitioner._ncparts];
+			int[] curSelectedRow = new int[partitioner._ncparts];
+			int[] curIgnoredRow = new int[partitioner._ncparts];
 			for (int r = 0; r < partitioner._ncparts; r++) {
-				curRow[r] += r * partitioner._cbPerPart * partitioner._numColumnsPerBlock;
+				curSelectedRow[r] = (int) (r * partitioner._cbPerPart * partitioner._numColumnsPerBlock);
+				curIgnoredRow[r] = (int) ((r + 1) * partitioner._cbPerPart * partitioner._numColumnsPerBlock - 1);
 			}
-			if (select.sparse) {
-				for (Iterator<IJV> it = select.sparseBlock.getIterator(); it.hasNext();) {
-					IJV ijv = it.next();
-					double v = ijv.getV();
-					int i = ijv.getI();
-					if (v != 0) {
-						int newI = curRow[partitioner.getColBound(i)];
-						retBlock.set(newI, 0, in.getValue(i, 0));
-						orderBlock.set(i, 0, newI == 0 ? -1 : newI);
-						curRow[partitioner.getColBound(i)]++;
-					} else {
-						orderBlock.set(i, 0, 0);
-					}
-				}
+			curIgnoredRow[partitioner._ncparts - 1] = in.getNumRows() - 1;
 
-			} else {
-				for (int i = 0; i < in.rlen; i++) {
-					double v = select.denseBlock.get(i, 0);
-					if (v != 0) {
-						int newI = curRow[partitioner.getColBound(i)];
-						retBlock.set(newI, 0, in.getValue(i, 0));
-						orderBlock.set(i, 0, newI == 0 ? -1 : newI);
-						curRow[partitioner.getColBound(i)]++;
-					} else {
-						orderBlock.set(i, 0, 0);
-					}
+			// 获取 selectOrder
+			for (int i = 0; i < select.getNumRows(); i++) {
+				int newI;
+				if (select.getValue(i, 0) != 0) {
+					newI = curSelectedRow[partitioner.getColBound(i)]++;
+				} else {
+					newI = curIgnoredRow[partitioner.getColBound(i)]--;
+				}
+				orderBlock.set(i, 0, newI);
+			}
+
+			// 设置 ret.selectBlock, 这里从表示选行转为表示选行块
+			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+			int brlen = (int) Math.ceil(ret.rlen / blockSize);
+			ret.selectBlock = new FilterBlock(brlen, 1);
+			ret.selectBlock.initData();
+			for (int r = 0; r < curSelectedRow.length; r++) {
+				int start = (int) (r * partitioner._cbPerPart);
+				int end = (int) ((curSelectedRow[r] - 1) / blockSize) + 1;
+				for (int i = start; i < end; i++) {
+					ret.selectBlock.setData(i, 0, 1);
 				}
 			}
+
+			// 根据 selectOrder 重新排列 in
+			for (int i = 0; i < in.rlen; i++) {
+				int newI = (int) orderBlock.get(i, 0);
+				for (int j = 0; j < in.clen; j++) {
+					double v = in.getValue(i, j);
+					ret.setValue(newI, j, v);
+				}
+			}
+
+			// TODO added by czh debug
+			int count = 0;
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					double v = select.getValue(i, 0);
+					if (v != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					count++;
+				}
+			}
+			System.out.println(" before repartition blockNum: " + count);
+			count = 0;
+			for (int i = 0; i < ret.selectBlock.getRowNum(); i++) {
+				count += ret.selectBlock.getData(i, 0);
+			}
+			System.out.println(" after repartition blockNum: " + count);
 
 		} else {
-			// TODO added by czh
+			// TODO added by czh 此处处理行向量
 			throw new DMLRuntimeException("Shouldn't be here");
 		}
 
@@ -596,42 +625,76 @@ public class LibMatrixReorg
 	}
 
 	/**
-	 * TODO added by czh 没改filterblock
-	 *
-	 * 恢复顺序
+	 * 按顺序repartition
 	 */
-	public static MatrixBlock recoverRepartition(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
+	public static MatrixBlock repartitionByOrder(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean isRow,
 												 String dVarName) {
 		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
-		MatrixBlock order = ec.getMatrixObject(orderName).acquireReadAndRelease();
+		String selectName = DWhileStatement.getSelectName(dVarName);
+		MatrixBlock select = ec.getMatrixObject(selectName).acquireReadAndRelease();
+		MatrixBlock selectOrder = ec.getMatrixObject(orderName).acquireReadAndRelease();
 
-		if (rows) {
-			if (in.clen != 1) {
-				throw new DMLRuntimeException("Shouldn't be here");
-			}
-
-			int n = order.rlen;
-			ret.reset(n, 1, n);
+		if (isRow) {
+			ret.reset(in.rlen, in.clen, in.sparse, in.nonZeros);
 
 			if (in.isEmpty()) {
 				return ret;
 			}
 
-			if (in.sparse) {
-				throw new DMLRuntimeException("Shouldn't be here");
+			ret.allocateBlock();
 
-			} else {
-				ret.allocateDenseBlock();
-				for (int i = 0; i < order.rlen; i++) {
-					int newI = (int) order.getValue(i, 0);
-					if (newI == 0) {
-						continue;
-					}
-
-					double v = in.getValue(newI == -1 ? 0 : newI, 0);
-					ret.setValue(i, 0, v);
+			// 根据 selectOrder 重新排列 in
+			int[] newSelectedRow = new int[in.rlen];
+			for (int i = 0; i < in.rlen; i++) {
+				int newI = (int) selectOrder.getValue(i, 0);
+				newSelectedRow[newI] = (int) select.getValue(i, 0);
+				for (int j = 0; j < in.clen; j++) {
+					double v = in.getValue(i, j);
+					ret.setValue(newI, j, v);
 				}
 			}
+
+			// 设置 ret.selectBlock, 这里从表示选行转为表示选行块
+			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+			int brlen = (int) Math.ceil(ret.rlen / blockSize);
+			ret.selectBlock = new FilterBlock(brlen, 1);
+			ret.selectBlock.initData();
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					if (newSelectedRow[i] != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					ret.selectBlock.setData(bi, 0, 1);
+				} else {
+					ret.selectBlock.setData(bi, 0, 0);
+				}
+			}
+
+			// TODO added by czh debug
+			int count = 0;
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					double v = select.getValue(i, 0);
+					if (v != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					count++;
+				}
+			}
+			System.out.println(" before repartition blockNum: " + count);
+			count = 0;
+			for (int i = 0; i < ret.selectBlock.getRowNum(); i++) {
+				count += ret.selectBlock.getData(i, 0);
+			}
+			System.out.println(" after repartition blockNum: " + count);
 
 		} else {
 			// TODO added by czh
@@ -642,40 +705,174 @@ public class LibMatrixReorg
 	}
 
 	/**
-	 * 按顺序repartition
+	 * 将 select 指定的项按 isRow 集中到几个block中
 	 */
-	public static MatrixBlock repartitionByOrder(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean rows,
-												 String dVarName) {
-		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
-		MatrixBlock order = ec.getMatrixObject(orderName).acquireReadAndRelease();
+	public static MatrixBlock repartitionNonZerosWithEmpty(SparkExecutionContext sec, MatrixBlock in, boolean isRow,
+												  String dVarName, int partitionNum, MatrixCharacteristics mc) {
+		MatrixBlock ret;
+		String selectName = DWhileStatement.getSelectName(dVarName);
+		MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
+		MatrixBlock selectOrder = new MatrixBlock(in.rlen, 1, false);
+		selectOrder.allocateDenseBlock();
+		DenseBlock orderBlock = selectOrder.denseBlock;
+		RowPartitioner partitioner = new RowPartitioner(mc, partitionNum);
 
-		if (rows) {
-			if (in.clen != 1) {
-				throw new DMLRuntimeException("Shouldn't be here");
+		if (isRow) {
+			ret = new MatrixBlock(in.getNumRows(), in.getNumColumns(), in.sparse);
+			ret.allocateBlock();
+
+			int[] curSelectedRow = new int[partitioner._ncparts];
+			int[] curIgnoredRow = new int[partitioner._ncparts];
+			for (int r = 0; r < partitioner._ncparts; r++) {
+				curSelectedRow[r] = (int) (r * partitioner._cbPerPart * partitioner._numColumnsPerBlock);
+				curIgnoredRow[r] = (int) ((r + 1) * partitioner._cbPerPart * partitioner._numColumnsPerBlock - 1);
+			}
+			curIgnoredRow[partitioner._ncparts - 1] = in.getNumRows() - 1;
+
+			// 获取 selectOrder
+			for (int i = 0; i < select.getNumRows(); i++) {
+				int newI;
+				if (select.getValue(i, 0) != 0) {
+					newI = curSelectedRow[partitioner.getColBound(i)]++;
+				} else {
+					newI = curIgnoredRow[partitioner.getColBound(i)]--;
+				}
+				orderBlock.set(i, 0, newI);
 			}
 
-			ret.reset(in.getNumRows(), 1, in.getNumRows());
+			// 设置 ret.selectBlock, 这里从表示选行转为表示选行块
+			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+			int brlen = (int) Math.ceil(ret.rlen / blockSize);
+			ret.selectBlock = new FilterBlock(brlen, 1);
+			ret.selectBlock.initData();
+			for (int r = 0; r < curSelectedRow.length; r++) {
+				int start = (int) (r * partitioner._cbPerPart);
+				int end = (int) ((curSelectedRow[r] - 1) / blockSize) + 1;
+				for (int i = start; i < end; i++) {
+					ret.selectBlock.setData(i, 0, 1);
+				}
+			}
+
+			// 再根据 ret.selectBlock 更新 orderBlock, 将不需要的行块设为 -1
+			for (int bi = 0; bi < brlen; bi++) {
+				if (ret.selectBlock.getData(bi, 0) != 0) {
+					continue;
+				}
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					orderBlock.set(i, 0, -1);
+				}
+			}
+
+			// 根据 selectOrder 重新排列 in
+			for (int i = 0; i < in.rlen; i++) {
+				int newI = (int) orderBlock.get(i, 0);
+				if (newI < 0) {
+					continue;
+				}
+				for (int j = 0; j < in.clen; j++) {
+					double v = in.getValue(i, j);
+					ret.setValue(newI, j, v);
+				}
+			}
+
+			// TODO added by czh debug
+			int count = 0;
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					double v = select.getValue(i, 0);
+					if (v != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					count++;
+				}
+			}
+			System.out.println(" before repartition blockNum: " + count);
+			count = 0;
+			for (int i = 0; i < ret.selectBlock.getRowNum(); i++) {
+				count += ret.selectBlock.getData(i, 0);
+			}
+			System.out.println(" after repartition blockNum: " + count);
+
+		} else {
+			// TODO added by czh 此处处理行向量
+			throw new DMLRuntimeException("Shouldn't be here");
+		}
+
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		if (!sec.containsVariable(orderName)) {
+			MatrixObject orderMB = new MatrixObject(Expression.ValueType.INT, "",
+					new MetaData(selectOrder.getMatrixCharacteristics()));
+			sec.setVariable(orderName, orderMB);
+		}
+		sec.cleanupBroadcastByDWhile(sec.getMatrixObject(orderName));
+		sec.setMatrixOutput(orderName, selectOrder);
+
+		return ret;
+	}
+
+	/**
+	 * 按顺序repartition
+	 */
+	public static MatrixBlock repartitionByOrderWithEmpty(ExecutionContext ec, MatrixBlock in, MatrixBlock ret, boolean isRow,
+												 String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		String selectName = DWhileStatement.getSelectName(dVarName);
+		MatrixBlock select = ec.getMatrixObject(selectName).acquireReadAndRelease();
+		MatrixBlock selectOrder = ec.getMatrixObject(orderName).acquireReadAndRelease();
+
+		if (isRow) {
+			ret.reset(in.rlen, in.clen, in.sparse, in.nonZeros);
 
 			if (in.isEmpty()) {
 				return ret;
 			}
 
-			if (in.sparse) {
-				throw new DMLRuntimeException("Shouldn't be here");
+			ret.allocateBlock();
 
-			} else {
-				ret.allocateDenseBlock();
-				for (int i = 0; i < in.rlen; i++) {
-					int newI = (int) order.getValue(i, 0);
-					boolean isFiltered = in.getSelectBlock() != null && in.getSelectBlock().getData(i / 1000) == 0;
-					if (newI == 0 || isFiltered) {
-						continue;
-					}
-
-					double v = in.getValue(i, 0);
-					ret.setValue(newI == -1 ? 0 : newI, 0, v);
+			// 根据 selectOrder 重新排列 in
+			int[] newSelectedRow = new int[in.rlen];
+			for (int i = 0; i < in.rlen; i++) {
+				int newI = (int) selectOrder.getValue(i, 0);
+				if (newI < 0) {
+					continue;
+				}
+				newSelectedRow[newI] = (int) select.getValue(i, 0);
+				for (int j = 0; j < in.clen; j++) {
+					double v = in.getValue(i, j);
+					ret.setValue(newI, j, v);
 				}
 			}
+
+			// 设置 ret.selectBlock, 这里从表示选行转为表示选行块
+			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+			int brlen = (int) Math.ceil(ret.rlen / blockSize);
+			ret.selectBlock = new FilterBlock(brlen, 1);
+			ret.selectBlock.initData();
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in.rlen; i++) {
+					if (newSelectedRow[i] != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					ret.selectBlock.setData(bi, 0, 1);
+				} else {
+					ret.selectBlock.setData(bi, 0, 0);
+				}
+			}
+
+			// TODO added by czh debug
+			int count = 0;
+			for (int i = 0; i < ret.selectBlock.getRowNum(); i++) {
+				count += ret.selectBlock.getData(i, 0);
+			}
+			System.out.println(" after repartition blockNum: " + count);
 
 		} else {
 			// TODO added by czh
@@ -685,22 +882,6 @@ public class LibMatrixReorg
 		return ret;
 	}
 
-	private static MatrixBlock getNewBlockOrder(MatrixBlock oldOrder, MatrixBlock newOrder) {
-		MatrixBlock ret = new MatrixBlock(oldOrder.rlen, 1, oldOrder.rlen);
-		ret.allocateDenseBlock();
-		DenseBlock block = ret.denseBlock;
-
-		for (int i = 0; i < oldOrder.rlen; i++) {
-			int newI = (int) oldOrder.getValue(i, 0);
-			if (newI == 0) {
-				continue;
-			}
-			double v = newOrder.getValue(i, 0);
-			block.set(newI == -1 ? 0 : newI, 0, v);
-		}
-
-		return ret;
-	}
 
 	/**
 	 * MR rmempty interface - for rmempty we cannot view blocks independently, and hence,

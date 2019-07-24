@@ -45,7 +45,7 @@ public abstract class Expression implements ParseInfo
 	 * Relational operators.
 	 */
 	public enum RelationalOp {
-		LESSEQUAL, LESS, GREATEREQUAL, GREATER, EQUAL, NOTEQUAL, GREATEREQUALBLOCK, INVALID
+		LESSEQUAL, LESS, GREATEREQUAL, GREATER, EQUAL, NOTEQUAL, SELECTROW, INVALID
 	}
 
 	/**

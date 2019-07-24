@@ -44,13 +44,20 @@ public class IfStatement extends Statement
 		_predicate = pred;
 	}
 	
-	
 	public void addStatementBlockIfBody(StatementBlock sb){
 		_ifBody.add(sb);
 	}
-	
+
+	public void addStatementBlockIfBody(ArrayList<StatementBlock> sbList){
+		_ifBody.addAll(sbList);
+	}
+
 	public void addStatementBlockElseBody(StatementBlock sb){
 		_elseBody.add(sb);
+	}
+
+	public void addStatementBlockElseBody(ArrayList<StatementBlock> sbList){
+		_elseBody.addAll(sbList);
 	}
 	
 	public ConditionalPredicate getConditionalPredicate(){

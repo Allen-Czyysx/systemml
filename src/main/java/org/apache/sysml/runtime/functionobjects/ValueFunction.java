@@ -28,8 +28,7 @@ public abstract class ValueFunction extends FunctionObject implements Serializab
 	private static final long serialVersionUID = -4985988545393861058L;
 
 	public boolean isBlockFn() {
-		return this instanceof GreaterThanEqualsBlock
-				|| this instanceof MultiplyBlock
+		return this instanceof MultiplyBlock
 				|| this instanceof PlusBlock;
 	}
 

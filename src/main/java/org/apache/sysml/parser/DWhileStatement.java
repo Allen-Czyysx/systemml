@@ -108,6 +108,13 @@ public class DWhileStatement extends WhileStatement {
 				+ hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn();
 	}
 
+	public static boolean isPreOutputNameFromHop(String varName) {
+		if (!isDWhileTmpVar(varName)) {
+			return false;
+		}
+		return Character.toString(varName.charAt(0)).equals("5");
+	}
+
 	public static String getPreOutputNameFromInst(Instruction inst) {
 		return "6_preOutput_inst_" + inst.getOpcode() + "_" + inst.getBeginLine() + "_" + inst.getBeginColumn() + "_"
 				+ inst.getEndLine() + "_" + inst.getEndColumn();
@@ -133,28 +140,16 @@ public class DWhileStatement extends WhileStatement {
 		return "11_useRepartition_" + varName;
 	}
 
-	public static String getRepartitionSelectName(String varName) {
-		return "12_repartitionSelect_" + varName;
-	}
-
-	public static String getAbsName(String varName) {
-		return "13_abs_" + varName;
-	}
-
-	public static String getRepartitionBlockOrderName(String varName) {
-		return "10_repartitionBlockOrder_" + varName;
-	}
-
 	public static String getPreBlockNumName(String varName) {
-		return "11_preBlockNum_" + varName;
+		return "15_preBlockNum_" + varName;
 	}
 
 	public static String getUseFilterName(String varName) {
-		return "12_useFilter_" + varName;
+		return "16_useFilter_" + varName;
 	}
 
-	public static String getSelectNumName(String varName) {
-		return "13_selectNum_" + varName;
+	public static String getDwhileCountName() {
+		return "18_dwhileCount";
 	}
 
 	@Override

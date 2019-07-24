@@ -21,6 +21,7 @@ package org.apache.sysml.runtime.instructions.cp;
 
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.functionobjects.SelectRow;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
@@ -34,6 +35,9 @@ public class BinaryMatrixScalarCPInstruction extends BinaryCPInstruction {
 
 	@Override
 	public void processInstruction(ExecutionContext ec) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		CPOperand mat = ( input1.getDataType() == DataType.MATRIX ) ? input1 : input2;
 		CPOperand scalar = ( input1.getDataType() == DataType.MATRIX ) ? input2 : input1;
 		
@@ -53,5 +57,10 @@ public class BinaryMatrixScalarCPInstruction extends BinaryCPInstruction {
  		}
 		
 		ec.setMatrixOutput(output.getName(), retBlock, getExtendedOpcode());
+
+		// TODO added by czh debug
+		if (sc_op.fn instanceof SelectRow) {
+			System.out.println("b>= " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
+		}
 	}
 }

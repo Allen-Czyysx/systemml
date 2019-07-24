@@ -19,6 +19,7 @@
 
 package org.apache.sysml.runtime.instructions.cp;
 
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.functionobjects.MultiplyBlock;
@@ -36,6 +37,9 @@ public class BinaryMatrixMatrixCPInstruction extends BinaryCPInstruction {
 
 	@Override
 	public void processInstruction(ExecutionContext ec) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		if ( LibCommonsMath.isSupportedMatrixMatrixOperation(getOpcode()) ) {
 			MatrixBlock solution = LibCommonsMath.matrixMatrixOperations(
 				ec.getMatrixInput(input1.getName()), ec.getMatrixInput(input2.getName()), getOpcode());
@@ -55,7 +59,7 @@ public class BinaryMatrixMatrixCPInstruction extends BinaryCPInstruction {
 		if (bop.fn.isBlockFn()) {
 			if (bop.fn instanceof MultiplyBlock) {
 				retBlock = new MatrixBlock(inBlock1);
-				retBlock.setSelectBlock(inBlock2.getFilterBlock());
+				retBlock.setSelectBlock(inBlock2);
 			} else {
 				throw new DMLRuntimeException("Shouldn't be here");
 			}
@@ -75,5 +79,12 @@ public class BinaryMatrixMatrixCPInstruction extends BinaryCPInstruction {
 		
 		// Attach result matrix with MatrixObject associated with output_name
 		ec.setMatrixOutput(output.getName(), retBlock, getExtendedOpcode());
+
+		// TODO added by czh debug
+//		if (DWhileStatement.isPreOutputNameFromHop(input1.getName())) {
+			long t2 = System.currentTimeMillis();
+			System.out.println(getOpcode() + " " + input1.getName() + " " + input2.getName() + " " + output.getName()
+					+ " time: " + (t2 - t1) / 1000.0);
+//		}
 	}
 }

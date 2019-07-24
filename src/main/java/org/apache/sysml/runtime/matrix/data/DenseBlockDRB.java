@@ -193,7 +193,11 @@ public class DenseBlockDRB extends DenseBlock
 
 	@Override
 	public DenseBlock set(int r, int c, double v) {
-		data[pos(r, c)] = v;
+		try {
+			data[pos(r, c)] = v;
+		} catch (Exception e) {
+			System.out.println("WRONG!!!!!!!!!!");
+		}
 		return this;
 	}
 	
@@ -211,7 +215,7 @@ public class DenseBlockDRB extends DenseBlock
 				System.arraycopy(a, 0, data, rl * clen + cl,
 						Math.min(data.length - rl * clen - cl, (int) db.size()));
 			} catch (Exception e) {
-				System.out.println(123);
+				System.out.println("WRONG!!!!!!!!!!");
 			}
 		else {
 			int len = cu - cl;

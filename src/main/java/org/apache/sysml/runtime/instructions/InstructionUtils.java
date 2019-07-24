@@ -631,8 +631,8 @@ public class InstructionUtils
 
 		} else if (opcode.equalsIgnoreCase("b>=")) {
 			if(arg1IsScalar)
-				return new LeftScalarOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject(), constant);
-			return new RightScalarOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject(), constant);
+				return new LeftScalarOperator(SelectRow.getGreaterThanEqualsBlockFnObject(), constant);
+			return new RightScalarOperator(SelectRow.getGreaterThanEqualsBlockFnObject(), constant);
 
 		} else if ( opcode.equalsIgnoreCase("<") ) {
 			if(arg1IsScalar)
@@ -730,7 +730,7 @@ public class InstructionUtils
 		else if(opcode.equalsIgnoreCase(">=") || opcode.equalsIgnoreCase("map>="))
 			return new BinaryOperator(GreaterThanEquals.getGreaterThanEqualsFnObject());
 		else if (opcode.equalsIgnoreCase("b>=") || opcode.equalsIgnoreCase("mapb>=")) {
-			return new BinaryOperator(GreaterThanEqualsBlock.getGreaterThanEqualsBlockFnObject());
+			return new BinaryOperator(SelectRow.getGreaterThanEqualsBlockFnObject());
 
 		} else if(opcode.equalsIgnoreCase("&&") || opcode.equalsIgnoreCase("map&&"))
 			return new BinaryOperator(And.getAndFnObject());

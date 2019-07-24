@@ -58,6 +58,8 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 	private boolean _requiresRecompile = false;
 	private boolean _splitDag = false;
 
+	private boolean _isSkip = false;
+
 	public StatementBlock() {
 		_dmlProg = null;
 		_statements = new ArrayList<>();
@@ -76,6 +78,14 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 		this();
 		setParseInfo(sb);
 		_dmlProg = sb._dmlProg;
+	}
+
+	public boolean isSkip() {
+		return _isSkip;
+	}
+
+	public void setSkip(boolean skip) {
+		_isSkip = skip;
 	}
 
 	public void setLiveVariables(StatementBlock sb) {

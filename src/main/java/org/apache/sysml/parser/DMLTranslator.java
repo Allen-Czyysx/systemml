@@ -1593,33 +1593,47 @@ public class DMLTranslator {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
 		ArrayList<StatementBlock> newBody = new ArrayList<>();
 
-		// TODO added by czh 暂不支持 x, y 在同一个式子中出现的情况.
 		// IfStatement 包装
 		String[] curDVarNames;
 
 		// 原计划
+		// TODO added by czh 计划被一段skip的算子分隔开
 		ArrayList<StatementBlock> originalPart = new ArrayList<>();
 		ArrayList<Hop> originalRecordHops = new ArrayList<>();
+		ArrayList<StatementBlock> originalPart2 = new ArrayList<>();
+		ArrayList<Hop> originalRecordHops2 = new ArrayList<>();
+		ArrayList<StatementBlock> skipPart = new ArrayList<>();
+		boolean isFirstPart = true;
 		for (StatementBlock sb : dwst.getBody()) {
-			originalPart.add(sb);
-			for (Hop hop : sb.getHops()) {
-				recordPreVarForEachHop(hop, originalRecordHops, dwsb);
+			if (sb.isSkip()) {
+				skipPart.add(sb);
+				isFirstPart = false;
+				continue;
+			}
+			if (isFirstPart) {
+				originalPart.add(sb);
+				for (Hop hop : sb.getHops()) {
+					recordPreVarForEachHop(hop, originalRecordHops, dwsb);
+				}
+			} else {
+				originalPart2.add(sb);
+				for (Hop hop : sb.getHops()) {
+					recordPreVarForEachHop(hop, originalRecordHops2, dwsb);
+				}
 			}
 		}
 
 		// 增量迭代 x 计划
 		curDVarNames = new String[]{dwst.getDVarNames()[0]};
-		StatementBlock dPart2 = constructDStatementBlock(dwsb, curDVarNames);
+		ArrayList<StatementBlock> dPart2 = constructDStatementBlock(dwsb, curDVarNames);
 
 		// TODO added by czh 暂支持1或2个变量
 		if (dwst.getDVarNames().length == 1) {
 			/*
-
 			if (useDelta_x)
 				针对x的增量迭代 1
 			else
 				原计划
-
 			 */
 
 			// 不能出现在 constructDStatementBlock() 前面, 否则在增量迭代里会做多次记录
@@ -1634,7 +1648,6 @@ public class DMLTranslator {
 
 		} else if (dwst.getDVarNames().length == 2) {
 			/*
-
 			if (useDelta_x) ifsb3
     			if (useDelta_y) ifsb1
 					针对x和y的增量迭代 dPart1
@@ -1644,19 +1657,23 @@ public class DMLTranslator {
 				针对y的增量迭代 dPart3
 			else
 				原计划
-
 			 */
 
 			// 增量迭代 x 和 y 计划
 			curDVarNames = dwst.getDVarNames();
-			StatementBlock dPart1 = constructDStatementBlock(dwsb, curDVarNames);
+			ArrayList<StatementBlock> dPart1 = constructDStatementBlock(dwsb, curDVarNames);
 
 			// 增量迭代 y 计划
 			curDVarNames = new String[]{dwst.getDVarNames()[1]};
-			StatementBlock dPart3 = constructDStatementBlock(dwsb, curDVarNames);
+			ArrayList<StatementBlock> dPart3 = constructDStatementBlock(dwsb, curDVarNames);
 
 			// 不能出现在 constructDStatementBlock() 前面, 否则在增量迭代里会做多次记录
 			originalPart.get(originalPart.size() - 1).getHops().addAll(originalRecordHops);
+			originalPart.addAll(skipPart);
+			if (!originalPart2.isEmpty()) {
+				originalPart2.get(originalPart2.size() - 1).getHops().addAll(originalRecordHops2);
+			}
+			originalPart.addAll(originalPart2);
 
 			// ifsb1
 			IfStatement ifst1 = new IfStatement();
@@ -1701,27 +1718,39 @@ public class DMLTranslator {
 	}
 
 	/**
-	 * 针对 curDVarNames 构造增量迭代计划, 放进dParts.
+	 * 针对 curDVarNames 构造增量迭代计划, 放进dPart.
 	 */
-	private StatementBlock constructDStatementBlock(DWhileStatementBlock dwsb, String[] curDVarNames) {
+	private ArrayList<StatementBlock> constructDStatementBlock(DWhileStatementBlock dwsb, String[] curDVarNames) {
 		DWhileStatement dwst = (DWhileStatement) dwsb.getStatement(0);
-		// TODO added by czh 暂没考虑内部还有if或while等嵌套的情况
-		ArrayList<Hop> bodyHops = dwst.getBody().get(0).getHops();
-		StatementBlock dPart = new StatementBlock(dwsb);
-		ArrayList<Hop> tmpDHops = new ArrayList<>();
-		ArrayList<Hop> tmpRecordDHops = new ArrayList<>();
+		ArrayList<StatementBlock> dPart = new ArrayList<>(2);
 
-		dPart.setLiveVariables(dwsb);
-		for (Hop hop : bodyHops) {
-			Hop dHop = dIterForEachHop(hop, false, dwsb, curDVarNames).get(0);
-			tmpDHops.add(dHop);
-			recordPreVarForEachHop(dHop, tmpRecordDHops, dwsb);
-		}
-		tmpDHops.addAll(tmpRecordDHops);
-		dPart.setHops(tmpDHops);
+		for (StatementBlock sb : dwst.getBody()) {
+			if (!sb.isSkip()) {
+				// TODO added by czh 暂没考虑内部还有if或while等嵌套的情况
+				ArrayList<Hop> bodyHops = sb.getHops();
+				StatementBlock tmpSb = new StatementBlock(dwsb);
+				ArrayList<Hop> tmpDHops = new ArrayList<>();
+				ArrayList<Hop> tmpRecordDHops = new ArrayList<>();
 
-		for (Hop hop : bodyHops) {
-			resetHopForDStatement(hop);
+				tmpSb.setLiveVariables(dwsb);
+
+				for (Hop hop : bodyHops) {
+					Hop dHop = dIterForEachHop(hop, false, dwsb, curDVarNames).get(0);
+					tmpDHops.add(dHop);
+					recordPreVarForEachHop(dHop, tmpRecordDHops, dwsb);
+				}
+				tmpDHops.addAll(tmpRecordDHops);
+				tmpSb.setHops(tmpDHops);
+
+				for (Hop hop : bodyHops) {
+					resetHopForDStatement(hop);
+				}
+
+				dPart.add(tmpSb);
+
+			} else {
+				dPart.add(sb);
+			}
 		}
 
 		return dPart;
@@ -1928,7 +1957,7 @@ public class DMLTranslator {
 			} else {
 				// 原计划
 				Hop input = dIterForEachHop(inputs.get(0), false, dwsb, curDVarNames).get(0);
-				AggUnaryOp newHop = new AggUnaryOp(varName, dataType, valueType, opType, Direction.RowCol, input);
+				AggUnaryOp newHop = new AggUnaryOp(varName, dataType, valueType, opType, aggUHop.getDirection(), input);
 				newHop.setBlockInfo(aggUHop);
 				newHop.setParseInfo(aggUHop);
 				newHop.setDisableRecord(true);
@@ -1943,6 +1972,13 @@ public class DMLTranslator {
 			Hop originRight = inputs.get(1);
 			String leftName = originLeft.getName();
 			String rightName = originRight.getName();
+			// TODO added by czh 变量名修正
+			if (leftName.startsWith("parsertemp")) {
+				leftName = originLeft.getInput().get(0).getName();
+			}
+			if (rightName.startsWith("parsertemp")) {
+				rightName = originRight.getInput().get(0).getName();
+			}
 
 			if (aggBHop.isMatrixMultiply()) {
 				if (!updated.containsVariable(leftName)) {
@@ -1986,15 +2022,14 @@ public class DMLTranslator {
 
 							// TODO added by czh 处理误差
 //							// unfixed = pre + delta
-//							BinaryOp unfixed = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
-//							unfixed.setBlockInfo(aggBHop);
-//							unfixed.setParseInfo(aggBHop);
-//							unfixed.setDisableRecord(true);
-//							// newHop = max(unfixed, 0)
-//							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.MAX, unfixed,
-//									new LiteralOp(0));
-
-							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
+							BinaryOp unfixed = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
+							unfixed.setBlockInfo(aggBHop);
+							unfixed.setParseInfo(aggBHop);
+							unfixed.setDisableRecord(true);
+							// newHop = max(unfixed, 0)
+							BinaryOp newHop = new BinaryOp(
+									varName, dataType, valueType, OpOp2.MAX, unfixed, new LiteralOp(0));
+//							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
 
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
@@ -2024,8 +2059,9 @@ public class DMLTranslator {
 					}
 
 				} else {
-					ArrayList<Hop> left = dIterForEachHop(originLeft, true, dwsb, curDVarNames);
-					ArrayList<Hop> right = dIterForEachHop(originRight, true, dwsb, curDVarNames);
+					// TODO added by czh 在GNMF中若k小, 就不用增量了
+					ArrayList<Hop> left = dIterForEachHop(originLeft, false, dwsb, curDVarNames);
+					ArrayList<Hop> right = dIterForEachHop(originRight, false, dwsb, curDVarNames);
 					if (left.size() == 1 && right.size() == 1) {
 						// 原计划: left %*% right
 						AggBinaryOp newHop = new AggBinaryOp(varName, dataType, valueType, OpOp2.MULT, AggOp.SUM,
@@ -2600,7 +2636,7 @@ public class DMLTranslator {
 			op = OpOp2.EQUAL;
 		} else if (source.getOpCode() == Expression.RelationalOp.NOTEQUAL) {
 			op = OpOp2.NOTEQUAL;
-		} else if (source.getOpCode() == Expression.RelationalOp.GREATEREQUALBLOCK) {
+		} else if (source.getOpCode() == Expression.RelationalOp.SELECTROW) {
 			op = OpOp2.GREATEREQUALBLOCK;
 		}
 		currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), op, left, right);

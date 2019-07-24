@@ -21,7 +21,6 @@ package org.apache.sysml.runtime.matrix.data;
 
 import java.util.Arrays;
 
-import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.functionobjects.*;
 import org.apache.sysml.runtime.functionobjects.Builtin.BuiltinCode;
@@ -572,7 +571,7 @@ public class LibMatrixBincell
 		else {
 			if (op.fn.isBlockFn()) {
 				if (op.fn instanceof MultiplyBlock) {
-					int m2Data = m2.getFilterBlock().getData(0);
+					int m2Data = m2.getFilterBlock().getData(0, 0);
 					if (m2Data == 1) {
 						ret.copy(m1);
 					} else {
@@ -916,6 +915,7 @@ public class LibMatrixBincell
 			if (op.fn.isBlockFn()) {
 				if (op.fn instanceof MultiplyBlock) {
 					// TODO added by czh
+					throw new DMLRuntimeException("Should not be here");
 //					if (m2.filterBlock.getData(0) == 0) {
 //						ret.clean();
 //					}
@@ -969,70 +969,44 @@ public class LibMatrixBincell
 			SparseBlock a = m1.sparseBlock;
 			long nnz = 0;
 
-			if (op.fn.isBlockFn()) {
-				// TODO adde by czh 暂不支持
-				if (m1.clen > 1 || !(op.fn instanceof GreaterThanEqualsBlock)) {
-					throw new DMLRuntimeException("Shouldn't be here");
-				}
+			//allocate sparse row structure
+			ret.allocateSparseRowsBlock();
+			SparseBlock c = ret.sparseBlock;
+			int rlen = Math.min(m1.rlen, a.numRows());
 
-				float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
-				int brlen = (int) Math.ceil(m1.rlen / blockSize);
-				int bclen = (int) Math.ceil(m1.clen / blockSize);
+			for (int r = 0; r < rlen; r++) {
+				if (a.isEmpty(r)) continue;
 
-				ret.allocateFilterBlock(brlen, bclen);
+				int apos = a.pos(r);
+				int alen = a.size(r);
+				int[] aix = a.indexes(r);
+				double[] avals = a.values(r);
 
-				for (int bi = 0; bi < brlen; bi++) {
-					for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < m1.rlen; i++) {
-						double val = op.executeScalar(a.get(i, 0));
-						if (val != 0) {
-							ret.filterBlock.setData(bi, 1);
-							nnz++;
-							break;
-						}
+				if (copyOnes) { //SPECIAL CASE: e.g., (X != 0)
+					//create sparse row without repeated resizing
+					SparseRowVector crow = new SparseRowVector(alen);
+					crow.setSize(alen);
+
+					//memcopy/memset of indexes/values (sparseblock guarantees absence of 0s)
+					System.arraycopy(aix, apos, crow.indexes(), 0, alen);
+					Arrays.fill(crow.values(), 0, alen, 1);
+					c.set(r, crow, false);
+					nnz += alen;
+
+				} else { //GENERAL CASE
+					//create sparse row without repeated resizing for specific ops
+					if (allocExact)
+						c.allocate(r, alen);
+
+					for (int j = apos; j < apos + alen; j++) {
+						double val = op.executeScalar(avals[j]);
+						c.append(r, aix[j], val);
+						nnz += (val != 0) ? 1 : 0;
 					}
 				}
-
-				ret.nonZeros = nnz;
-
-			} else {
-				//allocate sparse row structure
-				ret.allocateSparseRowsBlock();
-				SparseBlock c = ret.sparseBlock;
-				int rlen = Math.min(m1.rlen, a.numRows());
-
-				for (int r = 0; r < rlen; r++) {
-					if (a.isEmpty(r)) continue;
-
-					int apos = a.pos(r);
-					int alen = a.size(r);
-					int[] aix = a.indexes(r);
-					double[] avals = a.values(r);
-
-					if (copyOnes) { //SPECIAL CASE: e.g., (X != 0)
-						//create sparse row without repeated resizing
-						SparseRowVector crow = new SparseRowVector(alen);
-						crow.setSize(alen);
-
-						//memcopy/memset of indexes/values (sparseblock guarantees absence of 0s)
-						System.arraycopy(aix, apos, crow.indexes(), 0, alen);
-						Arrays.fill(crow.values(), 0, alen, 1);
-						c.set(r, crow, false);
-						nnz += alen;
-
-					} else { //GENERAL CASE
-						//create sparse row without repeated resizing for specific ops
-						if (allocExact)
-							c.allocate(r, alen);
-
-						for (int j = apos; j < apos + alen; j++) {
-							double val = op.executeScalar(avals[j]);
-							c.append(r, aix[j], val);
-							nnz += (val != 0) ? 1 : 0;
-						}
-					}
-				}
-				ret.nonZeros = nnz;
 			}
+
+			ret.nonZeros = nnz;
 
 		} else { // DENSE <- DENSE
 			denseBinaryScalar(m1, ret, op);
@@ -1077,23 +1051,47 @@ public class LibMatrixBincell
 
 			//compute non-zero input values
 			long nnz = lsparseSafe ? 0 : m * n;
-			for(int bi=0; bi<dc.numBlocks(); bi++) {
-				int blen = dc.blockSize(bi);
-				double[] c = dc.valuesAt(bi);
-				for(int i=bi*dc.blockSize(), cix=i*n; i<blen && i<m; i++, cix+=n) {
-					if( a.isEmpty(i) ) continue;
-					int apos = a.pos(i);
-					int alen = a.size(i);
-					int[] aix = a.indexes(i);
-					double[] avals = a.values(i);
-					for(int j=apos; j<apos+alen; j++) {
-						double val = op.executeScalar(avals[j]);
-						c[ cix+aix[j] ] = val;
-						nnz += lsparseSafe ? (val!=0 ? 1 : 0) :
-							(val==0 ? -1 : 0);
+
+			if (op.fn instanceof SelectRow) {
+				int rlen = Math.min(m1.rlen, a.numRows());
+				double ratio = op.getConstant();
+
+				for (int r = 0; r < rlen; r++) {
+					if (a.isEmpty(r)) {
+						continue;
+					}
+					int apos = a.pos(r);
+					int alen = a.size(r);
+					double[] avals = a.values(r);
+					for (int j = apos; j < apos + alen; j++) {
+						if (Math.abs(avals[j]) >= ratio) {
+							dc.set(r, 0, 1);
+							nnz++;
+							break;
+						}
+					}
+				}
+
+			} else {
+				for (int bi = 0; bi < dc.numBlocks(); bi++) {
+					int blen = dc.blockSize(bi);
+					double[] c = dc.valuesAt(bi);
+					for (int i = bi * dc.blockSize(), cix = i * n; i < blen && i < m; i++, cix += n) {
+						if (a.isEmpty(i)) continue;
+						int apos = a.pos(i);
+						int alen = a.size(i);
+						int[] aix = a.indexes(i);
+						double[] avals = a.values(i);
+						for (int j = apos; j < apos + alen; j++) {
+							double val = op.executeScalar(avals[j]);
+							c[cix + aix[j]] = val;
+							nnz += lsparseSafe ? (val != 0 ? 1 : 0) :
+									(val == 0 ? -1 : 0);
+						}
 					}
 				}
 			}
+
 			ret.nonZeros = nnz;
 		}
 		else { //DENSE MATRIX
@@ -1104,36 +1102,28 @@ public class LibMatrixBincell
 	private static void denseBinaryScalar(MatrixBlock m1, MatrixBlock ret, ScalarOperator op) {
 		DenseBlock da = m1.getDenseBlock();
 
-		if (op.fn.isBlockFn()) {
-			// TODO adde by czh 暂不支持
-			if (m1.clen > 1 || !(op.fn instanceof GreaterThanEqualsBlock)) {
-				throw new DMLRuntimeException("Shouldn't be here");
-			}
+		//allocate dense block (if necessary), incl clear nnz
+		ret.allocateDenseBlock(true);
+		DenseBlock dc = ret.getDenseBlock();
 
-			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
-			int brlen = (int) Math.ceil(m1.rlen / blockSize);
-			int bclen = (int) Math.ceil(m1.clen / blockSize);
+		//compute scalar operation, incl nnz maintenance
+		long nnz = 0;
 
-			ret.allocateFilterBlock(brlen, bclen);
+		if (op.fn instanceof SelectRow) {
+			double ratio = op.getConstant();
 
-			for (int bi = 0; bi < brlen; bi++) {
-				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < m1.rlen; i++) {
-					double val = op.executeScalar(da.get(i, 0));
-					if (val != 0) {
-						ret.filterBlock.setData(bi, 1);
+			for (int i = 0; i < m1.rlen; i++) {
+				for (int j = 0; j < m1.clen; j++) {
+					double in = da.get(i, j);
+					if (Math.abs(in) >= ratio) {
+						dc.set(i, 0, 1);
+						nnz++;
 						break;
 					}
 				}
 			}
 
 		} else {
-			//allocate dense block (if necessary), incl clear nnz
-			ret.allocateDenseBlock(true);
-
-			DenseBlock dc = ret.getDenseBlock();
-
-			//compute scalar operation, incl nnz maintenance
-			long nnz = 0;
 			for (int bi = 0; bi < da.numBlocks(); bi++) {
 				double[] a = da.valuesAt(bi);
 				double[] c = dc.valuesAt(bi);
@@ -1143,8 +1133,9 @@ public class LibMatrixBincell
 					nnz += (c[i] != 0) ? 1 : 0;
 				}
 			}
-			ret.nonZeros = nnz;
 		}
+
+		ret.nonZeros = nnz;
 	}
 
 	private static void safeBinaryInPlace(MatrixBlock m1ret, MatrixBlock m2, BinaryOperator op) {
@@ -1162,8 +1153,8 @@ public class LibMatrixBincell
 		}
 
 		if (m1ret.filterBlock != null && m2.filterBlock != null) {
-			// TODO added by czh
-			m1ret.filterBlock.setData((int) op.fn.execute(m1ret.filterBlock.getData(0), m2.filterBlock.getData(0)));
+			double value = op.fn.execute(m1ret.filterBlock.getData(0, 0), m2.filterBlock.getData(0, 0));
+			m1ret.filterBlock.setData((int) value);
 
 		} else if (m1ret.filterBlock != null) {
 			throw new DMLRuntimeException("Shouldn't be here");

@@ -44,6 +44,9 @@ public class TernaryCPInstruction extends ComputationCPInstruction {
 	
 	@Override
 	public void processInstruction( ExecutionContext ec ) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		if( input1.isMatrix() || input2.isMatrix() || input3.isMatrix() )
 		{
 			//get all inputs as matrix blocks
@@ -74,5 +77,8 @@ public class TernaryCPInstruction extends ComputationCPInstruction {
 			ec.setScalarOutput(output.getName(), ScalarObjectFactory
 				.createScalarObject(output.getValueType(), value));
 		}
+
+		// TODO added by czh debug
+		System.out.println("+* " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
 	}
 }

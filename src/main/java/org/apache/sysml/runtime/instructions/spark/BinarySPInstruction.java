@@ -31,6 +31,7 @@ import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.functionobjects.Divide;
+import org.apache.sysml.runtime.functionobjects.MultiplyBlock;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.cp.ScalarObject;
@@ -154,6 +155,9 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	 */
 	protected void processMatrixMatrixBinaryInstruction(ExecutionContext ec) 
 	{
+//		// TODO added by czh debug
+//		long t1 = System.currentTimeMillis();
+
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
 		
 		//sanity check dimensions
@@ -191,6 +195,12 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(output.getName(), input1.getName());
 		sec.addLineageRDD(output.getName(), input2.getName());
+
+//		// TODO added by czh debug
+//		sec.getMatrixInput(output.getName());
+//		sec.releaseMatrixInput(output.getName());
+//		long t2 = System.currentTimeMillis();
+//		System.out.println("binary " + input1.getName() + " time: " + (t2 - t1) / 1000.0);
 	}
 
 	protected void processMatrixBVectorBinaryInstruction(ExecutionContext ec, VectorType vtype) 
@@ -215,6 +225,21 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		
 		BinaryOperator bop = (BinaryOperator) _optr;
 		boolean isOuter = (mc1.getRows()>1 && mc1.getCols()==1 && mc2.getRows()==1 && mc2.getCols()>1);
+
+		// TODO added by czh debug
+		if (bop.fn.isBlockFn()) {
+			if (bop.fn instanceof MultiplyBlock) {
+				MatrixBlock in1Block = sec.getMatrixObject(rddVar).acquireReadAndRelease();
+				MatrixBlock in2Block = sec.getMatrixObject(bcastVar).acquireReadAndRelease();
+				MatrixBlock retBlock = new MatrixBlock(in1Block);
+				retBlock.setSelectBlock(in2Block);
+
+				sec.setMatrixOutput(output.getName(), retBlock, getExtendedOpcode());
+				return;
+			} else {
+				throw new DMLRuntimeException("Shouldn't be here");
+			}
+		}
 		
 		//execute map binary operation
 		JavaPairRDD<MatrixIndexes,MatrixBlock> out;
@@ -355,8 +380,13 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		}	
 		
 		if(mc1.getRowsPerBlock() != mc2.getRowsPerBlock() ||  mc1.getColsPerBlock() != mc2.getColsPerBlock()) {
-			throw new DMLRuntimeException("Blocksize mismatch matrix-matrix binary operations: "
-					+ "[" + mc1.getRowsPerBlock() + "x" + mc1.getColsPerBlock()  + " vs " + mc2.getRowsPerBlock() + "x" + mc2.getColsPerBlock() + "]");
+			// TODO added by czh 暴力
+			mc1.setColsPerBlock(1000);
+			mc1.setRowsPerBlock(1000);
+			mc2.setColsPerBlock(1000);
+			mc2.setRowsPerBlock(1000);
+//			throw new DMLRuntimeException("Blocksize mismatch matrix-matrix binary operations: "
+//					+ "[" + mc1.getRowsPerBlock() + "x" + mc1.getColsPerBlock()  + " vs " + mc2.getRowsPerBlock() + "x" + mc2.getColsPerBlock() + "]");
 		}	
 	}
 

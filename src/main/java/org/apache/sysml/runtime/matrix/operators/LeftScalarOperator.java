@@ -37,7 +37,7 @@ public class LeftScalarOperator extends ScalarOperator {
 				|| (p instanceof LessThanEquals && cst > 0)
 				|| (Builtin.isBuiltinCode(p, BuiltinCode.MAX) && cst <= 0)
 				|| (Builtin.isBuiltinCode(p, BuiltinCode.MIN) && cst >= 0)
-				|| p instanceof GreaterThanEqualsBlock);
+				|| p instanceof SelectRow);
 	}
 
 	@Override

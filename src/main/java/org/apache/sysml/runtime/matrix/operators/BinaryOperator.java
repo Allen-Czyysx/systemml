@@ -39,7 +39,6 @@ public class BinaryOperator  extends Operator implements Serializable
 				|| p instanceof And || p instanceof Or || p instanceof Xor
 				|| p instanceof BitwAnd || p instanceof BitwOr || p instanceof BitwXor
 				|| p instanceof BitwShiftL || p instanceof BitwShiftR
-				|| p instanceof GreaterThanEqualsBlock
 				|| p instanceof MultiplyBlock
 				|| p instanceof PlusBlock);
 		fn = p;

@@ -151,8 +151,13 @@ public class RelationalExpression extends Expression
 			}
 			MatrixCharacteristics dims = getBinaryMatrixCharacteristics(_left, _right);
 			output.setDataType(DataType.MATRIX);
-			output.setDimensions(dims.getRows(), dims.getCols());
-			output.setBlockDimensions(dims.getRowsPerBlock(), dims.getColsPerBlock());
+			if (_opcode == RelationalOp.SELECTROW) {
+				output.setDimensions(dims.getRows(), 1);
+				output.setBlockDimensions(dims.getRowsPerBlock(), dims.getColsPerBlock());
+			} else {
+				output.setDimensions(dims.getRows(), dims.getCols());
+				output.setBlockDimensions(dims.getRowsPerBlock(), dims.getColsPerBlock());
+			}
 			
 			//since SystemML only supports double matrices, the value type is forced to
 			//double; once we support boolean matrices this needs to change

@@ -115,6 +115,10 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 		
 		return ret;
 	}
+
+	public CacheBlock[] getPartBlocks() {
+		return _partBlocks;
+	}
 	
 	public long getNumRows() {
 		return _rlen;
@@ -145,16 +149,13 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 		if (_partBlocks[0] instanceof MatrixBlock && ((MatrixBlock) _partBlocks[0]).isFilterBlock()) {
 			MatrixBlock ret = new MatrixBlock(true);
 
-			// TODO added by czh 暂只支持 colIndex == 1
-			if (colIndex != 1) {
-				throw new DMLRuntimeException("Unsupported: colIndex = " + colIndex);
-			}
+			int rix = rowIndex - 1;
+			int cix = colIndex - 1;
+			int ix = rix / _brlen * getNumColumnBlocks() + cix / _bclen;
+			int i = rix % _brlen;
+			int j = cix % _bclen;
 
-			int rIdx = rowIndex - 1;
-			int pIdx = rIdx / _bclen;
-			int idx = rIdx % _bclen;
-
-			int data = ((MatrixBlock) _partBlocks[pIdx]).getFilterBlock().getData(idx);
+			int data = ((MatrixBlock) _partBlocks[ix]).getFilterBlock().getData(i, j);
 			ret.getFilterBlock().setData(data);
 			ret.setNonZeros(data != 0 ? 1 : 0);
 			return (T) ret;

@@ -28,7 +28,6 @@ import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.sysml.conf.CompilerConfig.ConfigType;
 import org.apache.sysml.conf.ConfigurationManager;
-import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.*;
 import org.apache.sysml.parser.common.CommonSyntacticValidator;
 import org.apache.sysml.parser.common.CustomErrorListener;
@@ -88,6 +87,9 @@ import org.apache.sysml.parser.dml.DmlParser.UnaryExpressionContext;
 import org.apache.sysml.parser.dml.DmlParser.ValueTypeContext;
 import org.apache.sysml.parser.dml.DmlParser.WhileStatementContext;
 import org.apache.sysml.runtime.util.UtilFunctions;
+
+import static org.apache.sysml.api.DMLScript.USE_LOCAL_SPARK_CONFIG;
+import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 
 
 public class DmlSyntacticValidator extends CommonSyntacticValidator implements DmlListener {
@@ -626,6 +628,15 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		ArrayList<StatementBlock> before = new ArrayList<>();
 		ArrayList<StatementBlock> after = new ArrayList<>();
 
+		// TODO added by czh 对GNMF中的TH做特殊处理
+		ArrayList<StatementBlock> tmpAfter = new ArrayList<>();
+		ArrayList<StatementBlock> saveAfter = null;
+
+		// dwhileCount = 0
+		DataIdentifier dwhileCount = new DataIdentifier(DWhileStatement.getDwhileCountName());
+		AssignmentStatement initDwhileCount = new AssignmentStatement(ctx, dwhileCount, new IntIdentifier(0));
+		init.add(getStatementBlock(initDwhileCount));
+
 		for (String dVarName : dVarNames) {
 			String preVarName = DWhileStatement.getPreVarName(dVarName);
 			DataIdentifier var = new DataIdentifier(dVarName);
@@ -639,23 +650,19 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 					new DataIdentifier(DWhileStatement.getRepartitionPreBlockNumName(dVarName));
 			DataIdentifier useFilter = new DataIdentifier(DWhileStatement.getUseFilterName(dVarName));
 			DataIdentifier useRepartition = new DataIdentifier(DWhileStatement.getUseRepartitionName(dVarName));
-			DataIdentifier repartitionSelectVar =
-					new DataIdentifier(DWhileStatement.getRepartitionSelectName(dVarName));
-			DataIdentifier absVar = new DataIdentifier(DWhileStatement.getAbsName(dVarName));
 			DataIdentifier useRepartitionCount =
 					new DataIdentifier(DWhileStatement.getUseRepartitionCountName(dVarName));
-			DataIdentifier selectNum = new DataIdentifier(DWhileStatement.getSelectNumName(dVarName)); // TODO added by czh
 
 
-			// 循环条件: 添加 & selectNum > 1000
-			// TODO added by czh 多个怎么办
-			RelationalExpression detectSelectNum = new RelationalExpression(Expression.RelationalOp.GREATER, dwst);
-			detectSelectNum.setLeft(selectNum);
-			detectSelectNum.setRight(new IntIdentifier(1000));
-			BooleanExpression newPredicateExp = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
-			newPredicateExp.setLeft(predicateExp);
-			newPredicateExp.setRight(detectSelectNum);
-			predicateExp = newPredicateExp;
+//			// 循环条件: 添加 & selectNum > DEFAULT_BLOCKSIZE
+//			// TODO added by czh 多个怎么办
+//			RelationalExpression detectSelectNum = new RelationalExpression(Expression.RelationalOp.GREATER, dwst);
+//			detectSelectNum.setLeft(selectNum);
+//			detectSelectNum.setRight(new IntIdentifier(DEFAULT_BLOCKSIZE));
+//			BooleanExpression newPredicateExp = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+//			newPredicateExp.setLeft(predicateExp);
+//			newPredicateExp.setRight(detectSelectNum);
+//			predicateExp = newPredicateExp;
 
 
 			// Init: 创建useDelta, useDeltaCount, ...
@@ -664,36 +671,28 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 					new BooleanIdentifier(false));
 			init.add(getStatementBlock(disableUseDelta));
 
-			// selectNum = Integer.MAX_VALUE
-			AssignmentStatement initSelectNum =
-					new AssignmentStatement(ctx, selectNum, new IntIdentifier(Integer.MAX_VALUE));
-			init.add(getStatementBlock(initSelectNum));
-
-			// blockNum = nrow(var) / 1000
-			Expression[] nrowArgs = {var};
-			BuiltinFunctionExpression rowNum =
-					new BuiltinFunctionExpression(ctx, Expression.BuiltinFunctionOp.NROW, nrowArgs, currentFile);
+			// blockNum = nrow(var) / DEFAULT_BLOCKSIZE
+			BuiltinFunctionExpression rowNum = new BuiltinFunctionExpression(
+					ctx, Expression.BuiltinFunctionOp.NROW, new Expression[]{var}, currentFile);
 			BinaryExpression maxBlockNum = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
 			maxBlockNum.setLeft(rowNum);
-			maxBlockNum.setRight(new IntIdentifier(ctx, OptimizerUtils.DEFAULT_BLOCKSIZE, currentFile));
+			maxBlockNum.setRight(new IntIdentifier(ctx, DEFAULT_BLOCKSIZE, currentFile));
 			AssignmentStatement initBlockNum = new AssignmentStatement(ctx, blockNum, maxBlockNum);
 			init.add(getStatementBlock(initBlockNum));
 
-			// preBlockNum = nrow(var) / 1000
+			// preBlockNum = nrow(var) / DEFAULT_BLOCKSIZE
 			AssignmentStatement initPreBlockNum = new AssignmentStatement(ctx, preBlockNum, maxBlockNum);
 			init.add(getStatementBlock(initPreBlockNum));
 
-			// repartitionPreBlockNum = nrow(var) / 1000
+			// repartitionPreBlockNum = nrow(var) / DEFAULT_BLOCKSIZE
 			AssignmentStatement initRepartitionPreBlockNum =
 					new AssignmentStatement(ctx, repartitionPreBlockNum, maxBlockNum);
 			init.add(getStatementBlock(initRepartitionPreBlockNum));
 
 			// useFilter = true
-			AssignmentStatement enableFilter = new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(true));
-			init.add(getStatementBlock(enableFilter));
-//			AssignmentStatement disableFilter =
-//					new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(false));
-//			init.add(getStatementBlock(disableFilter));
+			AssignmentStatement initUseFilter =
+					new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(true));
+			init.add(getStatementBlock(initUseFilter));
 
 			// useRepartition = false
 			AssignmentStatement disableRepartition =
@@ -705,17 +704,34 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 					new AssignmentStatement(ctx, useRepartitionCount, new IntIdentifier(1));
 			init.add(getStatementBlock(initUseRepartitionCount));
 
+			// delta = var
+			AssignmentStatement initDelta = new AssignmentStatement(ctx, deltaVar, var);
+			init.add(getStatementBlock(initDelta));
+
 
 			// Before: 记录input旧值
 			AssignmentStatement assignPreDVar = new AssignmentStatement(ctx, preVar, var);
 			before.add(getStatementBlock(assignPreDVar));
 
 
+			// TODO added by czh
+			if (dVarName.equals("W")) {
+				continue;
+			}
+
+
 			// After: 计算input增量, 为下一次迭代做准备
+			// TODO added by czh 开始对GNMF中的TH做特殊处理, 判断 useDelta 有问题
+			//  要求dvar必须是列向量或高瘦矩阵
+			if (dVarName.equals("TH")) {
+				saveAfter = after;
+				after = tmpAfter;
+			}
+
 			// 重置
+			after.add(getStatementBlock(disableRepartition));
 			AssignmentStatement disableFilter =
 					new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(false));
-			after.add(getStatementBlock(disableRepartition));
 			after.add(getStatementBlock(disableFilter));
 			after.add(getStatementBlock(disableUseDelta));
 
@@ -728,80 +744,123 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			AssignmentStatement assignDelta = new AssignmentStatement(ctx, deltaVar, delta);
 			after.add(getStatementBlock(assignDelta));
 
-			// abs = abs(delta / preVar)
+			// select = selectRow(delta / preVar, ratio)
 			BinaryExpression related = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
-			related.setLeft(delta);
+			related.setLeft(deltaVar);
 			related.setRight(preVar);
-			Expression[] absExps = {related};
-			BuiltinFunctionExpression abs =
-					new BuiltinFunctionExpression(ctx, Expression.BuiltinFunctionOp.ABS, absExps, currentFile);
-			AssignmentStatement assignAbs = new AssignmentStatement(ctx, absVar, abs);
-			after.add(getStatementBlock(assignAbs));
-
-			// select = abs >= ratio
-			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.GREATEREQUALBLOCK, dwst);
+			RelationalExpression select = new RelationalExpression(Expression.RelationalOp.SELECTROW, dwst);
 			double ratio = Double.parseDouble(ctx.ratio.getText());
-			select.setLeft(absVar);
+			select.setLeft(related);
 			select.setRight(new DoubleIdentifier(ratio));
 			AssignmentStatement assignSelect = new AssignmentStatement(ctx, selectBlock, select);
 			after.add(getStatementBlock(assignSelect));
 
-			// blockNum = sumBlock(selectBlock)
-			Expression[] blockNumArgs = {selectBlock};
-			BuiltinFunctionExpression sumBlockNum = new BuiltinFunctionExpression(ctx,
-					Expression.BuiltinFunctionOp.SUMBLOCK, blockNumArgs, currentFile);
-			AssignmentStatement assignBlockNum = new AssignmentStatement(ctx, blockNum, sumBlockNum);
-			after.add(getStatementBlock(assignBlockNum));
 
-			RelationalExpression selectNew = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
-			selectNew.setLeft(absVar);
-			selectNew.setRight(new DoubleIdentifier(ratio));
-			Expression[] sumArgs = {selectNew};
-			BuiltinFunctionExpression sum =
-					new BuiltinFunctionExpression(ctx, Expression.BuiltinFunctionOp.SUM, sumArgs, currentFile);
-			AssignmentStatement assignSelectNum = new AssignmentStatement(ctx, selectNum, sum);
-			after.add(getStatementBlock(assignSelectNum));
+			// 下次迭代是否用增量
+			// TODO added by czh 代价模型
+			Expression useDeltaCondition;
 
+			// blockNumBound = nrow(var) / (DEFAULT_BLOCKSIZE * ???)
+			BinaryExpression blockNumBound = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+			blockNumBound.setLeft(rowNum);
+//			blockNumBound.setRight(new IntIdentifier(ctx, DEFAULT_BLOCKSIZE * 2, currentFile));
+			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
+
+			// blockNumCondition = (blockNum <= blockNumBound)
+			RelationalExpression blockNumCondition = new RelationalExpression(Expression.RelationalOp.LESSEQUAL, dwst);
+			blockNumCondition.setLeft(blockNum);
+			blockNumCondition.setRight(blockNumBound);
+
+			if (dVarName.equals("TH")) {
+				BinaryExpression modDwhileCount = new BinaryExpression(Expression.BinaryOp.MODULUS, dwst);
+				modDwhileCount.setLeft(dwhileCount);
+				modDwhileCount.setRight(new IntIdentifier(2));
+				RelationalExpression equalZero = new RelationalExpression(Expression.RelationalOp.EQUAL, dwst);
+				equalZero.setLeft(modDwhileCount);
+				equalZero.setRight(new IntIdentifier(0));
+
+				BooleanExpression andMod = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+				andMod.setLeft(blockNumCondition);
+				andMod.setRight(equalZero);
+
+				useDeltaCondition = andMod;
+
+			} else {
+				useDeltaCondition = blockNumCondition;
+			}
 
 			// 判断是否 repartition
 			{
-				// TODO added by czh 再分区 delta, 暂时不再分区 var, 所以须固定使用增量
 				IfStatement ifRepartition = new IfStatement();
 				after.add(getStatementBlock(ifRepartition));
 
-				BinaryExpression blockNumAfterRepartition = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
-				blockNumAfterRepartition.setLeft(selectNum);
-				blockNumAfterRepartition.setRight(new IntIdentifier(1000));
+				BuiltinFunctionExpression selectNum = new BuiltinFunctionExpression(
+						ctx, Expression.BuiltinFunctionOp.SUM, new Expression[]{selectBlock}, currentFile);
+				BinaryExpression approBlockNumAfterRepartition = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+				approBlockNumAfterRepartition.setLeft(selectNum);
+				approBlockNumAfterRepartition.setRight(new IntIdentifier(DEFAULT_BLOCKSIZE));
+				BuiltinFunctionExpression blockNumAfterRepartition = new BuiltinFunctionExpression(
+						Expression.BuiltinFunctionOp.CEIL, new Expression[]{approBlockNumAfterRepartition}, dwst);
 				BinaryExpression div = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
 				div.setLeft(repartitionPreBlockNum);
 				div.setRight(blockNumAfterRepartition);
 				BinaryExpression r = new BinaryExpression(Expression.BinaryOp.POW, dwst);
-				// TODO adde by czh 原4
-				r.setLeft(new DoubleIdentifier(4));
+				if (USE_LOCAL_SPARK_CONFIG) {
+					r.setLeft(new DoubleIdentifier(1));
+				} else {
+					// TODO adde by czh 原4, 2.8, 2
+					r.setLeft(new DoubleIdentifier(2.5));
+				}
 				r.setRight(useRepartitionCount);
-				RelationalExpression repartitionCondition =
-						new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
-				repartitionCondition.setLeft(div);
-				repartitionCondition.setRight(r);
+//				r.setRight(new IntIdentifier(1)); // TODO added by czh
+				Expression repartitionCondition;
+				RelationalExpression satisfyDiv = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+				satisfyDiv.setLeft(div);
+				satisfyDiv.setRight(r);
+				RelationalExpression notZero = new RelationalExpression(Expression.RelationalOp.NOTEQUAL, dwst);
+				notZero.setLeft(blockNumAfterRepartition);
+				notZero.setRight(new IntIdentifier(0));
+				BooleanExpression andNotZero = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+				andNotZero.setLeft(satisfyDiv);
+				andNotZero.setRight(notZero);
+
+				if (dVarName.equals("TH")) {
+					// TODO added by czh useDelta 判断的是下次迭代, 这里需要的实际上是这次迭代的 useDelta,
+					//  故现在简陋的实现是用 !useDelta
+					BooleanExpression notUseDelta = new BooleanExpression(Expression.BooleanOp.NOT, dwst);
+					notUseDelta.setLeft(useDeltaCondition);
+					BooleanExpression andUseDelta = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+					andUseDelta.setLeft(andNotZero);
+					andUseDelta.setRight(notUseDelta);
+					RelationalExpression notFirst = new RelationalExpression(Expression.RelationalOp.GREATER, dwst);
+					notFirst.setLeft(dwhileCount);
+					notFirst.setRight(new IntIdentifier(0));
+					BooleanExpression andNotFirst = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+					andNotFirst.setLeft(andUseDelta);
+					andNotFirst.setRight(notFirst);
+
+					repartitionCondition = andNotFirst;
+
+				} else {
+					BooleanExpression andUseDelta = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+					andUseDelta.setLeft(andNotZero);
+					andUseDelta.setRight(useDeltaCondition);
+
+					repartitionCondition = andUseDelta;
+				}
 				ifRepartition.setConditionalPredicate(new ConditionalPredicate(repartitionCondition));
 
 				AssignmentStatement enableRepartition =
 						new AssignmentStatement(ctx, useRepartition, new BooleanIdentifier(true));
-				RelationalExpression repartitionSelect =
-						new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
-				repartitionSelect.setLeft(absVar);
-				repartitionSelect.setRight(new DoubleIdentifier(ratio));
-				AssignmentStatement assignRepartitionSelect =
-						new AssignmentStatement(ctx, repartitionSelectVar, repartitionSelect);
 				BinaryExpression addUseRepartitionCount = new BinaryExpression(Expression.BinaryOp.PLUS, dwst);
 				addUseRepartitionCount.setLeft(useRepartitionCount);
-				addUseRepartitionCount.setRight(new IntIdentifier(1));
+				addUseRepartitionCount.setRight(new IntIdentifier(2));
+//				addUseRepartitionCount.setRight(new IntIdentifier(999999));
 				AssignmentStatement assignRepartitionCount =
 						new AssignmentStatement(ctx, useRepartitionCount, addUseRepartitionCount);
 				AssignmentStatement assignRepartitionPreBlockNum =
 						new AssignmentStatement(ctx, repartitionPreBlockNum, blockNumAfterRepartition);
 				ifRepartition.addStatementBlockIfBody(getStatementBlock(enableRepartition));
-				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionSelect));
 				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionCount));
 				ifRepartition.addStatementBlockIfBody(getStatementBlock(assignRepartitionPreBlockNum));
 
@@ -812,58 +871,36 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 				after.add(getStatementBlock(print));
 			}
 
-			// 判断是否 filter
-			{
-				IfStatement ifFilter = new IfStatement();
-				after.add(getStatementBlock(ifFilter));
+//			// 判断是否 filter
+//			{
+//				IfStatement ifFilter = new IfStatement();
+//				after.add(getStatementBlock(ifFilter));
+//
+//				BinaryExpression div = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
+//				div.setLeft(preBlockNum);
+//				div.setRight(blockNum);
+//				RelationalExpression compare = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
+//				compare.setLeft(div);
+//				// TODO adde by czh 3
+//				compare.setRight(new DoubleIdentifier(999999999));
+//				BooleanExpression not = new BooleanExpression(Expression.BooleanOp.NOT, dwst);
+//				not.setLeft(useRepartition);
+//				BooleanExpression and = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
+//				and.setLeft(compare);
+//				and.setRight(not);
+//				ifFilter.setConditionalPredicate(new ConditionalPredicate(and));
+//
+//				AssignmentStatement assignPreBlockNum = new AssignmentStatement(ctx, preBlockNum, blockNum);
+//				AssignmentStatement enableFilter = new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(true));
+//				ifFilter.addStatementBlockIfBody(getStatementBlock(assignPreBlockNum));
+//				ifFilter.addStatementBlockIfBody(getStatementBlock(enableFilter));
+//			}
 
-				BinaryExpression div = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
-				div.setLeft(preBlockNum);
-				div.setRight(blockNum);
-				RelationalExpression compare = new RelationalExpression(Expression.RelationalOp.GREATEREQUAL, dwst);
-				compare.setLeft(div);
-				// TODO adde by czh
-				compare.setRight(new IntIdentifier(3));
-				BooleanExpression not = new BooleanExpression(Expression.BooleanOp.NOT, dwst);
-				not.setLeft(useRepartition);
-				BooleanExpression and = new BooleanExpression(Expression.BooleanOp.LOGICALAND, dwst);
-				and.setLeft(compare);
-				and.setRight(not);
-				ifFilter.setConditionalPredicate(new ConditionalPredicate(and));
-
-				AssignmentStatement assignPreBlockNum = new AssignmentStatement(ctx, preBlockNum, blockNum);
-				ifFilter.addStatementBlockIfBody(getStatementBlock(assignPreBlockNum));
-//				AssignmentStatement enableFilter =
-//						new AssignmentStatement(ctx, useFilter, new BooleanIdentifier(true));
-				ifFilter.addStatementBlockIfBody(getStatementBlock(enableFilter));
-			}
-
-			// blockNumBound = nrow(var) / (DEFAULT_BLOCKSIZE * ???)
-			BinaryExpression blockNumBound = new BinaryExpression(Expression.BinaryOp.DIV, dwst);
-			blockNumBound.setLeft(rowNum);
-			// TODO added by czh 代价模型
-//			blockNumBound.setRight(new IntIdentifier(ctx, 1000 * 2, currentFile));
-			blockNumBound.setRight(new IntIdentifier(ctx, 1, currentFile));
-
-			// deltaCondition = (blockNum <= blockNumBound)
-			// TODO added by czh 代价模型
-			RelationalExpression deltaCondition = new RelationalExpression(Expression.RelationalOp.LESSEQUAL, dwst);
-			deltaCondition.setLeft(blockNum);
-			deltaCondition.setRight(blockNumBound);
-
-			// 增量迭代条件判断
 			IfStatement ifUseDelta = new IfStatement();
-			ifUseDelta.setConditionalPredicate(new ConditionalPredicate(deltaCondition));
 			after.add(getStatementBlock(ifUseDelta));
+			ifUseDelta.setConditionalPredicate(new ConditionalPredicate(useDeltaCondition));
 
-			// if (deltaCondition) { 开启增量迭代
-
-			// lightDelta = delta * select
-			BinaryExpression lightDelta = new BinaryExpression(Expression.BinaryOp.MULTBLOCK, dwst);
-			lightDelta.setLeft(deltaVar);
-			lightDelta.setRight(selectBlock);
-			AssignmentStatement assignLightDelta = new AssignmentStatement(ctx, deltaVar, lightDelta);
-			ifUseDelta.addStatementBlockIfBody(getStatementBlock(assignLightDelta));
+			// if (blockNumCondition) { 开启增量迭代
 
 			// useDelta = true
 			AssignmentStatement enableUseDelta =
@@ -871,7 +908,19 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 			ifUseDelta.addStatementBlockIfBody(getStatementBlock(enableUseDelta));
 
 			// }
+
+			// TODO added by czh 结束对GNMF中的TH做特殊处理
+			if (dVarName.equals("TH")) {
+				after = saveAfter;
+			}
 		}
+
+		// dwhileCount += 1
+		BinaryExpression addDwhileCount = new BinaryExpression(Expression.BinaryOp.PLUS, dwst);
+		addDwhileCount.setLeft(dwhileCount);
+		addDwhileCount.setRight(new IntIdentifier(1));
+		AssignmentStatement updateDwhileCount = new AssignmentStatement(ctx, dwhileCount, addDwhileCount);
+		after.add(getStatementBlock(updateDwhileCount));
 
 		ConditionalPredicate predicate = new ConditionalPredicate(predicateExp);
 		dwst.setPredicate(predicate);
@@ -883,8 +932,19 @@ public class DmlSyntacticValidator extends CommonSyntacticValidator implements D
 		// body
 		if (ctx.body.size() > 0) {
 			for (StatementContext stCtx : ctx.body) {
+				// TODO added by czh 对GNMF中的TH做特殊处理
+				if (stCtx.info.stmt.getText().startsWith("tmp1 = t(TH)")) {
+					tmpAfter = StatementBlock.mergeStatementBlocks(tmpAfter);
+					for (StatementBlock sb : tmpAfter) {
+						sb.setSkip(true);
+					}
+					dwst.addStatementBlock(tmpAfter);
+				}
+
 				dwst.addStatementBlock(getStatementBlock(stCtx.info.stmt));
 			}
+
+			// TODO added by czh 此处merge会导致skip中的语句融进非skip中
 			dwst.mergeStatementBlocks();
 		}
 

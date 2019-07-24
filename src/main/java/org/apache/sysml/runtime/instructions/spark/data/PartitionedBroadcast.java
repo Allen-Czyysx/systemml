@@ -50,8 +50,6 @@ public class PartitionedBroadcast<T extends CacheBlock> implements Serializable
 	private Broadcast<PartitionedBlock<T>>[] _pbc = null;
 	private MatrixCharacteristics _mc;
 
-	private boolean _hasSelect = false;
-	
 	public PartitionedBroadcast() {
 		//do nothing (required for Externalizable)
 	}
@@ -60,24 +58,11 @@ public class PartitionedBroadcast<T extends CacheBlock> implements Serializable
 		_pbc = broadcasts;
 		_mc = mc;
 	}
-
-	public PartitionedBroadcast(Broadcast<PartitionedBlock<T>>[] broadcasts, MatrixCharacteristics mc,
-								boolean hasSelect) {
-		this(broadcasts, mc);
-		_hasSelect = hasSelect;
-	}
 	
 	public Broadcast<PartitionedBlock<T>>[] getBroadcasts() {
 		return _pbc;
 	}
 
-	public boolean hasSelect() {
-		return _hasSelect;
-	}
-
-	public void setHasSelect(boolean hasSelect) {
-		_hasSelect = hasSelect;
-	}
 	
 	public long getNumRows() {
 		return _mc.getRows();

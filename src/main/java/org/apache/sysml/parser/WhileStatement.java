@@ -46,6 +46,10 @@ public class WhileStatement extends Statement
 		_body.add(sb);
 	}
 
+	public void addStatementBlock(ArrayList<StatementBlock> sbList){
+		_body.addAll(sbList);
+	}
+
 	public ConditionalPredicate getConditionalPredicate(){
 		return _predicate;
 	}

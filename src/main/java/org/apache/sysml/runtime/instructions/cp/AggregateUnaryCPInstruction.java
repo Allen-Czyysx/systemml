@@ -31,6 +31,7 @@ import org.apache.sysml.runtime.functionobjects.Plus;
 import org.apache.sysml.runtime.functionobjects.PlusBlock;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
+import org.apache.sysml.runtime.matrix.data.FilterBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.AggregateUnaryOperator;
@@ -146,9 +147,18 @@ public class AggregateUnaryCPInstruction extends UnaryCPInstruction
 			MatrixBlock resultBlock;
 
 			if (au_op.aggOp.increOp.fn.isBlockFn()) {
+				FilterBlock filterBlock = matBlock.getFilterBlock();
 				if (au_op.aggOp.increOp.fn instanceof PlusBlock) {
-					int sum = Arrays.stream(matBlock.getFilterBlock().getData()).sum();
-					System.out.println("blockSum = " + sum);
+					// TODO added by czh 当前为按行, 即一行中只要有一个非零, 就加1
+					int sum = 0;
+					for (int i = 0; i < filterBlock.getRowNum(); i++) {
+						for (int j = 0; j < filterBlock.getColNum(); j++) {
+							if (filterBlock.getData(i, j) == 1) {
+								sum += 1;
+								break;
+							}
+						}
+					}
 					resultBlock = new MatrixBlock(1, 1, false, 1);
 					resultBlock.allocateDenseBlock();
 					resultBlock.getDenseBlock().set(sum);

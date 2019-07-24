@@ -22,7 +22,11 @@ public class FilterNonEmptyAndSelectedBlocksFunction implements Function<Tuple2<
 		long colIdx = arg0._1().getColumnIndex();
 
 		boolean ix1 = rowIdx == 1 && colIdx == 1;
-		boolean isSelected = !_in2.getBlock((int) colIdx, 1).isEmptyBlock(false);
+
+		boolean isSelected = true;
+		for (int j = 1; j <= _in2.getNumColumnBlocks(); j++) {
+			isSelected &= !_in2.getBlock((int) colIdx, j).isEmptyBlock(false);
+		}
 
 		return !arg0._2().isEmptyBlock(false) && isSelected || ix1;
 	}

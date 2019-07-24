@@ -26,6 +26,7 @@ import org.apache.spark.api.java.function.PairFunction;
 
 import org.apache.sysml.runtime.functionobjects.PlusBlock;
 import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
+import org.apache.sysml.runtime.matrix.data.FilterBlock;
 import scala.Tuple2;
 
 import org.apache.sysml.hops.AggBinaryOp.SparkAggType;
@@ -62,7 +63,7 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 		String[] parts = InstructionUtils.getInstructionPartsWithValueType(str);
 		InstructionUtils.checkNumFields(parts, 3);
 		String opcode = parts[0];
-		
+
 		CPOperand in1 = new CPOperand(parts[1]);
 		CPOperand out = new CPOperand(parts[2]);
 		SparkAggType aggtype = SparkAggType.valueOf(parts[3]);
@@ -99,10 +100,20 @@ public class AggregateUnarySPInstruction extends UnarySPInstruction {
 		//perform aggregation if necessary and put output into symbol table
 		if (_aggtype == SparkAggType.SINGLE_BLOCK) {
 			if (aggop.increOp.fn.isBlockFn()) {
+				System.out.println("Should not be here on Clusters");
 				if (aggop.increOp.fn instanceof PlusBlock) {
+					// TODO added by czh 当前为按行, 即一行中只要有一个非零, 就加1
 					MatrixBlock mb = sec.getBlockForVariable(input1.getName());
-					int sum = Arrays.stream(mb.getFilterBlock().getData()).sum();
-					System.out.println("blockSum = "  + sum);
+					FilterBlock filterBlock = mb.getFilterBlock();
+					int sum = 0;
+					for (int i = 0; i < filterBlock.getRowNum(); i++) {
+						for (int j = 0; j < filterBlock.getColNum(); j++) {
+							if (filterBlock.getData(i, j) == 1) {
+								sum += 1;
+								break;
+							}
+						}
+					}
 					MatrixBlock outMb = new MatrixBlock(1, 1, false, 1);
 					outMb.allocateDenseBlock();
 					outMb.getDenseBlock().set(sum);

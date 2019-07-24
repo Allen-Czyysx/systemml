@@ -49,4 +49,9 @@ public abstract class DenseBlockFactory
 		return (dblock instanceof DenseBlockDRB) ? DenseBlock.Type.DRB :
 			(dblock instanceof DenseBlockLDRB) ? DenseBlock.Type.LDRB : null;
 	}
+
+	public static DenseBlock.Type getDenseBlockType(int rlen, int clen) {
+		return ((long) rlen * clen < Integer.MAX_VALUE) ? DenseBlock.Type.DRB : DenseBlock.Type.LDRB;
+	}
+
 }

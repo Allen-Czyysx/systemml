@@ -73,6 +73,9 @@ public class RmmSPInstruction extends BinarySPInstruction {
 	
 	@Override
 	public void processInstruction(ExecutionContext ec) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
 		
 		//get input rdds
@@ -103,6 +106,12 @@ public class RmmSPInstruction extends BinarySPInstruction {
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(output.getName(), input1.getName());
 		sec.addLineageRDD(output.getName(), input2.getName());
+
+		// TODO added by czh debug
+		sec.getMatrixInput(output.getName());
+		sec.releaseMatrixInput(output.getName());
+		long t2 = System.currentTimeMillis();
+		System.out.println("rmm " + input1.getName() + " time: " + (t2 - t1) / 1000.0);
 	}
 	
 	private static int getNumJoinPartitions(MatrixCharacteristics mc1, MatrixCharacteristics mc2) {

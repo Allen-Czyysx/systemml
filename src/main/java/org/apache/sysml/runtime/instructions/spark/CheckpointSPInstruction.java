@@ -117,14 +117,15 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 			if( coalesce ) {
 				//merge partitions without shuffle if too many partitions
 				// TODO added by czh
-				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
+				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
+						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
 					System.out.println("checkpoint in coalesce. " + this + ". # partition = " + numPartitions);
 					out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
 				} else {
 					out = in.coalesce(numPartitions);
 				}
-			}
-			else if( repartition ) {
+
+			} else if( repartition ) {
 				//repartitionNonZeros to preferred size as multiple of default parallelism
 //				out = in.repartition(UtilFunctions.roundToNext(numPartitions,
 //					SparkExecutionContext.getDefaultParallelism(true)));
@@ -134,12 +135,13 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 					out = in.partitionBy(new RowPartitioner(mcIn, UtilFunctions.roundToNext(numPartitions,
 							SparkExecutionContext.getDefaultParallelism(true))));
 //				}
-			}
-			else if( !mcsr2csr ) {
+
+			} else if( !mcsr2csr ) {
 				//since persist is an in-place marker for a storage level, we 
 				//apply a narrow shallow copy to allow for short-circuit collects
 				// TODO added by czh
-				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
+				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
+						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
 					System.out.println("checkpoint in !mcsr2csr. " + this + ". # partition = " + in.getNumPartitions()
 							+ ". preferred # partition = " + numPartitions);
 					in = in.partitionBy(new RowPartitioner(mcIn, in.getNumPartitions()));
@@ -150,9 +152,15 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 				else if( input1.getDataType() == DataType.FRAME)
 					out = ((JavaPairRDD<Long,FrameBlock>)in)
 						.mapValues(new CopyFrameBlockFunction(false));
-			}
-			else {
-				out = in;
+
+			} else {
+				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
+						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
+					System.out.println("checkpoint in normal. " + this + ". # partition = " + numPartitions);
+					out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+				} else {
+					out = in;
+				}
 			}
 			
 			//convert mcsr into memory-efficient csr if potentially sparse

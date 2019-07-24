@@ -128,4 +128,14 @@ public class BlockPartitioner extends Partitioner {
 				&& _cbPerPart == that._cbPerPart;
 	}
 
+	@Override
+	public String toString() {
+		return "Partitioner: "
+				+ "numParts=" + _numParts
+				+ "\nncparts=" + _ncparts
+				+ "\nrbPerPart=" + _rbPerPart
+				+ "\ncbPerPart=" + _cbPerPart
+				+ "\nnumColumnsPerBlock=" + _numColumnsPerBlock;
+	}
+
 }

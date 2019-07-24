@@ -38,8 +38,7 @@ public class RightScalarOperator extends ScalarOperator {
 				|| (p instanceof Divide && cst != 0)
 				|| (p instanceof Power && cst != 0)
 				|| (Builtin.isBuiltinCode(p, BuiltinCode.MAX) && cst <= 0)
-				|| (Builtin.isBuiltinCode(p, BuiltinCode.MIN) && cst >= 0)
-				|| p instanceof GreaterThanEqualsBlock);
+				|| (Builtin.isBuiltinCode(p, BuiltinCode.MIN) && cst >= 0));
 	}
 
 	@Override

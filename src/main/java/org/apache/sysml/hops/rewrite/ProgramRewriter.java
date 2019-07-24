@@ -239,10 +239,20 @@ public class ProgramRewriter
 			DWhileStatement dwst = (DWhileStatement)dwsb.getStatement(0);
 
 			dwsb.setPredicateHops(rewriteHopDAG(dwsb.getPredicateHops(), state));
-			rRewriteStatementBlockHopDAGs(dwst.getDIterInitByIndex(0), state);
-			rRewriteStatementBlockHopDAGs(dwst.getDIterBeforeByIndex(0), state);
+			for (StatementBlock sb : dwst.getDIterInit()) {
+				rRewriteStatementBlockHopDAGs(sb, state);
+			}
+			for (StatementBlock sb : dwst.getDIterBefore()) {
+				rRewriteStatementBlockHopDAGs(sb, state);
+			}
+			// TODO added by czh
 			rRewriteStatementBlockHopDAGs(dwst.getBody().get(0), state);
-			rRewriteStatementBlockHopDAGs(dwst.getDIterAfterByIndex(0), state);
+//			for (StatementBlock sb : dwst.getBody()) {
+//				rRewriteStatementBlockHopDAGs(sb, state);
+//			}
+			for (StatementBlock sb : dwst.getDIterAfter()) {
+				rRewriteStatementBlockHopDAGs(sb, state);
+			}
 		}
 		else if (current instanceof WhileStatementBlock)
 		{

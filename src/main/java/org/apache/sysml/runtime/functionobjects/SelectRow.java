@@ -1,17 +1,17 @@
 package org.apache.sysml.runtime.functionobjects;
 
-public class GreaterThanEqualsBlock extends ValueComparisonFunction {
+public class SelectRow extends ValueComparisonFunction {
 
 	private static final long serialVersionUID = -5444900552418046584L;
 
-	private static GreaterThanEqualsBlock singleObj = null;
+	private static SelectRow singleObj = null;
 
-	private GreaterThanEqualsBlock() {
+	private SelectRow() {
 	}
 
-	public static GreaterThanEqualsBlock getGreaterThanEqualsBlockFnObject() {
+	public static SelectRow getGreaterThanEqualsBlockFnObject() {
 		if (singleObj == null)
-			singleObj = new GreaterThanEqualsBlock();
+			singleObj = new SelectRow();
 		return singleObj;
 	}
 

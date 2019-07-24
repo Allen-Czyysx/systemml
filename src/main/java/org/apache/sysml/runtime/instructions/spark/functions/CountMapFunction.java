@@ -1,90 +1,68 @@
 package org.apache.sysml.runtime.instructions.spark.functions;
 
 import org.apache.spark.api.java.function.PairFlatMapFunction;
-import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
 import org.apache.sysml.runtime.matrix.data.*;
 import scala.Tuple2;
+import scala.Tuple3;
 
 import java.util.*;
 
 import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 
-public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tuple2<MatrixIndexes, MatrixBlock>>,
-		MatrixIndexes, MatrixBlock> {
+public class CountMapFunction implements PairFlatMapFunction<Iterator<Tuple2<MatrixIndexes, MatrixBlock>>,
+		Integer, Tuple3<Integer, Integer, Long>> {
 
 	private static final long serialVersionUID = 1886318890063064287L;
 
 	private final PartitionedBroadcast<MatrixBlock> _pbc;
 
-	public RepartitionMapFunction(PartitionedBroadcast<MatrixBlock> binput) {
+	public CountMapFunction(PartitionedBroadcast<MatrixBlock> binput) {
 		_pbc = binput;
 	}
 
-//	@Override
-//	public Iterator<Tuple2<MatrixIndexes, MatrixBlock>> call(Iterator<Tuple2<MatrixIndexes, MatrixBlock>> iterator)
-//			throws Exception {
-//		Map<MatrixIndexes, MatrixBlock> outputMap = new HashMap<>();
-//
+	@Override
+	public Iterator<Tuple2<Integer, Tuple3<Integer, Integer, Long>>> call(
+			Iterator<Tuple2<MatrixIndexes, MatrixBlock>> iterator) throws Exception {
+		Map<MatrixIndexes, MatrixBlock> outputMap = new HashMap<>();
+		int denseCount = 0;
+		int sparseCount = 0;
+		long memCost = 0;
+
 //		while (iterator.hasNext()) {
 //			Tuple2<MatrixIndexes, MatrixBlock> arg = iterator.next();
 //			MatrixIndexes ixIn = arg._1();
 //			MatrixBlock blkIn = arg._2();
-//			int blockI = (int) ixIn.getRowIndex();
-//			int blockJ = (int) ixIn.getColumnIndex();
-//			MatrixBlock colOrder = _pbc.getBlock(blockJ, 1);
 //
-//			if (!(ixIn.getRowIndex() == 1 && ixIn.getColumnIndex() == 1) && blkIn.isEmptyBlock(false)) {
+//			memCost -= blkIn.estimateSizeInMemory();
+//
+//			MatrixBlock mb = new MatrixBlock(blkIn.getNumRows(), blkIn.getNumColumns(), blkIn.isInSparseFormat(),
+//					blkIn.getNonZeros());
+//			outputMap.put(ixIn, mb);
+//
+//			if (blkIn.getDenseBlock() == null && blkIn.getSparseBlock() == null) {
 //				continue;
 //			}
 //
 //			if (blkIn.isInSparseFormat()) {
+//				denseCount += blkIn.getSparseBlock().size();
 //				for (Iterator<IJV> it = blkIn.getSparseBlockIterator(); it.hasNext(); ) {
 //					IJV ijv = it.next();
 //					int i = ijv.getI();
 //					int j = ijv.getJ();
-//					int newGlobalJ = (int) colOrder.getValue(j, 0);
 //					double v = ijv.getV();
-//
-//					setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
-//							blkIn.getNumRows(), blkIn.getNonZeros(), true);
+//					mb.quickSetValue(i, j, v);
 //				}
 //
 //			} else {
 //				for (int j = 0; j < blkIn.getNumColumns(); j++) {
 //					for (int i = 0; i < blkIn.getNumRows(); i++) {
-//						int newGlobalJ = (int) colOrder.getValue(j, 0);
 //						double v = blkIn.getValue(i, j);
-//
-//						setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
-//								blkIn.getNumRows(), blkIn.getNonZeros(), false);
+//						mb.quickSetValue(i, j, v);
 //					}
 //				}
 //			}
 //		}
-//
-//		List<Tuple2<MatrixIndexes, MatrixBlock>> ret = new ArrayList<>(outputMap.size());
-//		for (Map.Entry<MatrixIndexes, MatrixBlock> entry : outputMap.entrySet()) {
-//			MatrixIndexes idx = entry.getKey();
-//			MatrixBlock blk = entry.getValue();
-//			blk.examSparsity();
-//
-//			if ((idx.getRowIndex() == 1 && idx.getColumnIndex() == 1) || !blk.isEmptyBlock(false)) {
-//				if (blk.isInSparseFormat() && !blk.isUltraSparse() && !(blk.getSparseBlock() instanceof SparseBlockCSR)) {
-//					entry.setValue(null);
-//					blk = new MatrixBlock(blk, MatrixBlock.DEFAULT_INPLACE_SPARSEBLOCK, true);
-//				}
-//				ret.add(new Tuple2<>(idx, blk));
-//			}
-//		}
-//
-//		return ret.iterator();
-//	}
-
-	@Override
-	public Iterator<Tuple2<MatrixIndexes, MatrixBlock>> call(Iterator<Tuple2<MatrixIndexes, MatrixBlock>> iterator)
-			throws Exception {
-		Map<MatrixIndexes, MatrixBlock> outputMap = new HashMap<>();
 
 		while (iterator.hasNext()) {
 			Tuple2<MatrixIndexes, MatrixBlock> arg = iterator.next();
@@ -94,7 +72,9 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 			int blockJ = (int) ixIn.getColumnIndex();
 			MatrixBlock colOrder = _pbc.getBlock(blockJ, 1);
 
-			if (!(ixIn.getRowIndex() == 1 && ixIn.getColumnIndex() == 1) && blkIn.isEmptyBlock(false)) {
+			memCost -= blkIn.estimateSizeInMemory();
+
+			if (blkIn.getDenseBlock() == null && blkIn.getSparseBlock() == null) {
 				continue;
 			}
 
@@ -103,12 +83,8 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 					IJV ijv = it.next();
 					int i = ijv.getI();
 					int j = ijv.getJ();
-					double v = ijv.getV();
 					int newGlobalJ = (int) colOrder.getValue(j, 0);
-
-					if (newGlobalJ < 0) {
-						continue;
-					}
+					double v = ijv.getV();
 
 					setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
 							blkIn.getNumRows(), blkIn.getNonZeros(), true);
@@ -117,12 +93,8 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 			} else {
 				for (int j = 0; j < blkIn.getNumColumns(); j++) {
 					for (int i = 0; i < blkIn.getNumRows(); i++) {
-						double v = blkIn.getValue(i, j);
 						int newGlobalJ = (int) colOrder.getValue(j, 0);
-
-						if (newGlobalJ < 0) {
-							continue;
-						}
+						double v = blkIn.getValue(i, j);
 
 						setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
 								blkIn.getNumRows(), blkIn.getNonZeros(), false);
@@ -131,20 +103,19 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 			}
 		}
 
-		List<Tuple2<MatrixIndexes, MatrixBlock>> ret = new ArrayList<>(outputMap.size());
-		for (Map.Entry<MatrixIndexes, MatrixBlock> entry : outputMap.entrySet()) {
-			MatrixIndexes idx = entry.getKey();
-			MatrixBlock blk = entry.getValue();
-			blk.examSparsity();
+		List<Tuple2<Integer, Tuple3<Integer, Integer, Long>>> ret = new ArrayList<>(outputMap.size());
+		for (Map.Entry entry : outputMap.entrySet()) {
+			MatrixBlock blk = (MatrixBlock) entry.getValue();
 
-			if ((idx.getRowIndex() == 1 && idx.getColumnIndex() == 1) || !blk.isEmptyBlock(false)) {
-				if (blk.isInSparseFormat() && !blk.isUltraSparse() && !(blk.getSparseBlock() instanceof SparseBlockCSR)) {
-					entry.setValue(null);
-					blk = new MatrixBlock(blk, MatrixBlock.DEFAULT_INPLACE_SPARSEBLOCK, true);
-				}
-				ret.add(new Tuple2<>(idx, blk));
+			blk.examSparsity();
+			if (blk.isInSparseFormat() && !blk.isUltraSparse() && !(blk.getSparseBlock() instanceof SparseBlockCSR)) {
+				sparseCount++;
+				blk = new MatrixBlock(blk, MatrixBlock.DEFAULT_INPLACE_SPARSEBLOCK, true);
 			}
+
+			memCost += blk.estimateSizeInMemory();
 		}
+		ret.add(new Tuple2<>(0, new Tuple3<>(denseCount, sparseCount, memCost)));
 
 		return ret.iterator();
 	}
@@ -175,13 +146,12 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 			}
 
 			block = new MatrixBlock(rowNum, colNum, sparse, estnnzHint);
-			block.allocateBlock();
 			map.put(idx, block);
 
 		} else {
 			block = map.get(idx);
 		}
-		block.setValue(i, j, v);
+		block.quickSetValue(i, j, v);
 	}
 
 }

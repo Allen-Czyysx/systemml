@@ -86,6 +86,9 @@ public class CpmmSPInstruction extends BinarySPInstruction {
 	
 	@Override
 	public void processInstruction(ExecutionContext ec) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
 		
 		//get rdd inputs
@@ -152,6 +155,12 @@ public class CpmmSPInstruction extends BinarySPInstruction {
 				updateBinaryMMOutputMatrixCharacteristics(sec, true);
 			}
 		}
+
+		// TODO added by czh debug
+		sec.getMatrixInput(output.getName());
+		sec.releaseMatrixInput(output.getName());
+		long t2 = System.currentTimeMillis();
+		System.out.println("cpmm " + input1.getName() + " time: " + (t2 - t1) / 1000.0);
 	}
 	
 	private static int getPreferredParJoin(MatrixCharacteristics mc1, MatrixCharacteristics mc2, int numPar1, int numPar2) {

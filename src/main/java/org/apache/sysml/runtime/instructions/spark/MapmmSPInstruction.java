@@ -20,23 +20,23 @@
 package org.apache.sysml.runtime.instructions.spark;
 
 
-import java.util.Iterator;
+import java.util.*;
 import java.util.stream.IntStream;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.StorageLevels;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.api.java.function.PairFunction;
 
 import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
-import org.apache.sysml.runtime.instructions.spark.data.BlockPartitioner;
-import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyAndSelectedBlocksFunction;
-import org.apache.sysml.runtime.instructions.spark.functions.RepartitionMapFunction;
-import org.apache.sysml.runtime.matrix.data.LibMatrixReorg;
+import org.apache.sysml.runtime.instructions.spark.functions.*;
+import org.apache.sysml.runtime.matrix.data.*;
 import scala.Tuple2;
 
 import org.apache.sysml.hops.AggBinaryOp.SparkAggType;
@@ -53,12 +53,8 @@ import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
 import org.apache.sysml.runtime.instructions.spark.data.LazyIterableIterator;
 import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
-import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyBlocksFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.RDDAggregateUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
-import org.apache.sysml.runtime.matrix.data.MatrixBlock;
-import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
-import org.apache.sysml.runtime.matrix.data.OperationsOnMatrixValues;
 import org.apache.sysml.runtime.matrix.operators.AggregateBinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.AggregateOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
@@ -70,11 +66,10 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 	private CacheType _type;
 	private boolean _outputEmpty;
 	private SparkAggType _aggtype;
-	private  boolean _isSpecial;
 
-	public static boolean hasRepartitioned = false;
+	public static Set<String> hasRepartitioned = new HashSet<>(2);
 
-	public static boolean hasFiltered = false;
+	public static Set<String> hasFiltered= new HashSet<>(2);
 
 	public static boolean useCP = false; // TODO added by czh
 
@@ -87,7 +82,6 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		_aggtype = aggtype;
 		_needCache = needCache;
 		_preOutputName = preOutputName;
-		_isSpecial = isSpecial;
 	}
 
 	public static MapmmSPInstruction parseInstruction(String str) {
@@ -116,6 +110,9 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 
 	@Override
 	public void processInstruction(ExecutionContext ec) {
+		// TODO added by czh debug
+		long t1 = System.currentTimeMillis();
+
 		SparkExecutionContext sec = (SparkExecutionContext) ec;
 
 		CacheType type = _type;
@@ -130,13 +127,23 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		String dVarName = null; // TODO added by czh 检查是否是dVar
 		if (_needCache && DWhileStatement.isDWhileTmpVar(bcastVar)) {
 			dVarName = DWhileStatement.getDVarNameFromTmpVar(bcastVar);
+			System.out.println("in delta mapmm: " + dVarName);
 		} else if (_needCache) {
 			dVarName = bcastVar;
 		}
 
+		// TODO added by czh
+		if (rddVar.equals("G")) {
+			DWhileProgramBlock.midT2 = System.currentTimeMillis();
+		}
+
+		// TODO added by czh 删
+		_outputEmpty = false;
+
 		//get input rdd with preferred number of partitions to avoid unnecessary repartitionNonZeros
 		JavaPairRDD<MatrixIndexes, MatrixBlock> in1;
-		if (_needCache && (hasRepartitioned || hasFiltered) && !needRepartitionNow) {
+		if (_needCache && (hasRepartitioned.contains(rddVar) || hasFiltered.contains(rddVar)) && !needRepartitionNow
+				&& DWhileStatement.isDWhileTmpVar(bcastVar)) {
 			// 在dwhile中, 做过repartition或filter且当前不需要repartition时取 betterRddVar
 			in1 = sec.getBinaryBlockRDDHandleForVariable(betterRddVar,
 					(requiresFlatMapFunction(type, mcBc) && requiresRepartitioning(
@@ -168,15 +175,14 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 		}
 
 		if (_needCache && needRepartitionNow) {
-			System.out.print("repartitioning...");
-			hasRepartitioned = true;
+			System.out.println("repartitioning... " + bcastVar);
+			hasRepartitioned.add(rddVar);
 
 			// repartitionNonZeros in2
 			MatrixBlock in2Block = sec.getMatrixObject(bcastVar).acquireReadAndRelease();
-			MatrixBlock repartitionSelect = sec.getMatrixObject(DWhileStatement.getRepartitionSelectName(dVarName))
-					.acquireReadAndRelease();
-			MatrixBlock newIn2Block = LibMatrixReorg.repartitionNonZeros(
-					sec, in2Block, true, repartitionSelect, dVarName, in1.getNumPartitions(), mcRdd);
+
+			MatrixBlock newIn2Block = LibMatrixReorg.repartitionNonZerosWithEmpty(
+					sec, in2Block, true, dVarName, in1.getNumPartitions(), mcRdd);
 			if (!sec.containsVariable(betterBcastVar)) {
 				sec.setVariable(betterBcastVar, new MatrixObject(sec.getMatrixObject(bcastVar)));
 			}
@@ -184,142 +190,172 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 			sec.setMatrixOutput(betterBcastVar, newIn2Block);
 
 			// repartitionNonZeros in1
-			// TODO added by czh
-//			MatrixCharacteristics in1MC = sec.getMatrixCharacteristics(rddVar);
-//			if (OptimizerUtils.estimateSizeExactSparsity(in1MC.getRows(), newIn2Block.getNumRows(),
-//					in1MC.getNonZeros()) <= OptimizerUtils.getLocalMemBudget()) {
-			if (false) {
-				System.out.println("begin local mapmm");
-				useCP = true;
-			} else {
-				useCP = false;
-			}
-
 			String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
 			PartitionedBroadcast<MatrixBlock> order = sec.getBroadcastForVariable(orderName);
-			in1 = in1.filter(new FilterNonEmptyBlocksFunction())
-					.mapPartitionsToPair(new RepartitionMapFunction(order));
-//			in1 = RDDAggregateUtils.mergeByKey(in1, false);
+			in1 = in1.mapPartitionsToPair(new RepartitionMapFunction(order));
 			if (!sec.containsVariable(betterRddVar)) {
 				sec.setVariable(betterRddVar, new MatrixObject(sec.getMatrixObject(rddVar)));
 			}
 			sec.getMatrixCharacteristics(betterRddVar).setCols(newIn2Block.getNumRows());
-			if (!useCP) {
-				in1 = sec.persistRdd(rddVar, in1, MEMORY_AND_DISK);
-				sec.setRDDHandleForVariable(betterRddVar, in1);
-				sec.addLineageBroadcast(betterRddVar, orderName);
-			} else {
-				sec.setRDDHandleForVariable(betterRddVar, in1);
-			}
+			in1 = sec.persistRdd(rddVar, in1, MEMORY_AND_DISK);
+			sec.setRDDHandleForVariable(betterRddVar, in1);
+			sec.addLineageBroadcast(betterRddVar, orderName);
 
-			System.out.println("done");
+			System.out.println(" done");
 
-		} else if (_needCache && hasRepartitioned) {
+		} else if (_needCache && hasRepartitioned.contains(rddVar) && DWhileStatement.isDWhileTmpVar(bcastVar)) {
 			// 若在之前的迭代已repartition in1, 则调整 in2 顺序
 			MatrixBlock in2Block = sec.getMatrixObject(bcastVar).acquireReadAndRelease();
 			MatrixBlock newIn2Block =
-					LibMatrixReorg.repartitionByOrder(sec, in2Block, new MatrixBlock(), true, dVarName);
+					LibMatrixReorg.repartitionByOrderWithEmpty(sec, in2Block, new MatrixBlock(), true, dVarName);
+
+			int selectSum = Arrays.stream(newIn2Block.getSelectBlock().getData()).sum();
+			if (selectSum == 0) {
+				updateBinaryMMOutputMatrixCharacteristics(sec, true);
+				MatrixCharacteristics outputMc = sec.getMatrixCharacteristics(output.getName());
+				sec.setMatrixOutput(output.getName(),
+						new MatrixBlock((int) outputMc.getRows(), (int) outputMc.getCols(), true), getExtendedOpcode());
+
+				// TODO added by czh debug
+				long t2 = System.currentTimeMillis();
+				System.out.println("skip mapmm " + bcastVar + " time: " + (t2 - t1) / 1000.0);
+
+				return;
+			}
+
+
 			if (!ec.containsVariable(betterBcastVar)) {
 				MatrixObject mb = new MatrixObject(sec.getMatrixObject(bcastVar));
 				ec.setVariable(betterBcastVar, mb);
 			}
 			sec.unpersistBroadcastByDWhile(sec.getMatrixObject(betterBcastVar));
 			sec.setMatrixOutput(betterBcastVar, newIn2Block);
+
+		} else if (_needCache && DWhileStatement.isDWhileTmpVar(bcastVar)) {
+			// 设置 in2.selectBlock
+			MatrixBlock in2Block = sec.getMatrixObject(bcastVar).acquireReadAndRelease();
+			String selectName = DWhileStatement.getSelectName(dVarName);
+			MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
+			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+			int brlen = (int) Math.ceil(in2Block.getNumRows() / blockSize);
+//			FilterBlock selectBlock = sec.getMatrixObject(selectName).acquireReadAndRelease().getFilterBlock();
+
+			FilterBlock selectBlock = new FilterBlock(brlen, 1);
+			selectBlock.initData();
+			for (int bi = 0; bi < brlen; bi++) {
+				boolean flag = false;
+				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < in2Block.getNumRows(); i++) {
+					if (select.getValue(i, 0) != 0) {
+						flag = true;
+						break;
+					}
+				}
+				if (flag) {
+					selectBlock.setData(bi, 0, 1);
+				} else {
+					selectBlock.setData(bi, 0, 0);
+				}
+			}
+
+			int selectSum = Arrays.stream(selectBlock.getData()).sum();
+			if (selectSum == 0) {
+				updateBinaryMMOutputMatrixCharacteristics(sec, true);
+				MatrixCharacteristics outputMc = sec.getMatrixCharacteristics(output.getName());
+				sec.setMatrixOutput(output.getName(),
+						new MatrixBlock((int) outputMc.getRows(), (int) outputMc.getCols(), true), getExtendedOpcode());
+
+				// TODO added by czh debug
+				long t2 = System.currentTimeMillis();
+				System.out.println("skip mapmm " + bcastVar + " time: " + (t2 - t1) / 1000.0);
+
+				return;
+			}
+
+			in2Block.setSelectBlock(selectBlock);
+			sec.setMatrixOutput(bcastVar, in2Block);
+		}
+
+		//get inputs
+		if (_needCache && hasRepartitioned.contains(rddVar) && DWhileStatement.isDWhileTmpVar(bcastVar)) {
+			bcastVar = betterBcastVar;
+		}
+		PartitionedBroadcast<MatrixBlock> in2 = sec.getBroadcastForVariable(bcastVar);
+
+		//empty input block filter
+		if (!_outputEmpty)
+			in1 = in1.filter(new FilterNonEmptyBlocksFunction());
+
+		if (needFilterNow) {
+			System.out.print("filtering... " + bcastVar);
+			hasFiltered.add(rddVar);
+
+			in1 = in1.filter(new FilterNonEmptyBlocksFunction());
+			sec.persistRdd(rddVar, in1, StorageLevels.MEMORY_AND_DISK);
+			if (!sec.containsVariable(betterRddVar)) {
+				sec.setVariable(betterRddVar, new MatrixObject(sec.getMatrixObject(rddVar)));
+			}
+			sec.setRDDHandleForVariable(betterRddVar, in1);
+			sec.addLineageBroadcast(betterRddVar, bcastVar);
+			if (hasRepartitioned.contains(rddVar) && DWhileStatement.isDWhileTmpVar(bcastVar)) {
+				sec.addLineageBroadcast(betterRddVar, DWhileStatement.getRepartitionOrderName(dVarName));
+			}
+
+			System.out.println(" done");
+		}
+
+		//execute mapmm and aggregation if necessary and put output into symbol table
+		if (_aggtype == SparkAggType.SINGLE_BLOCK) {
+			JavaRDD<MatrixBlock> out = in1.map(new RDDMapMMFunction2(type, in2));
+			MatrixBlock out2 = RDDAggregateUtils.sumStable(out);
+
+			//put output block into symbol table (no lineage because single block)
+			//this also includes implicit maintenance of matrix characteristics
+			sec.setMatrixOutput(output.getName(), out2, getExtendedOpcode());
+
+		} else { //MULTI_BLOCK or NONE
+			JavaPairRDD<MatrixIndexes, MatrixBlock> out;
+			if (requiresFlatMapFunction(type, mcBc)) {
+				if (requiresRepartitioning(type, mcRdd, mcBc, in1.getNumPartitions())) {
+					int numParts = getNumRepartitioning(type, mcRdd, mcBc);
+					LOG.warn("Mapmm: Repartition input rdd '" + rddVar + "' from " + in1.getNumPartitions() + " to "
+							+ numParts + " partitions to satisfy size restrictions of output partitions.");
+					in1 = in1.repartition(numParts);
+				}
+				out = in1.flatMapToPair(new RDDFlatMapMMFunction(type, in2));
+			} else if (preservesPartitioning(mcRdd, type))
+				out = in1.mapPartitionsToPair(new RDDMapMMPartitionFunction(type, in2), true);
+			else
+				out = in1.mapToPair(new RDDMapMMFunction(type, in2));
+
+			//empty output block filter
+			if (!_outputEmpty)
+				out = out.filter(new FilterNonEmptyBlocksFunction());
+
+			if (_aggtype == SparkAggType.MULTI_BLOCK)
+				out = RDDAggregateUtils.sumByKeyStable(out, false);
+
+			//put output RDD handle into symbol table
+			sec.setRDDHandleForVariable(output.getName(), out);
+			sec.addLineageRDD(output.getName(), rddVar);
+			sec.addLineageBroadcast(output.getName(), bcastVar);
+
+			if (needRepartitionNow || needFilterNow) {
+				sec.unpersistRdd(rddVar);
+			}
+
+			//update output statistics if not inferred
+			updateBinaryMMOutputMatrixCharacteristics(sec, true);
 		}
 
 		// TODO added by czh debug
-		if (_needCache) {
-			String preBlockNumName = DWhileStatement.getRepartitionPreBlockNumName(dVarName);
-			long preBlockNum = sec.getScalarInput(preBlockNumName, Expression.ValueType.INT, false)
-					.getLongValue();
-			System.out.println("preBlockNumAfterRepartition = " + preBlockNum);
-		}
+		sec.getMatrixInput(output.getName());
+		sec.releaseMatrixInput(output.getName());
+		long t2 = System.currentTimeMillis();
+		System.out.println("mapmm " + bcastVar + " time: " + (t2 - t1) / 1000.0);
 
-		if (useCP) {
-			MatrixBlock mb1 = sec.getMatrixInput(betterRddVar);
-			MatrixBlock mb2 = sec.getMatrixInput(betterBcastVar);
-			AggregateOperator agg = new AggregateOperator(0, Plus.getPlusFnObject());
-			AggregateBinaryOperator aggbin =
-					new AggregateBinaryOperator(Multiply.getMultiplyFnObject(), agg, 1);
-
-			MatrixBlock ret = mb1.aggregateBinaryOperations(mb1, mb2, new MatrixBlock(), aggbin);
-
-			sec.releaseMatrixInput(betterRddVar);
-			sec.releaseMatrixInput(bcastVar);
-			sec.setMatrixOutput(output.getName(), ret);
-
-		} else {
-			//get inputs
-			if (_needCache && hasRepartitioned) {
-				bcastVar = betterBcastVar;
-			}
-			PartitionedBroadcast<MatrixBlock> in2 = sec.getBroadcastForVariable(bcastVar);
-
-			//empty input block filter
-			if (!_outputEmpty)
-				in1 = in1.filter(new FilterNonEmptyBlocksFunction());
-
-			if (needFilterNow) {
-				System.out.print("filtering...");
-				hasFiltered = true;
-
-				in1 = in1.filter(new FilterNonEmptyAndSelectedBlocksFunction(in2));
-				sec.persistRdd(rddVar, in1, StorageLevels.MEMORY_AND_DISK);
-				if (!sec.containsVariable(betterRddVar)) {
-					sec.setVariable(betterRddVar, new MatrixObject(sec.getMatrixObject(rddVar)));
-				}
-				sec.setRDDHandleForVariable(betterRddVar, in1);
-				sec.addLineageBroadcast(betterRddVar, bcastVar);
-				if (hasRepartitioned) {
-					sec.addLineageBroadcast(betterRddVar, DWhileStatement.getRepartitionOrderName(dVarName));
-				}
-
-				System.out.println("done");
-			}
-
-			//execute mapmm and aggregation if necessary and put output into symbol table
-			if (_aggtype == SparkAggType.SINGLE_BLOCK) {
-				JavaRDD<MatrixBlock> out = in1.map(new RDDMapMMFunction2(type, in2));
-				MatrixBlock out2 = RDDAggregateUtils.sumStable(out);
-
-				//put output block into symbol table (no lineage because single block)
-				//this also includes implicit maintenance of matrix characteristics
-				sec.setMatrixOutput(output.getName(), out2, getExtendedOpcode());
-
-			} else { //MULTI_BLOCK or NONE
-				JavaPairRDD<MatrixIndexes, MatrixBlock> out;
-				if (requiresFlatMapFunction(type, mcBc)) {
-					if (requiresRepartitioning(type, mcRdd, mcBc, in1.getNumPartitions())) {
-						int numParts = getNumRepartitioning(type, mcRdd, mcBc);
-						LOG.warn("Mapmm: Repartition input rdd '" + rddVar + "' from " + in1.getNumPartitions() + " to "
-								+ numParts + " partitions to satisfy size restrictions of output partitions.");
-						in1 = in1.repartition(numParts);
-					}
-					out = in1.flatMapToPair(new RDDFlatMapMMFunction(type, in2));
-				} else if (preservesPartitioning(mcRdd, type))
-					out = in1.mapPartitionsToPair(new RDDMapMMPartitionFunction(type, in2), true);
-				else
-					out = in1.mapToPair(new RDDMapMMFunction(type, in2));
-
-				//empty output block filter
-				if (!_outputEmpty)
-					out = out.filter(new FilterNonEmptyBlocksFunction());
-
-				if (_aggtype == SparkAggType.MULTI_BLOCK)
-					out = RDDAggregateUtils.sumByKeyStable(out, false);
-
-				//put output RDD handle into symbol table
-				sec.setRDDHandleForVariable(output.getName(), out);
-				sec.addLineageRDD(output.getName(), rddVar);
-				sec.addLineageBroadcast(output.getName(), bcastVar);
-
-				if (needRepartitionNow || needFilterNow) {
-					sec.unpersistRdd(rddVar);
-				}
-
-				//update output statistics if not inferred
-				updateBinaryMMOutputMatrixCharacteristics(sec, true);
-			}
+		// TODO added by czh
+		if (rddVar.equals("TG")) {
+			DWhileProgramBlock.midT1 = System.currentTimeMillis();
 		}
 	}
 
@@ -421,17 +457,26 @@ public class MapmmSPInstruction extends BinarySPInstruction {
 				//get the right hand side matrix
 				MatrixBlock left = _pbc.getBlock(1, (int) ixIn.getRowIndex());
 
-				//execute matrix-vector mult
-				OperationsOnMatrixValues.matMult(new MatrixIndexes(1, ixIn.getRowIndex()),
-						left, ixIn, blkIn, ixOut, blkOut, _op);
+//				if (left.getSparseBlock() == null && left.getDenseBlock() == null) {
+//					blkOut = new MatrixBlock();
+//				} else {
+					//execute matrix-vector mult
+					OperationsOnMatrixValues.matMult(
+							new MatrixIndexes(1, ixIn.getRowIndex()), left, ixIn, blkIn, ixOut, blkOut, _op);
+//				}
+
 			} else //if( _type == CacheType.RIGHT )
 			{
 				//get the right hand side matrix
 				MatrixBlock right = _pbc.getBlock((int) ixIn.getColumnIndex(), 1);
 
-				//execute matrix-vector mult
-				OperationsOnMatrixValues.matMult(ixIn, blkIn,
-						new MatrixIndexes(ixIn.getColumnIndex(), 1), right, ixOut, blkOut, _op);
+//				if (right.getSparseBlock() == null && right.getDenseBlock() == null) {
+//					blkOut = new MatrixBlock();
+//				} else {
+					//execute matrix-vector mult
+					OperationsOnMatrixValues.matMult(ixIn, blkIn,
+							new MatrixIndexes(ixIn.getColumnIndex(), 1), right, ixOut, blkOut, _op);
+//				}
 			}
 
 			//output new tuple

@@ -219,6 +219,7 @@ public class AggBinaryOp extends MultiThreadedHop
 						input1.getDim1(), input1.getDim2(), input1.getRowsInBlock(), input1.getColsInBlock(), input1.getNnz(),
 						input2.getDim1(), input2.getDim2(), input2.getRowsInBlock(), input2.getColsInBlock(), input2.getNnz(),
 						mmtsj, chain, _hasLeftPMInput, tmmRewrite );
+//				_method = MMultMethod.CPMM; // TODO added by czh
 			
 				//dispatch SPARK lops construction 
 				switch( _method )
