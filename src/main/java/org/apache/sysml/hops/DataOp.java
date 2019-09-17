@@ -271,7 +271,8 @@ public class DataOp extends Hop
 			case PERSISTENTWRITE:
 				l = new Data(HopsData2Lops.get(_dataop), getInput().get(0).constructLops(), inputLops, getName(), null, 
 						getDataType(), getValueType(), false, getInputFormatType());
-				((Data)l).setExecType(et);
+				((Data) l).setExecType(et);
+				((Data) l).setExecType(ExecType.SPARK); // TODO added by czh
 				setOutputDimensions(l);
 				break;
 				

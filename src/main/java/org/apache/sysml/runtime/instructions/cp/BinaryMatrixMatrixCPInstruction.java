@@ -19,7 +19,6 @@
 
 package org.apache.sysml.runtime.instructions.cp;
 
-import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.functionobjects.MultiplyBlock;
@@ -80,11 +79,12 @@ public class BinaryMatrixMatrixCPInstruction extends BinaryCPInstruction {
 		// Attach result matrix with MatrixObject associated with output_name
 		ec.setMatrixOutput(output.getName(), retBlock, getExtendedOpcode());
 
-		// TODO added by czh debug
-//		if (DWhileStatement.isPreOutputNameFromHop(input1.getName())) {
-			long t2 = System.currentTimeMillis();
-			System.out.println(getOpcode() + " " + input1.getName() + " " + input2.getName() + " " + output.getName()
-					+ " time: " + (t2 - t1) / 1000.0);
-//		}
+//		// TODO added by czh debug
+////		if (DWhileStatement.isPreOutputNameFromHop(input1.getName())) {
+//			long t2 = System.currentTimeMillis();
+//			System.out.println(getOpcode() + " " + input1.getName() + " " + input2.getName() + " " + output.getName()
+//					+ " time: " + (t2 - t1) / 1000.0);
+////		}
 	}
+
 }

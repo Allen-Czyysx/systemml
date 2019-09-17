@@ -41,7 +41,7 @@ public class MMCJ extends Lop
 	private MMCJType _type = MMCJType.AGG;
 	
 	//optional attribute for spark exec type
-	private SparkAggType _aggtype = SparkAggType.MULTI_BLOCK;
+	public SparkAggType _aggtype = SparkAggType.MULTI_BLOCK;
 		
 	/**
 	 * Constructor to perform a cross product operation.
@@ -101,32 +101,34 @@ public class MMCJ extends Lop
 
 	//SPARK instruction generation
 	@Override
-	public String getInstructions(String input1, String input2, String output)
-	{
+	public String getInstructions(String input1, String input2, String output) {
 		StringBuilder sb = new StringBuilder();
-		sb.append( getExecType() );
-		
-		sb.append( Lop.OPERAND_DELIMITOR );
-		sb.append( "cpmm" );
-		
-		sb.append( OPERAND_DELIMITOR );
-		sb.append( getInputs().get(0).prepInputOperand(input1) );
-		
-		sb.append( OPERAND_DELIMITOR );
-		sb.append( getInputs().get(1).prepInputOperand(input2) );
-		
-		sb.append( OPERAND_DELIMITOR );
-		sb.append( prepOutputOperand(output) );
-		
-		sb.append( OPERAND_DELIMITOR );
-		if( getExecType() == ExecType.SPARK ) {
+		sb.append(getExecType());
+
+		sb.append(Lop.OPERAND_DELIMITOR);
+		sb.append("cpmm");
+
+		sb.append(OPERAND_DELIMITOR);
+		sb.append(getInputs().get(0).prepInputOperand(input1));
+
+		sb.append(OPERAND_DELIMITOR);
+		sb.append(getInputs().get(1).prepInputOperand(input2));
+
+		sb.append(OPERAND_DELIMITOR);
+		sb.append(prepOutputOperand(output));
+
+		sb.append(OPERAND_DELIMITOR);
+		if (getExecType() == ExecType.SPARK) {
 			sb.append(_outputEmptyBlocks);
 			sb.append(Lop.OPERAND_DELIMITOR);
 			sb.append(_aggtype.name());
-		}
-		else
+		} else {
 			sb.append(_type.name());
-		
+		}
+
+		setCacheInfoToInst(sb);
+
 		return sb.toString();
 	}
+
 }

@@ -49,26 +49,8 @@ import org.apache.sysml.runtime.controlprogram.caching.CacheBlock;
 import org.apache.sysml.runtime.controlprogram.caching.LazyWriteBuffer;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
-import org.apache.sysml.runtime.functionobjects.Builtin;
+import org.apache.sysml.runtime.functionobjects.*;
 import org.apache.sysml.runtime.functionobjects.Builtin.BuiltinCode;
-import org.apache.sysml.runtime.functionobjects.CM;
-import org.apache.sysml.runtime.functionobjects.CTable;
-import org.apache.sysml.runtime.functionobjects.DiagIndex;
-import org.apache.sysml.runtime.functionobjects.Divide;
-import org.apache.sysml.runtime.functionobjects.IfElse;
-import org.apache.sysml.runtime.functionobjects.KahanFunction;
-import org.apache.sysml.runtime.functionobjects.KahanPlus;
-import org.apache.sysml.runtime.functionobjects.KahanPlusSq;
-import org.apache.sysml.runtime.functionobjects.MinusMultiply;
-import org.apache.sysml.runtime.functionobjects.Multiply;
-import org.apache.sysml.runtime.functionobjects.Plus;
-import org.apache.sysml.runtime.functionobjects.PlusMultiply;
-import org.apache.sysml.runtime.functionobjects.ReduceAll;
-import org.apache.sysml.runtime.functionobjects.ReduceCol;
-import org.apache.sysml.runtime.functionobjects.ReduceRow;
-import org.apache.sysml.runtime.functionobjects.RevIndex;
-import org.apache.sysml.runtime.functionobjects.SortIndex;
-import org.apache.sysml.runtime.functionobjects.SwapIndex;
 import org.apache.sysml.runtime.functionobjects.TernaryValueFunction.ValueFunctionWithConstant;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CM_COV_Object;
@@ -2795,11 +2777,18 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 			sp = false; // if the operation is not sparse safe, then result will be in dense format
 		
 		//allocate the output matrix block
-		if( ret==null )
+		if (op.fn instanceof SelectRow) {
+			if (ret == null) {
+				ret = new MatrixBlock(rlen, 1, false, this.nonZeros);
+			} else {
+				ret.reset(rlen, 1, false, this.nonZeros);
+			}
+		} else if (ret == null) {
 			ret = new MatrixBlock(rlen, clen, sp, this.nonZeros);
-		else if (!op.fn.isBlockFn())
+		} else {
 			ret.reset(rlen, clen, sp, this.nonZeros);
-		
+		}
+
 		//core scalar operations
 		LibMatrixBincell.bincellOp(this, ret, op);
 		
@@ -5172,7 +5161,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 //		if (DWhileStatement.isDWhileTmpVar(name)) {
 //			name = DWhileStatement.getDVarNameFromTmpVar(name);
 //		}
-//		return LibMatrixReorg.repartitionNonZeros(ec, this, ret, rows, select, DWhileStatement.getDVarNameFromTmpVar(name));
+//		return LibMatrixReorg.repartitionNonZeros(_ec, this, ret, rows, select, DWhileStatement.getDVarNameFromTmpVar(name));
 		return null;
 	}
 

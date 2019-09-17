@@ -43,8 +43,10 @@ import org.apache.sysml.lops.PMapMult;
 import org.apache.sysml.lops.PartialAggregate.CorrectionLocationType;
 import org.apache.sysml.lops.Transform;
 import org.apache.sysml.lops.Transform.OperationTypes;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.ParForProgramBlock.PDataPartitionFormat;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
@@ -53,7 +55,7 @@ import org.apache.sysml.runtime.matrix.mapred.DistributedCacheInput;
 import org.apache.sysml.runtime.matrix.mapred.MMCJMRReducerWithAggregator;
 import org.apache.sysml.runtime.util.UtilFunctions;
 
-import static org.apache.sysml.parser.DWhileStatement.getPreOutputNameFromHop;
+import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 
 
 /* Aggregate binary (cell operations): Sum (aij + bij)
@@ -182,7 +184,7 @@ public class AggBinaryOp extends MultiThreadedHop
 			
 			//matrix mult operation selection part 1 (CP vs MR vs Spark)
 			ExecType et = optFindExecType();
-			
+
 			//matrix mult operation selection part 2 (specific pattern)
 			MMTSJType mmtsj = checkTransposeSelf(); //determine tsmm pattern
 			ChainType chain = checkMapMultChain(); //determine mmchain pattern
@@ -213,13 +215,29 @@ public class AggBinaryOp extends MultiThreadedHop
 			}
 			else if( et == ExecType.SPARK ) 
 			{
+				long in1Nnz;
+				long in2Nnz;
+				if (_needCache && DWhileStatement.isDWhileTmpVar(input2._name) && DWhileProgramBlock._ec != null) {
+					String dVarName = DWhileStatement.getDVarNameFromTmpVar(input2._name);
+					String blockNumName = DWhileStatement.getRepartitionPreBlockNumName(dVarName);
+					long blockNum = DWhileProgramBlock._ec.getScalarInput(blockNumName, ValueType.INT, false)
+							.getLongValue();
+					in1Nnz = blockNum * DEFAULT_BLOCKSIZE * input1._dim1;
+					in2Nnz = input2._dim2 * blockNum * DEFAULT_BLOCKSIZE;
+					in1Nnz = input1._nnz < 0 ? in1Nnz : Math.min(input1._nnz, in1Nnz);
+					in2Nnz = input2._nnz < 0 ? in2Nnz : Math.min(input2._nnz, in2Nnz);
+				} else {
+					in1Nnz = input1.getNnz();
+					in2Nnz = input2.getNnz();
+				}
+
 				//matrix mult operation selection part 3 (SPARK type)
 				boolean tmmRewrite = HopRewriteUtils.isTransposeOperation(input1);
 				_method = optFindMMultMethodSpark ( 
-						input1.getDim1(), input1.getDim2(), input1.getRowsInBlock(), input1.getColsInBlock(), input1.getNnz(),
-						input2.getDim1(), input2.getDim2(), input2.getRowsInBlock(), input2.getColsInBlock(), input2.getNnz(),
+						input1.getDim1(), input1.getDim2(), input1.getRowsInBlock(), input1.getColsInBlock(), in1Nnz,
+						input2.getDim1(), input2.getDim2(), input2.getRowsInBlock(), input2.getColsInBlock(), in2Nnz,
 						mmtsj, chain, _hasLeftPMInput, tmmRewrite );
-//				_method = MMultMethod.CPMM; // TODO added by czh
+				_method = _method == MMultMethod.RMM ? MMultMethod.CPMM : _method; // TODO added by czh 暴力
 			
 				//dispatch SPARK lops construction 
 				switch( _method )
@@ -737,10 +755,6 @@ public class AggBinaryOp extends MultiThreadedHop
 			mapmult = new MapMult(getInput().get(0).constructLops(), getInput().get(1).constructLops(),
 					                getDataType(), getValueType(), (method==MMultMethod.MAPMM_R), false, 
 					                _outputEmptyBlocks, aggtype);	
-		}
-
-		if (innerOp == OpOp2.SMULT) {
-			mapmult.setSpecial(true);
 		}
 
 		setOutputDimensions(mapmult);
@@ -1599,9 +1613,9 @@ public class AggBinaryOp extends MultiThreadedHop
 		return MMultMethod.MM; 
 	}
 	
-	private MMultMethod optFindMMultMethodSpark( long m1_rows, long m1_cols, long m1_rpb, long m1_cpb, long m1_nnz, 
+	private MMultMethod optFindMMultMethodSpark( long m1_rows, long m1_cols, long m1_rpb, long m1_cpb, long m1_nnz,
 		long m2_rows, long m2_cols, long m2_rpb, long m2_cpb, long m2_nnz,
-		MMTSJType mmtsj, ChainType chainType, boolean leftPMInput, boolean tmmRewrite ) 
+		MMTSJType mmtsj, ChainType chainType, boolean leftPMInput, boolean tmmRewrite )
 	{
 		//Notes: Any broadcast needs to fit twice in local memory because we partition the input in cp,
 		//and needs to fit once in executor broadcast memory. The 2GB broadcast constraint is no longer

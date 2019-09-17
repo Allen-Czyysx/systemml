@@ -21,6 +21,7 @@ package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.StorageLevels;
+import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.BinaryM.VectorType;
 import org.apache.sysml.parser.DWhileStatement;
@@ -28,9 +29,9 @@ import org.apache.sysml.parser.Expression;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
-import org.apache.sysml.runtime.functionobjects.Divide;
 import org.apache.sysml.runtime.functionobjects.MultiplyBlock;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
@@ -39,17 +40,22 @@ import org.apache.sysml.runtime.instructions.spark.data.PartitionedBroadcast;
 import org.apache.sysml.runtime.instructions.spark.functions.*;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
+import org.apache.sysml.runtime.matrix.data.FilterBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
-import scala.Tuple2;
 
 import java.util.Arrays;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
+
+	public static Set<String> _hasRepartitioned = new HashSet<>(2);
+
+	public static Set<String> _hasFiltered = new HashSet<>(2);
 
 	protected BinarySPInstruction(SPType type, Operator op, CPOperand in1, CPOperand in2, CPOperand out, String opcode,
 								  String istr) {
@@ -155,9 +161,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	 */
 	protected void processMatrixMatrixBinaryInstruction(ExecutionContext ec) 
 	{
-//		// TODO added by czh debug
-//		long t1 = System.currentTimeMillis();
-
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
 		
 		//sanity check dimensions
@@ -195,12 +198,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(output.getName(), input1.getName());
 		sec.addLineageRDD(output.getName(), input2.getName());
-
-//		// TODO added by czh debug
-//		sec.getMatrixInput(output.getName());
-//		sec.releaseMatrixInput(output.getName());
-//		long t2 = System.currentTimeMillis();
-//		System.out.println("binary " + input1.getName() + " time: " + (t2 - t1) / 1000.0);
 	}
 
 	protected void processMatrixBVectorBinaryInstruction(ExecutionContext ec, VectorType vtype) 
@@ -380,13 +377,13 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		}	
 		
 		if(mc1.getRowsPerBlock() != mc2.getRowsPerBlock() ||  mc1.getColsPerBlock() != mc2.getColsPerBlock()) {
-			// TODO added by czh 暴力
-			mc1.setColsPerBlock(1000);
-			mc1.setRowsPerBlock(1000);
-			mc2.setColsPerBlock(1000);
-			mc2.setRowsPerBlock(1000);
-//			throw new DMLRuntimeException("Blocksize mismatch matrix-matrix binary operations: "
-//					+ "[" + mc1.getRowsPerBlock() + "x" + mc1.getColsPerBlock()  + " vs " + mc2.getRowsPerBlock() + "x" + mc2.getColsPerBlock() + "]");
+//			// TODO added by czh 暴力
+//			mc1.setColsPerBlock(1000);
+//			mc1.setRowsPerBlock(1000);
+//			mc2.setColsPerBlock(1000);
+//			mc2.setRowsPerBlock(1000);
+			throw new DMLRuntimeException("Blocksize mismatch matrix-matrix binary operations: "
+					+ "[" + mc1.getRowsPerBlock() + "x" + mc1.getColsPerBlock()  + " vs " + mc2.getRowsPerBlock() + "x" + mc2.getColsPerBlock() + "]");
 		}	
 	}
 
@@ -438,6 +435,84 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 //		}
 
 		return false;
+	}
+
+	/**
+	 * @return 当前是否需要 repartition
+	 */
+	boolean needRepartitionNow(String varName) {
+		if (!_needCache) {
+			return false;
+		}
+
+		return needRepartition(varName);
+	}
+
+	/**
+	 * @return 当前是否需要 repartition
+	 */
+	public static boolean needRepartition(String varName) {
+		ExecutionContext ec = DWhileProgramBlock._ec;
+
+		if (!DWhileStatement.isDWhileTmpVar(varName) && !DWhileStatement.isDVar(varName, ec)) {
+			return false;
+		}
+
+		String dVarName = DWhileStatement.getDVarNameFromTmpVar(varName);
+		String useRepartitionName = DWhileStatement.getUseRepartitionName(dVarName);
+		if (ec.containsVariable(useRepartitionName)) {
+			return ec.getScalarInput(useRepartitionName, Expression.ValueType.BOOLEAN, false)
+					.getBooleanValue();
+		}
+
+		return false;
+	}
+
+	/**
+	 * @return 当前是否 hasRepartitioned
+	 */
+	public static boolean hasRepartitioned(String in1Name, String in2Name) {
+		return _hasRepartitioned.contains(in1Name) && DWhileStatement.isDWhileTmpVar(in2Name);
+	}
+
+	/**
+	 * @return selectBlock or null
+	 */
+	FilterBlock selectMatrixBlock(SparkExecutionContext sec, String inName, String dVarName) {
+		MatrixCharacteristics inMc = sec.getMatrixCharacteristics(inName);
+		String selectName = DWhileStatement.getSelectName(dVarName);
+		MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
+		float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+		int brlen = (int) Math.ceil(inMc.getRows() / blockSize);
+
+		FilterBlock selectBlock = new FilterBlock(brlen, 1);
+		selectBlock.initData();
+		for (int bi = 0; bi < brlen; bi++) {
+			boolean flag = false;
+			for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < inMc.getRows(); i++) {
+				if (select.getValue(i, 0) != 0) {
+					flag = true;
+					break;
+				}
+			}
+			if (flag) {
+				selectBlock.setData(bi, 0, 1);
+			} else {
+				selectBlock.setData(bi, 0, 0);
+			}
+		}
+
+		int selectSum = Arrays.stream(selectBlock.getData()).sum();
+		if (selectSum == 0) {
+			updateBinaryMMOutputMatrixCharacteristics(sec, true);
+			MatrixCharacteristics outputMc = sec.getMatrixCharacteristics(output.getName());
+			sec.setMatrixOutput(output.getName(),
+					new MatrixBlock((int) outputMc.getRows(), (int) outputMc.getCols(), true), getExtendedOpcode());
+
+			return null;
+		}
+
+		return selectBlock;
 	}
 
 }

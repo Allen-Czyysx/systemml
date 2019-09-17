@@ -480,13 +480,13 @@ public class OptimizerUtils
 	}
 	
 	public static boolean checkSparkCollectMemoryBudget( MatrixCharacteristics mc, long memPinned, boolean checkBP ) {
-		// TODO added by czh 暴力解决估计内存不够, 需要写HDFS
-		return true;
-//		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
-//			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
+//		// TODO added by czh 暴力解决估计内存不够, 需要写HDFS
+//		return true;
+		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
+			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
 	}
 	
-	private static boolean checkSparkCollectMemoryBudget( long rlen, long clen, int brlen, int bclen, long nnz, long memPinned, boolean checkBP ) {
+	public static boolean checkSparkCollectMemoryBudget( long rlen, long clen, int brlen, int bclen, long nnz, long memPinned, boolean checkBP ) {
 		//compute size of output matrix and its blocked representation
 		double sp = getSparsity(rlen, clen, nnz);
 		double memMatrix = estimateSizeExactSparsity(rlen, clen, sp);

@@ -376,6 +376,8 @@ public class RDDSortUtils
 		}
 	}
 
+
+
 	private static class CreateDoubleKeyFunction implements Function<Double,Double> 
 	{
 		private static final long serialVersionUID = 2021786334763247835L;
@@ -860,6 +862,16 @@ public class RDDSortUtils
 					MatrixBlock mbTargetIndex = _pmb.value().getBlock((int)ixmap.getRowIndex(), 1);
 					
 					long valix = (long) mbTargetIndex.getValue(_currPos, 0);
+
+					// 处理不要的
+					if (valix < 0) {
+						_currPos++;
+						if (_currPos == data.getNumRows()) {
+							_currBlk = null;
+						}
+						return new Tuple2<>(new MatrixIndexes(), new RowMatrixBlock());
+					}
+
 					long rix = UtilFunctions.computeBlockIndex(valix, _brlen);
 					int pos = UtilFunctions.computeCellInBlock(valix, _brlen);
 					int len = UtilFunctions.computeBlockSize(_rlen, rix, _brlen);
@@ -871,7 +883,7 @@ public class RDDSortUtils
 					if( _currPos == data.getNumRows() ){
 						_currBlk = null;
 					}
-					
+
 					return new Tuple2<>(lix, new RowMatrixBlock(len, pos, tmp));
 				}
 				catch(Exception ex) {

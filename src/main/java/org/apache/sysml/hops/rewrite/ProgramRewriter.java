@@ -127,7 +127,7 @@ public class ProgramRewriter
 				_dagRuleSet.add( new RewriteGPUSpecificOps() );	// gpu-specific rewrites
 			}
 			if ( OptimizerUtils.ALLOW_SUM_PRODUCT_REWRITES) {
-				_dagRuleSet.add( new RewriteMatrixMultChainOptimization()         ); //dependency: cse
+//				_dagRuleSet.add( new RewriteMatrixMultChainOptimization()         ); //dependency: cse TODO added by czh 暴力解决 ALS
 				_dagRuleSet.add( new RewriteElementwiseMultChainOptimization()    ); //dependency: cse
 			}
 			if( OptimizerUtils.ALLOW_ALGEBRAIC_SIMPLIFICATION ) {

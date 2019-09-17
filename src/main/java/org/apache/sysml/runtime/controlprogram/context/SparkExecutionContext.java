@@ -49,6 +49,7 @@ import org.apache.sysml.api.mlcontext.MLContext;
 import org.apache.sysml.api.mlcontext.MLContextUtil;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.lops.Checkpoint;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
 import org.apache.sysml.runtime.compress.CompressedMatrixBlock;
@@ -104,7 +105,7 @@ public class SparkExecutionContext extends ExecutionContext
 	//10% of JVM max heap size for parallelized RDDs; if this is not sufficient,
 	//matrices or frames are exported to HDFS and the RDDs are created from files.
 	//TODO unify memory management for CP, par RDDs, and potentially broadcasts
-	private static final MemoryManagerParRDDs _parRDDs = new MemoryManagerParRDDs(0.1);
+	public static final MemoryManagerParRDDs _parRDDs = new MemoryManagerParRDDs(0.1);
 	
 	//pool of reused fair scheduler pool names (unset bits indicate availability)
 	private static boolean[] _poolBuff = FAIR_SCHEDULER_MODE ?
@@ -312,6 +313,7 @@ public class SparkExecutionContext extends ExecutionContext
 	@SuppressWarnings("unchecked")
 	public JavaPairRDD<MatrixIndexes,MatrixBlock> getBinaryBlockRDDHandleForVariable( String varname ) {
 		MatrixObject mo = getMatrixObject(varname);
+		mo._name = varname;
 		return (JavaPairRDD<MatrixIndexes,MatrixBlock>)
 			getRDDHandleForMatrixObject(mo, InputInfo.BinaryBlockInputInfo, -1, true);
 	}
@@ -596,14 +598,6 @@ public class SparkExecutionContext extends ExecutionContext
 			MatrixBlock mb = mo.acquireRead();
 			PartitionedBlock<MatrixBlock> pmb = new PartitionedBlock<>(mb, brlen, bclen);
 			mo.release();
-
-//			// TODO added by czh debug
-//			int mm = 0;
-//			for (CacheBlock partBlock : pmb.getPartBlocks()) {
-//				MatrixBlock partMatrixBlock = (MatrixBlock) partBlock;
-//				mm += partMatrixBlock.getInMemorySize();
-//			}
-//			System.out.println("bcast mem size: " + mm);
 
 			//determine coarse-grained partitioning
 			int numPerPart = PartitionedBroadcast.computeBlocksPerPartition(mo.getNumRows(), mo.getNumColumns(), brlen, bclen);
@@ -1753,7 +1747,7 @@ public class SparkExecutionContext extends ExecutionContext
 		}
 	}
 
-	private static class MemoryManagerParRDDs
+	public static class MemoryManagerParRDDs
 	{
 		private final long _limit;
 		private long _size;

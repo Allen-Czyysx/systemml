@@ -58,9 +58,9 @@ public class BinaryMatrixScalarCPInstruction extends BinaryCPInstruction {
 		
 		ec.setMatrixOutput(output.getName(), retBlock, getExtendedOpcode());
 
-		// TODO added by czh debug
-		if (sc_op.fn instanceof SelectRow) {
-			System.out.println("b>= " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
-		}
+//		// TODO added by czh debug
+//		if (sc_op.fn instanceof SelectRow) {
+//			System.out.println("b>= " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
+//		}
 	}
 }

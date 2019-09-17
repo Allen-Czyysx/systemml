@@ -21,66 +21,6 @@ public class RepartitionMapFunction implements PairFlatMapFunction<Iterator<Tupl
 		_pbc = binput;
 	}
 
-//	@Override
-//	public Iterator<Tuple2<MatrixIndexes, MatrixBlock>> call(Iterator<Tuple2<MatrixIndexes, MatrixBlock>> iterator)
-//			throws Exception {
-//		Map<MatrixIndexes, MatrixBlock> outputMap = new HashMap<>();
-//
-//		while (iterator.hasNext()) {
-//			Tuple2<MatrixIndexes, MatrixBlock> arg = iterator.next();
-//			MatrixIndexes ixIn = arg._1();
-//			MatrixBlock blkIn = arg._2();
-//			int blockI = (int) ixIn.getRowIndex();
-//			int blockJ = (int) ixIn.getColumnIndex();
-//			MatrixBlock colOrder = _pbc.getBlock(blockJ, 1);
-//
-//			if (!(ixIn.getRowIndex() == 1 && ixIn.getColumnIndex() == 1) && blkIn.isEmptyBlock(false)) {
-//				continue;
-//			}
-//
-//			if (blkIn.isInSparseFormat()) {
-//				for (Iterator<IJV> it = blkIn.getSparseBlockIterator(); it.hasNext(); ) {
-//					IJV ijv = it.next();
-//					int i = ijv.getI();
-//					int j = ijv.getJ();
-//					int newGlobalJ = (int) colOrder.getValue(j, 0);
-//					double v = ijv.getV();
-//
-//					setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
-//							blkIn.getNumRows(), blkIn.getNonZeros(), true);
-//				}
-//
-//			} else {
-//				for (int j = 0; j < blkIn.getNumColumns(); j++) {
-//					for (int i = 0; i < blkIn.getNumRows(); i++) {
-//						int newGlobalJ = (int) colOrder.getValue(j, 0);
-//						double v = blkIn.getValue(i, j);
-//
-//						setValueToMap(outputMap, getIndexes(blockI, newGlobalJ), i, getIndexInBlock(newGlobalJ), v,
-//								blkIn.getNumRows(), blkIn.getNonZeros(), false);
-//					}
-//				}
-//			}
-//		}
-//
-//		List<Tuple2<MatrixIndexes, MatrixBlock>> ret = new ArrayList<>(outputMap.size());
-//		for (Map.Entry<MatrixIndexes, MatrixBlock> entry : outputMap.entrySet()) {
-//			MatrixIndexes idx = entry.getKey();
-//			MatrixBlock blk = entry.getValue();
-//			blk.examSparsity();
-//
-//			if ((idx.getRowIndex() == 1 && idx.getColumnIndex() == 1) || !blk.isEmptyBlock(false)) {
-//				if (blk.isInSparseFormat() && !blk.isUltraSparse() && !(blk.getSparseBlock() instanceof SparseBlockCSR)) {
-//					entry.setValue(null);
-//					blk = new MatrixBlock(blk, MatrixBlock.DEFAULT_INPLACE_SPARSEBLOCK, true);
-//				}
-//				ret.add(new Tuple2<>(idx, blk));
-//			}
-//		}
-//
-//		return ret.iterator();
-//	}
-
 	@Override
 	public Iterator<Tuple2<MatrixIndexes, MatrixBlock>> call(Iterator<Tuple2<MatrixIndexes, MatrixBlock>> iterator)
 			throws Exception {

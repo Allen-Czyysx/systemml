@@ -78,6 +78,8 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 	private int _partitionSize = -1; //indicates n for BLOCKWISE_N
 	private String _partitionCacheName = null; //name of cache block
 	private MatrixBlock _partitionInMemory = null;
+
+	public String _name;
 	
 	/**
 	 * Constructor that takes the value type and the HDFS filename.
@@ -445,7 +447,7 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 	}
 
 	@Override
-	protected MatrixBlock readBlobFromRDD(RDDObject rdd, MutableBoolean writeStatus) 
+	public MatrixBlock readBlobFromRDD(RDDObject rdd, MutableBoolean writeStatus)
 		throws IOException
 	{
 		//note: the read of a matrix block from an RDD might trigger
@@ -473,7 +475,7 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 			int bclen = mc.getColsPerBlock();
 			long nnz = mc.getNonZerosBound();
 			
-			//guarded rdd collect 
+			//guarded rdd collect
 			if( ii == InputInfo.BinaryBlockInputInfo && //guarded collect not for binary cell
 				!OptimizerUtils.checkSparkCollectMemoryBudget(mc, getPinnedSize()+getBroadcastSize(), true) ) {
 				//write RDD to hdfs and read to prevent invalid collect mem consumption 
@@ -489,9 +491,9 @@ public class MatrixObject extends CacheableData<MatrixBlock>
 				}
 				mb = readBlobFromHDFS(_hdfsFileName);
 			}
-			// TODO added by czh 极度暴力, 需改
-			else if (false) {
-//			else if( ii == InputInfo.BinaryCellInputInfo ) {
+//			// TODO added by czh 极度暴力, 需改
+//			else if (false) {
+			else if( ii == InputInfo.BinaryCellInputInfo ) {
 				//collect matrix block from binary block RDD
 				mb = SparkExecutionContext.toMatrixBlock(lrdd, rlen, clen, nnz);
 			}

@@ -56,7 +56,7 @@ public class MapMult extends Lop
 	private boolean _outputEmptyBlocks = true;
 	
 	//optional attribute for spark exec type
-	private SparkAggType _aggtype = SparkAggType.MULTI_BLOCK;
+	public SparkAggType _aggtype = SparkAggType.MULTI_BLOCK;
 	
 	/**
 	 * Constructor to setup a partial Matrix-Vector Multiplication for MR
@@ -167,13 +167,6 @@ public class MapMult extends Lop
 		if( getExecType() == ExecType.SPARK ) {
 			sb.append(Lop.OPERAND_DELIMITOR);
 			sb.append(_aggtype.toString());
-
-			sb.append(Lop.OPERAND_DELIMITOR);
-			if (_isSpecial) {
-				sb.append(true);
-			} else {
-				sb.append(false);
-			}
 		}
 
 		setCacheInfoToInst(sb);

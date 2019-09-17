@@ -30,6 +30,8 @@ import org.apache.sysml.runtime.util.DataConverter;
 import org.apache.sysml.runtime.util.SortUtils;
 import org.apache.sysml.runtime.util.UtilFunctions;
 
+import static java.lang.Double.NaN;
+
 /**
  * Library for binary cellwise operations (incl arithmetic, relational, etc). Currently,
  * we don't have dedicated support for the individual operations but for categories of
@@ -67,7 +69,7 @@ public class LibMatrixBincell
 		//check internal assumptions
 		if (((op.sparseSafe && m1.isInSparseFormat() != ret.isInSparseFormat())
 				|| (!op.sparseSafe && ret.isInSparseFormat()))
-				&& !op.fn.isBlockFn()) {
+				&& !(op.fn instanceof SelectRow)) {
 			throw new DMLRuntimeException("Wrong output representation for safe=" + op.sparseSafe + ": " + m1.isInSparseFormat() + ", " + ret.isInSparseFormat());
 		}
 
@@ -957,7 +959,7 @@ public class LibMatrixBincell
 		}
 
 		//sanity check input/output sparsity
-		if (m1.sparse != ret.sparse && !op.fn.isBlockFn())
+		if (m1.sparse != ret.sparse && !(op.fn instanceof SelectRow))
 			throw new DMLRuntimeException("Unsupported safe binary scalar operations over different input/output representation: "+m1.sparse+" "+ret.sparse);
 
 		boolean copyOnes = (op.fn instanceof NotEquals && op.getConstant()==0);
@@ -1064,7 +1066,7 @@ public class LibMatrixBincell
 					int alen = a.size(r);
 					double[] avals = a.values(r);
 					for (int j = apos; j < apos + alen; j++) {
-						if (Math.abs(avals[j]) >= ratio) {
+						if (!(Math.abs(avals[j]) < ratio)) {
 							dc.set(r, 0, 1);
 							nnz++;
 							break;
@@ -1115,7 +1117,7 @@ public class LibMatrixBincell
 			for (int i = 0; i < m1.rlen; i++) {
 				for (int j = 0; j < m1.clen; j++) {
 					double in = da.get(i, j);
-					if (Math.abs(in) >= ratio) {
+					if (!(Math.abs(in) < ratio)) {
 						dc.set(i, 0, 1);
 						nnz++;
 						break;

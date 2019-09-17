@@ -26,8 +26,12 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.sysml.lops.LopProperties.ExecLocation;
 import org.apache.sysml.lops.LopProperties.ExecType;
 import org.apache.sysml.lops.compile.Dag;
+import org.apache.sysml.parser.DWhileStatement;
+import org.apache.sysml.parser.Expression;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
+import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 
 
 /**
@@ -124,15 +128,13 @@ public abstract class Lop
 
 	protected OutputParameters outParams = null;
 
-	protected LopProperties lps = null;
+	public LopProperties lps = null;
 
 	// 针对SP, 末尾cache RDD
 	boolean _needCache = false;
 
 	String _preOutputName = null;
 	String[] _dVarNames = null;
-
-	boolean _isSpecial = false;
 
 	/**
 	 * Constructor to be invoked by base class.
@@ -149,14 +151,6 @@ public abstract class Lop
 		outputs = new ArrayList<>();
 		outParams = new OutputParameters();
 		lps = new LopProperties();
-	}
-
-	public boolean isSpecial() {
-		return _isSpecial;
-	}
-
-	public void setSpecial(boolean isSpecial) {
-		_isSpecial = isSpecial;
 	}
 
 	public String[] getDVarNames() {
@@ -878,6 +872,21 @@ public abstract class Lop
 		for(Lop in : getInputs())
 			if(in.getDataType() == DataType.MATRIX && !in.getOutputParameters().isBlocked())
 				return true;
+		return false;
+	}
+
+	boolean needRepartitionNow(ExecutionContext ec, String varName) {
+		if (!_needCache || !DWhileStatement.isDWhileTmpVar(varName) && !DWhileStatement.isDVar(varName, ec)) {
+			return false;
+		}
+
+		String dVarName = DWhileStatement.getDVarNameFromTmpVar(varName);
+		String useRepartitionName = DWhileStatement.getUseRepartitionName(dVarName);
+		if (ec.containsVariable(useRepartitionName)) {
+			return ec.getScalarInput(useRepartitionName, Expression.ValueType.BOOLEAN, false)
+					.getBooleanValue();
+		}
+
 		return false;
 	}
 

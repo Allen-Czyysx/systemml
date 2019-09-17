@@ -219,8 +219,13 @@ public class DenseBlockDRB extends DenseBlock
 			}
 		else {
 			int len = cu - cl;
-			for(int i=rl, ix1=0, ix2=rl*clen+cl; i<ru; i++, ix1+=len, ix2+=clen)
-				System.arraycopy(a, ix1, data, ix2, len);
+			for (int i = rl, ix1 = 0, ix2 = rl * clen + cl; i < ru; i++, ix1 += len, ix2 += clen) {
+				try {
+					System.arraycopy(a, ix1, data, ix2, len);
+				} catch (Exception e) {
+					System.out.println("WRONG!!!!!!!!!!");
+				}
+			}
 		}
 		return this;
 	}

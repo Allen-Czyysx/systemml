@@ -549,7 +549,7 @@ public class AggUnaryOp extends MultiThreadedHop
 		return opOp2 == OpOp2.LESS || opOp2 == OpOp2.LESSEQUAL
 				|| opOp2 == OpOp2.GREATER || opOp2 == OpOp2.GREATEREQUAL
 				|| opOp2 == OpOp2.EQUAL || opOp2 == OpOp2.NOTEQUAL
-				|| opOp2 == OpOp2.GREATEREQUALBLOCK;
+				|| opOp2 == OpOp2.SELECTROW;
 	}
 
 	private boolean isUnaryAggregateOuterRewriteApplicable() 

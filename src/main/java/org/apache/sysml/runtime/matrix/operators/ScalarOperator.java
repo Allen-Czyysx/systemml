@@ -20,19 +20,8 @@
 
 package org.apache.sysml.runtime.matrix.operators;
 
-import org.apache.sysml.runtime.functionobjects.And;
-import org.apache.sysml.runtime.functionobjects.BitwShiftL;
-import org.apache.sysml.runtime.functionobjects.BitwShiftR;
-import org.apache.sysml.runtime.functionobjects.Builtin;
+import org.apache.sysml.runtime.functionobjects.*;
 import org.apache.sysml.runtime.functionobjects.Builtin.BuiltinCode;
-import org.apache.sysml.runtime.functionobjects.Equals;
-import org.apache.sysml.runtime.functionobjects.Minus;
-import org.apache.sysml.runtime.functionobjects.MinusNz;
-import org.apache.sysml.runtime.functionobjects.Multiply;
-import org.apache.sysml.runtime.functionobjects.Multiply2;
-import org.apache.sysml.runtime.functionobjects.NotEquals;
-import org.apache.sysml.runtime.functionobjects.Power2;
-import org.apache.sysml.runtime.functionobjects.ValueFunction;
 
 
 /**

@@ -258,7 +258,7 @@ public class DnnSPInstruction extends UnarySPInstruction {
 			int stride_h = getScalarInput(ec, _stride, 0);
 			int stride_w = getScalarInput(ec, _stride, 1);
 
-			// int N = getScalarInput(ec, _input_shape, 0);
+			// int N = getScalarInput(_ec, _input_shape, 0);
 			int C = getScalarInput(ec, _input_shape, 1);
 			int H = getScalarInput(ec, _input_shape, 2);
 			int W = getScalarInput(ec, _input_shape, 3);

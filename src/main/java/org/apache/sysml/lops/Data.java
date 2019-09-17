@@ -43,7 +43,7 @@ public class Data extends Lop
 	public static final String PREAD_PREFIX = "p"+OperationTypes.READ.name();
 
 	FileFormatTypes formatType = FileFormatTypes.BINARY;
-	OperationTypes operation;
+	public OperationTypes operation;
 	boolean literal_var = false;
 	boolean transient_var = false;
 	
@@ -382,7 +382,7 @@ public class Data extends Lop
 	{
 		if ( getOutputParameters().getFile_name() == null && operation == OperationTypes.READ ) 
 			throw new LopsException(this.printErrorLocation() + "Data.getInstructions(): Exepecting a SCALAR data type, encountered " + getDataType());
-			
+
 		StringBuilder sb = new StringBuilder();
 		if(this.getExecType() == ExecType.SPARK)  
 			sb.append( "SPARK" );

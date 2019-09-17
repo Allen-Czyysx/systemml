@@ -78,7 +78,7 @@ public class TernaryCPInstruction extends ComputationCPInstruction {
 				.createScalarObject(output.getValueType(), value));
 		}
 
-		// TODO added by czh debug
-		System.out.println("+* " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
+//		// TODO added by czh debug
+//		System.out.println("+* " + input1.getName() + " time: " + (System.currentTimeMillis() - t1) / 1000.0);
 	}
 }

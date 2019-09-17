@@ -1517,8 +1517,12 @@ public class BinaryOp extends MultiThreadedHop
 				//however, since we use qr internally, it also supports squared first inputs
 				setDim1( input1.getDim2() );
 				setDim2( input2.getDim2() );
-			}
-			else //general case
+
+			} else if (op == OpOp2.SELECTROW) {
+				setDim1(input1.getDim1());
+				setDim2(1);
+
+			} else //general case
 			{
 				long ldim1, ldim2, lnnz1 = -1;
 				
@@ -1608,7 +1612,7 @@ public class BinaryOp extends MultiThreadedHop
 				|| op == OpOp2.AND || op == OpOp2.OR || op == OpOp2.XOR
 				|| op == OpOp2.BITWAND || op == OpOp2.BITWOR || op == OpOp2.BITWXOR
 				|| op == OpOp2.BITWSHIFTL || op == OpOp2.BITWSHIFTR
-				|| op == OpOp2.GREATEREQUALBLOCK || op == OpOp2.MULTBLOCK
+				|| op == OpOp2.SELECTROW || op == OpOp2.MULTBLOCK
 				|| op == OpOp2.SMULT;
 	}
 	

@@ -81,7 +81,7 @@ public class TemplateRow extends TemplateBase
 	private static final Hop.OpOp2[] SUPPORTED_VECT_BINARY = new OpOp2[]{
 			OpOp2.MULT, OpOp2.DIV, OpOp2.MINUS, OpOp2.PLUS, OpOp2.POW, OpOp2.MIN, OpOp2.MAX, OpOp2.XOR,
 			OpOp2.EQUAL, OpOp2.NOTEQUAL, OpOp2.LESS, OpOp2.LESSEQUAL, OpOp2.GREATER, OpOp2.GREATEREQUAL,
-			OpOp2.BITWAND, OpOp2.GREATEREQUALBLOCK, OpOp2.MULTBLOCK
+			OpOp2.BITWAND, OpOp2.SELECTROW, OpOp2.MULTBLOCK
 	};
 
 	public TemplateRow() {

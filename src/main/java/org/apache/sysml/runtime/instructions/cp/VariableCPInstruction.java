@@ -27,18 +27,31 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.StorageLevels;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.sysml.conf.CompilerConfig.ConfigType;
 import org.apache.sysml.conf.ConfigurationManager;
+import org.apache.sysml.hops.OptimizerUtils;
+import org.apache.sysml.lops.Checkpoint;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.UnaryCP;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysml.runtime.controlprogram.caching.FrameObject;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
+import org.apache.sysml.runtime.instructions.spark.data.RDDObject;
+import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
+import org.apache.sysml.runtime.instructions.spark.functions.CopyFrameBlockFunction;
+import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
+import org.apache.sysml.runtime.matrix.data.*;
 import org.apache.sysml.runtime.util.ProgramConverter;
 import org.apache.sysml.runtime.controlprogram.parfor.util.IDSequence;
 import org.apache.sysml.runtime.instructions.Instruction;
@@ -51,10 +64,6 @@ import org.apache.sysml.runtime.io.WriterTextCSV;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.MetaDataFormat;
 import org.apache.sysml.runtime.matrix.MetaData;
-import org.apache.sysml.runtime.matrix.data.FrameBlock;
-import org.apache.sysml.runtime.matrix.data.InputInfo;
-import org.apache.sysml.runtime.matrix.data.MatrixBlock;
-import org.apache.sysml.runtime.matrix.data.OutputInfo;
 import org.apache.sysml.runtime.util.DataConverter;
 import org.apache.sysml.runtime.util.MapReduceTool;
 import org.apache.sysml.runtime.util.UtilFunctions;
@@ -779,21 +788,79 @@ public class VariableCPInstruction extends CPInstruction {
 	 * @param ec execution context
 	 */
 	private void processCopyInstruction(ExecutionContext ec) {
+		String input1Name = getInput1().getName();
+		String input2Name = getInput2().getName();
+
 		// get source variable 
-		Data dd = ec.getVariable(getInput1().getName());
+		Data dd = ec.getVariable(input1Name);
 			
 		if ( dd == null ) 
 			throw new DMLRuntimeException("Unexpected error: could not find a data object for variable name:" + getInput1().getName() + ", while processing instruction " +this.toString());
 			
 		// remove existing variable bound to target name
-		Data input2_data = ec.removeVariable(getInput2().getName());
+		Data input2_data = ec.removeVariable(input2Name);
 		
 		//cleanup matrix data on fs/hdfs (if necessary)
 		if( input2_data != null )
 			ec.cleanupDataObject(input2_data);
 		
 		// do the actual copy!
-		ec.setVariable(getInput2().getName(), dd);
+		ec.setVariable(input2Name, dd);
+
+		if (input2Name.equals("1_preVar_TH") || input2Name.startsWith("5_preOutput_hop_tmpR")) {
+			// TODO added by czh ALS
+
+			SparkExecutionContext sec = (SparkExecutionContext) ec;
+			MatrixObject mo = (MatrixObject) dd;
+
+			if (mo.getRDDHandle() != null) {
+				sec.persistRdd(input2Name, mo.getRDDHandle().getRDD(), StorageLevels.MEMORY_AND_DISK);
+				sec.unpersistRdd(input2Name);
+
+			} else {
+				sec.getBinaryBlockRDDHandleForVariable(input2Name);
+			}
+
+//		} else if (input2Name.equals("G") || input2Name.equals("TG")) {
+//			// TODO added by czh 缓存大矩阵 G
+//
+//			SparkExecutionContext sec = (SparkExecutionContext) ec;
+//			MatrixCharacteristics mcIn = sec.getMatrixCharacteristics(input1Name);
+//			JavaPairRDD<?,?> in = sec
+//					.getRDDHandleForVariable(input1Name, InputInfo.BinaryBlockInputInfo, -1, true);
+//			JavaPairRDD<?,?> out;
+//
+//			int numPartitions = SparkUtils.getNumPreferredPartitions(mcIn, in);
+//			boolean coalesce = (1.2 * numPartitions < in.getNumPartitions()
+//					&& !SparkUtils.isHashPartitioned(in) && in.getNumPartitions()
+//					> SparkExecutionContext.getDefaultParallelism(true));
+//			boolean repartition = mcIn.dimsKnown(true) && mcIn.isUltraSparse()
+//					&& numPartitions > in.getNumPartitions();
+//
+//			if (coalesce) {
+//				System.out.println("checkpoint in coalesce. " + input2Name + ". # partition = " + numPartitions);
+//				out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+//
+//			} else if (repartition) {
+//				System.out.println("checkpoint in repartition. " + input2Name);
+//				out = in.partitionBy(new RowPartitioner(mcIn, UtilFunctions.roundToNext(numPartitions,
+//						SparkExecutionContext.getDefaultParallelism(true))));
+//
+//			} else {
+//				System.out.println("checkpoint in normal. " + input2Name + ". # partition = " + numPartitions);
+//				out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+//			}
+//
+//			out.persist(StorageLevel.MEMORY_AND_DISK());
+//
+//			CacheableData<?> cd = sec.getCacheableData(input1Name);
+//			RDDObject inro =  cd.getRDDHandle();
+//			RDDObject outro = new RDDObject(out);
+//			outro.setCheckpointRDD(true);
+//			outro.addLineageChild(inro);
+//			cd.setRDDHandle(outro);
+//			sec.setVariable(input2Name, cd);
+		}
 	}
 	
 	/**

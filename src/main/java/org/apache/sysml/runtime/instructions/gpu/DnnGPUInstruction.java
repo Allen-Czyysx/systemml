@@ -990,7 +990,7 @@ public class DnnGPUInstruction extends GPUInstruction {
 			LibMatrixCuDNN.conv2dBackwardFilter(ec.getGPUContext(0), getExtendedOpcode(), image, dout, out, N, C, H, W,
 					K, R, S, pad_h, pad_w, stride_h, stride_w, P, Q, _intermediateMemoryBudget);
 			// TODO: For now always copy the device data to host
-			// ec.gpuCtx.copyDeviceToHost(outputBlock);
+			// _ec.gpuCtx.copyDeviceToHost(outputBlock);
 		}
 		else if (instOpcode.equalsIgnoreCase("conv2d_backward_data")) {
 			MatrixObject filter = getMatrixInputForGPUInstruction(ec, _input1.getName());

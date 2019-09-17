@@ -60,6 +60,14 @@ public class DWhileStatement extends WhileStatement {
 		_dIterAfter = dIterAfter;
 	}
 
+	@Override
+	public void mergeStatementBlocks() {
+		_dIterInit = StatementBlock.mergeStatementBlocks(_dIterInit);
+		_dIterBefore = StatementBlock.mergeStatementBlocks(_dIterBefore);
+		_body = StatementBlock.mergeStatementBlocks(_body);
+		_dIterAfter = StatementBlock.mergeStatementBlocks(_dIterAfter);
+	}
+
 	//// 常驻变量名工具
 
 	public static boolean isDVar(String name, String[] curDVars) {
@@ -72,7 +80,11 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static boolean isDVar(String name, ExecutionContext ec) {
-		return ec.containsVariable(getPreVarName(name));
+		if (ec != null) {
+			return ec.containsVariable(getPreVarName(name));
+		} else {
+			return false;
+		}
 	}
 
 	public static boolean isDWhileTmpVar(String varName) {
@@ -91,8 +103,22 @@ public class DWhileStatement extends WhileStatement {
 		return "1_preVar_" + varName;
 	}
 
+	public static boolean isPreVarName(String varName) {
+		if (!isDWhileTmpVar(varName)) {
+			return false;
+		}
+		return Character.toString(varName.charAt(0)).equals("1");
+	}
+
 	public static String getVarUseDeltaName(String varName) {
 		return "2_useDelta_" + varName;
+	}
+
+	public static boolean isVarUseDeltaName(String varName) {
+		if (!isDWhileTmpVar(varName)) {
+			return false;
+		}
+		return Character.toString(varName.charAt(0)).equals("2");
 	}
 
 	public static String getSelectName(String varName) {
@@ -125,7 +151,7 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static String getSelectBlockNumName(String varName) {
-		return "8_blockNum_" + varName;
+		return "8_selectBlockNum_" + varName;
 	}
 
 	public static String getRepartitionPreBlockNumName(String varName) {
@@ -140,8 +166,20 @@ public class DWhileStatement extends WhileStatement {
 		return "11_useRepartition_" + varName;
 	}
 
-	public static String getPreBlockNumName(String varName) {
-		return "15_preBlockNum_" + varName;
+	public static String getSelectBlockName(String varName) {
+		return "12_selectBlock_" + varName;
+	}
+
+	public static String getNewRepartitionOrderName(String varName) {
+		return "13_newRepartitionOrder_" + varName;
+	}
+
+	public static String getSelectNumName(String varName) {
+		return "14_selectNum_" + varName;
+	}
+
+	public static String getRepartitionBlockNumName(String varName) {
+		return "15_repartitionBlockNum_" + varName;
 	}
 
 	public static String getUseFilterName(String varName) {
@@ -150,6 +188,10 @@ public class DWhileStatement extends WhileStatement {
 
 	public static String getDwhileCountName() {
 		return "18_dwhileCount";
+	}
+
+	public static String getIsDetectName(String varName) {
+		return "19_isDetect" + varName;
 	}
 
 	@Override

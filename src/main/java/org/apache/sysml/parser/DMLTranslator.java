@@ -2026,10 +2026,10 @@ public class DMLTranslator {
 							unfixed.setBlockInfo(aggBHop);
 							unfixed.setParseInfo(aggBHop);
 							unfixed.setDisableRecord(true);
-							// newHop = max(unfixed, 0)
-							BinaryOp newHop = new BinaryOp(
-									varName, dataType, valueType, OpOp2.MAX, unfixed, new LiteralOp(0));
-//							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
+//							// newHop = max(unfixed, 0)
+//							BinaryOp newHop = new BinaryOp(
+//									varName, dataType, valueType, OpOp2.MAX, unfixed, new LiteralOp(0));
+							BinaryOp newHop = new BinaryOp(varName, dataType, valueType, OpOp2.PLUS, pre, delta);
 
 							newHop.setBlockInfo(aggBHop);
 							newHop.setParseInfo(aggBHop);
@@ -2059,7 +2059,7 @@ public class DMLTranslator {
 					}
 
 				} else {
-					// TODO added by czh 在GNMF中若k小, 就不用增量了
+					// TODO added by czh 在 ALS 中若 k 小, 就不用增量了
 					ArrayList<Hop> left = dIterForEachHop(originLeft, false, dwsb, curDVarNames);
 					ArrayList<Hop> right = dIterForEachHop(originRight, false, dwsb, curDVarNames);
 					if (left.size() == 1 && right.size() == 1) {
@@ -2637,7 +2637,7 @@ public class DMLTranslator {
 		} else if (source.getOpCode() == Expression.RelationalOp.NOTEQUAL) {
 			op = OpOp2.NOTEQUAL;
 		} else if (source.getOpCode() == Expression.RelationalOp.SELECTROW) {
-			op = OpOp2.GREATEREQUALBLOCK;
+			op = OpOp2.SELECTROW;
 		}
 		currBop = new BinaryOp(target.getName(), target.getDataType(), target.getValueType(), op, left, right);
 		currBop.setParseInfo(source);

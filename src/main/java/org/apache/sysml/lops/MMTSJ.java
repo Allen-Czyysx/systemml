@@ -43,7 +43,7 @@ public class MMTSJ extends Lop
 	}
 	
 	private MMTSJType _type = null;
-	private boolean _multiPass = false;
+	public boolean _multiPass = false;
 	private int _numThreads = 1;
 
 	public MMTSJ(Lop input1, DataType dt, ValueType vt, ExecType et, MMTSJType type) {

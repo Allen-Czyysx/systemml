@@ -1286,10 +1286,18 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 		return (_requiresRecompile =
 			ConfigurationManager.isDynamicRecompilation()
 			&& Recompiler.requiresRecompilation(getHops()));
+//		// TODO added by czh 暴力
+//		return true;
+	}
+
+	public void setRecompilationFlag(boolean flag) {
+		_requiresRecompile = flag;
 	}
 
 	public boolean requiresRecompilation() {
 		return _requiresRecompile;
+//		// TODO added by czh 暴力
+//		return true;
 	}
 
 	public ArrayList<String> getUpdateInPlaceVars() {

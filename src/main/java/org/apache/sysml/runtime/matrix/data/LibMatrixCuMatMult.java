@@ -123,7 +123,7 @@ public class LibMatrixCuMatMult extends LibMatrixCUDA {
 	 * appropriate method from cuBLAS or cuSparse C = op(A) x op(B)
 	 *
 	 * The user is expected to call
-	 * ec.releaseMatrixOutputForGPUInstruction(outputName);
+	 * _ec.releaseMatrixOutputForGPUInstruction(outputName);
 	 *
 	 * @param ec
 	 *            Current {@link ExecutionContext} instance

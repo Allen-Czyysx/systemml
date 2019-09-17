@@ -127,7 +127,7 @@ public class Recompiler
 	/** Local reused rewriter for dynamic rewrites during recompile */
 
 	/** Local DML configuration for thread-local config updates */
-	private static ThreadLocal<ProgramRewriter> _rewriter = new ThreadLocal<ProgramRewriter>() {
+	public static ThreadLocal<ProgramRewriter> _rewriter = new ThreadLocal<ProgramRewriter>() {
 		@Override protected ProgramRewriter initialValue() { return new ProgramRewriter(false, true); }
 	};
 	

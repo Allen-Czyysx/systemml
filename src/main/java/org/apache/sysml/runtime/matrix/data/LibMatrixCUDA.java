@@ -701,7 +701,7 @@ public class LibMatrixCUDA {
 			in1.getGPUObject(gCtx).sparseToDense(instName);
 			// long nnz = in1.getNnz();
 			// assert nnz > 0 : "Internal Error - number of non zeroes set to " + nnz + " in Aggregate Binary for GPU";
-			// MatrixObject out = ec.getSparseMatrixOutputForGPUInstruction(output, nnz);
+			// MatrixObject out = _ec.getSparseMatrixOutputForGPUInstruction(output, nnz);
 			// throw new DMLRuntimeException("Internal Error - Not implemented");
 
 		}
@@ -1218,11 +1218,11 @@ public class LibMatrixCUDA {
 			// to be re-enabled and the Java computation logic for divide by zero
 			// needs to be revisited
 			//else if(op.fn instanceof Divide && isSparseAndEmpty(gCtx, in)) {
-			//	setOutputToConstant(ec, gCtx, instName, Double.NaN, outputName);
+			//	setOutputToConstant(_ec, gCtx, instName, Double.NaN, outputName);
 			//}
 			//else if(op.fn instanceof Divide) {
 			//	//For division, IEEE 754 defines x/0.0 as INFINITY and 0.0/0.0 as NaN.
-			//	compareAndSet(ec, gCtx, instName, in, outputName, 0.0, 1e-6, Double.NaN, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+			//	compareAndSet(_ec, gCtx, instName, in, outputName, 0.0, 1e-6, Double.NaN, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
 			//}
 			else {
 				// TODO: Potential to optimize
@@ -1253,7 +1253,7 @@ public class LibMatrixCUDA {
 
 		// TODO: Performance optimization: Call cublasDaxpy if(in.getNumRows() == 1 || in.getNumColumns() == 1)
 		// C = alpha* op( A ) + beta* op ( B )
-		//	dgeam(ec, gCtx, instName, in, in, outputName, isInputTransposed, isInputTransposed, alpha, 0.0);
+		//	dgeam(_ec, gCtx, instName, in, in, outputName, isInputTransposed, isInputTransposed, alpha, 0.0);
 		//}
 	}
 
@@ -1394,7 +1394,7 @@ public class LibMatrixCUDA {
 		else {
 			// op(dense input, scalar) -> dense output
 			Pointer A = getDensePointer(gCtx, in, instName); 
-			// MatrixObject out = ec.getMatrixObject(outputName);
+			// MatrixObject out = _ec.getMatrixObject(outputName);
 			MatrixObject out = getDenseMatrixOutputForGPUInstruction(ec, instName, outputName, rlenA, clenA);	// Allocated the dense output matrix
 			Pointer C = getDensePointer(gCtx, out, instName);
 			denseMatrixScalarOp(gCtx, instName, A, scalar, rlenA, clenA, C, op);

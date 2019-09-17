@@ -8,21 +8,20 @@ import org.apache.sysml.runtime.instructions.Instruction;
 import org.apache.sysml.runtime.instructions.spark.MapmmSPInstruction;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 
 // TODO added by czh 退出dwhile时要删除多余变量
 public class DWhileProgramBlock extends WhileProgramBlock {
+
+	public static ExecutionContext _ec = null;
+
+	public static DWhileProgramBlock _pb = null; // for compare in UnaryScalarCPInstruction
 
 	private ArrayList<ProgramBlock> _dIterInit;
 
 	private ArrayList<ProgramBlock> _dIterBefore;
 
 	private ArrayList<ProgramBlock> _dIterAfter;
-
-	// TODO added by czh
-	public static long midT1;
-	public static long midT2;
 
 	public DWhileProgramBlock(Program prog, ArrayList<Instruction> predicate) {
 		super(prog, predicate);
@@ -69,14 +68,17 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 
 	@Override
 	public void execute(ExecutionContext ec) {
+		DWhileProgramBlock._ec = ec;
+		DWhileProgramBlock._pb = this;
+
 		// execute while loop
 		try {
 			// prepare update in-place variables
 			MatrixObject.UpdateType[] flags = prepareUpdateInPlaceVariables(ec, _tid);
 
 			// TODO added by czh
-			MapmmSPInstruction.hasRepartitioned = new HashSet<>(2);
-			MapmmSPInstruction.hasFiltered = new HashSet<>(2);
+			MapmmSPInstruction._hasRepartitioned = new HashSet<>(2);
+			MapmmSPInstruction._hasFiltered = new HashSet<>(2);
 
 			// 执行init
 			for (ProgramBlock pb : _dIterInit) {
@@ -112,7 +114,6 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 				long t4 = System.currentTimeMillis();
 				System.out.println("before \t" + (t2 - t1) / 1000.0);
 				System.out.println("child \t" + (t3 - t2) / 1000.0);
-				System.out.println("mid \t" + (midT2 - midT1) / 1000.0);
 				System.out.println("after \t" + (t4 - t3) / 1000.0);
 				System.out.println("dwhile\t" + (t4 - t1) / 1000.0 + "\t" + count + "\n");
 				count++;

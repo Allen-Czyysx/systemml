@@ -115,6 +115,10 @@ public abstract class Hop implements ParseInfo
 	String[] _dVarNames = null;
 	Hop _dHop = null;
 
+	// 在代价估计中是否被访问过
+	boolean _isEstimated = false;
+	boolean _isRDD = false;
+
 	private Lop _lops = null;
 
 	protected Hop(){
@@ -127,6 +131,22 @@ public abstract class Hop implements ParseInfo
 		setName(l);
 		setDataType(dt);
 		setValueType(vt);
+	}
+
+	public boolean isEstimated() {
+		return _isEstimated;
+	}
+
+	public void setIsEstimated(boolean isEstimated) {
+		_isEstimated = isEstimated;
+	}
+
+	public boolean isRDD() {
+		return _isRDD;
+	}
+
+	public void setIsRDD(boolean isRDD) {
+		_isRDD = isRDD;
 	}
 
 	public Hop getDHop() {
@@ -445,6 +465,11 @@ public abstract class Hop implements ParseInfo
 			catch( LopsException ex ) {
 				throw new HopsException(ex);
 			}
+		}
+
+		// TODO added by czh
+		if (!isScalar()) {
+			setRequiresRecompile();
 		}
 	}
 
@@ -1149,7 +1174,7 @@ public abstract class Hop implements ParseInfo
 		LOG_NZ, //sparse-safe log; ppred(X,0,"!=")*log(X,0.5)
 		MINUS1_MULT, //1-X*Y
 		BITWAND, BITWOR, BITWXOR, BITWSHIFTL, BITWSHIFTR, //bitwise operations
-		GREATEREQUALBLOCK, MULTBLOCK, // 以块做比较
+		SELECTROW, MULTBLOCK, // 以块做比较
 		SMULT,
 	}
 
@@ -1314,7 +1339,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsB.put(OpOp2.BITWXOR, Binary.OperationTypes.BW_XOR);
 		HopsOpOp2LopsB.put(OpOp2.BITWSHIFTL, Binary.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsB.put(OpOp2.BITWSHIFTR, Binary.OperationTypes.BW_SHIFTR);
-		HopsOpOp2LopsB.put(OpOp2.GREATEREQUALBLOCK, Binary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
+		HopsOpOp2LopsB.put(OpOp2.SELECTROW, Binary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
 		HopsOpOp2LopsB.put(OpOp2.MULTBLOCK, Binary.OperationTypes.AND_BLOCK);
 	}
 
@@ -1346,7 +1371,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsBS.put(OpOp2.BITWXOR, BinaryScalar.OperationTypes.BW_XOR);
 		HopsOpOp2LopsBS.put(OpOp2.BITWSHIFTL, BinaryScalar.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsBS.put(OpOp2.BITWSHIFTR, BinaryScalar.OperationTypes.BW_SHIFTR);
-		HopsOpOp2LopsBS.put(OpOp2.GREATEREQUALBLOCK, BinaryScalar.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
+		HopsOpOp2LopsBS.put(OpOp2.SELECTROW, BinaryScalar.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
 		HopsOpOp2LopsBS.put(OpOp2.MULTBLOCK, BinaryScalar.OperationTypes.MULT_BLOCK);
 	}
 
@@ -1380,7 +1405,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2LopsU.put(OpOp2.BITWXOR, Unary.OperationTypes.BW_XOR);
 		HopsOpOp2LopsU.put(OpOp2.BITWSHIFTL, Unary.OperationTypes.BW_SHIFTL);
 		HopsOpOp2LopsU.put(OpOp2.BITWSHIFTR, Unary.OperationTypes.BW_SHIFTR);
-		HopsOpOp2LopsU.put(OpOp2.GREATEREQUALBLOCK, Unary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
+		HopsOpOp2LopsU.put(OpOp2.SELECTROW, Unary.OperationTypes.GREATER_THAN_OR_EQUALS_BLOCK);
 	}
 
 	protected static final HashMap<Hop.OpOp1, org.apache.sysml.lops.Unary.OperationTypes> HopsOpOp1LopsU;
@@ -1576,7 +1601,7 @@ public abstract class Hop implements ParseInfo
 		HopsOpOp2String.put(OpOp2.BITWXOR, "bitwXor");
 		HopsOpOp2String.put(OpOp2.BITWSHIFTL, "bitwShiftL");
 		HopsOpOp2String.put(OpOp2.BITWSHIFTR, "bitwShiftR");
-		HopsOpOp2String.put(OpOp2.GREATEREQUALBLOCK, "b>=");
+		HopsOpOp2String.put(OpOp2.SELECTROW, "b>=");
 		HopsOpOp2String.put(OpOp2.MULTBLOCK, "b*");
 		HopsOpOp2String.put(OpOp2.SMULT, "s*");
 	}
@@ -1723,6 +1748,11 @@ public abstract class Hop implements ParseInfo
 		if( ConfigurationManager.isDynamicRecompilation()
 			&& (caseRemote || caseLocal || caseCodegen) )
 			setRequiresRecompile();
+
+		// TODO added by czh
+		if (!isScalar()) {
+			setRequiresRecompile();
+		}
 	}
 
 	/**

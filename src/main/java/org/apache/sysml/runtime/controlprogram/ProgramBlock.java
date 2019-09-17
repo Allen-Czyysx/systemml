@@ -113,6 +113,10 @@ public class ProgramBlock implements ParseInfo
 		return _inst.size();
 	}
 
+	public long getThreadID(){
+		return _tid;
+	}
+
 	public void setThreadID( long id ){
 		_tid = id;
 	}

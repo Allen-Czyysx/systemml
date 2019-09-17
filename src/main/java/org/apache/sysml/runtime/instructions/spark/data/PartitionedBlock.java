@@ -55,15 +55,14 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 	public PartitionedBlock() {
 		//do nothing (required for Externalizable)
 	}
-	
-	
+
+
 	@SuppressWarnings("unchecked")
-	public PartitionedBlock(T block, int brlen, int bclen) 
-	{
+	public PartitionedBlock(T block, int brlen, int bclen) {
 		//get the input frame block
 		int rlen = block.getNumRows();
 		int clen = block.getNumColumns();
-		
+
 		//partitioning input broadcast
 		_rlen = rlen;
 		_clen = clen;
@@ -72,7 +71,16 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 		int nrblks = getNumRowBlocks();
 		int ncblks = getNumColumnBlocks();
 		int code = CacheBlockFactory.getCode(block);
-		
+
+		// 处理 selectBlock
+		if (block instanceof MatrixBlock) {
+			MatrixBlock mb = (MatrixBlock) block;
+			if (mb.isEmptyBlock(false) && mb.getSelectBlock() != null) {
+				_partBlocks = new CacheBlock[]{mb};
+				return;
+			}
+		}
+
 		try {
 			_partBlocks = new CacheBlock[nrblks * ncblks];
 			Arrays.parallelSetAll(_partBlocks, index -> {
@@ -80,9 +88,9 @@ public class PartitionedBlock<T extends CacheBlock> implements Externalizable
 				int j = index % ncblks;
 				T tmp = (T) CacheBlockFactory.newInstance(code);
 				return block.slice(i * _brlen, Math.min((i + 1) * _brlen, rlen) - 1,
-					j * _bclen, Math.min((j + 1) * _bclen, clen) - 1, tmp);
+						j * _bclen, Math.min((j + 1) * _bclen, clen) - 1, tmp);
 			});
-		} catch(Exception ex) {
+		} catch (Exception ex) {
 			throw new RuntimeException("Failed partitioning of broadcast variable input.", ex);
 		}
 
