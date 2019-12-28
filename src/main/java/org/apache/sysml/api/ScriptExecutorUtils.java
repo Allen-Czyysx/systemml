@@ -49,6 +49,8 @@ import org.apache.sysml.runtime.DMLRuntimeException;
 
 public class ScriptExecutorUtils {
 
+	public static DMLConfig dmlConfig;
+
 	public static final boolean IS_JCUDA_AVAILABLE;
 	static {
 		// Early detection of JCuda libraries avoids synchronization overhead for common JMLC scenario:
@@ -104,6 +106,7 @@ public class ScriptExecutorUtils {
 												// MLContext-specific flags
 												boolean performHOPRewrites, boolean maintainSymbolTable,
 												boolean init) {
+		dmlConfig = dmlconf;
 		DMLScript.SCRIPT_TYPE = scriptType;
 
 		Program rtprog;

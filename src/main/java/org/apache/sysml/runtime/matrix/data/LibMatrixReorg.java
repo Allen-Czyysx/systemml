@@ -20,15 +20,7 @@
 
 package org.apache.sysml.runtime.matrix.data;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -37,13 +29,14 @@ import java.util.stream.Collectors;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.sysml.api.ScriptExecutorUtils;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression;
 import org.apache.sysml.runtime.DMLRuntimeException;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysml.runtime.controlprogram.caching.MatrixObject.UpdateType;
-import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.functionobjects.DiagIndex;
 import org.apache.sysml.runtime.functionobjects.RevIndex;
@@ -56,7 +49,6 @@ import org.apache.sysml.runtime.instructions.spark.data.RowMatrixBlock;
 import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.instructions.spark.functions.RepartitionMapFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.RDDAggregateUtils;
-import org.apache.sysml.runtime.instructions.spark.utils.RDDSortUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.MetaData;
 import org.apache.sysml.runtime.matrix.mapred.IndexedMatrixValue;
@@ -67,7 +59,9 @@ import org.apache.sysml.runtime.util.SortUtils;
 import org.apache.sysml.runtime.util.UtilFunctions;
 import scala.Tuple2;
 
-import static org.apache.spark.api.java.StorageLevels.MEMORY_AND_DISK;
+import static org.apache.spark.api.java.StorageLevels.MEMORY_AND_DISK_SER;
+import static org.apache.sysml.conf.DMLConfig.REORGANIZATION_STRATEGY;
+import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 
 /**
  * MB:
@@ -537,25 +531,23 @@ public class LibMatrixReorg
 			return removeEmptyColumns(in, ret, select, emptyReturn);
 	}
 
-
 	/**
 	 * @return order, key表示旧位置, value表示新位置
 	 */
 	public static MatrixBlock getOrderWithSelect(SparkExecutionContext sec, boolean isRow, String dVarName,
 												 int partitionNum, MatrixCharacteristics mc) {
+		return getOrderWithSelect(sec, isRow, dVarName, partitionNum, mc, false);
+	}
+
+
+	/**
+	 * @return order, key表示旧位置, value表示新位置
+	 */
+	public static MatrixBlock getOrderWithSelect(SparkExecutionContext sec, boolean isRow, String dVarName,
+												 int partitionNum, MatrixCharacteristics mc, boolean localMm) {
 		String selectName = DWhileStatement.getSelectName(dVarName);
 		MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
 		int rlen = select.rlen;
-		RowPartitioner partitioner = new RowPartitioner(mc, partitionNum);
-
-//		// TODO added by czh
-//		for (int i = 0; i < select.rlen; i++) {
-//			if (i != 0) {
-//				select.setValue(i, 0, 0);
-//			} else {
-//				select.setValue(i, 0, 1);
-//			}
-//		}
 
 		MatrixBlock oldToNew = new MatrixBlock(rlen, 1, (double) -1);
 		oldToNew.setNonZeros(rlen);
@@ -563,6 +555,13 @@ public class LibMatrixReorg
 		int[] newToOldList = new int[rlen];
 
 		if (isRow) {
+			RowPartitioner partitioner = null;
+			if (ScriptExecutorUtils.dmlConfig.getIntValue(REORGANIZATION_STRATEGY) == 1 || localMm) {
+				partitioner = new RowPartitioner(mc, 1);
+			} else if (ScriptExecutorUtils.dmlConfig.getIntValue(REORGANIZATION_STRATEGY) == 2) {
+				partitioner = new RowPartitioner(mc, partitionNum);
+			}
+
 			int[] curSelectedRow = new int[partitioner._ncparts];
 			int[] curIgnoredRow = new int[partitioner._ncparts];
 			for (int r = 0; r < partitioner._ncparts; r++) {
@@ -644,118 +643,113 @@ public class LibMatrixReorg
 	}
 
 	/**
-	 * @return order, key表示旧位置, value表示新位置
+	 * 更新要忽略的块
+	 * @return 若全忽略, 返回 false; 否则返回 true
 	 */
-	public static MatrixBlock getNewOrderWithSelect(SparkExecutionContext sec, boolean isRow, String dVarName) {
+	public static boolean updateIgnoredRowBlock(SparkExecutionContext sec, String dVarName) {
 		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
 		String selectName = DWhileStatement.getSelectName(dVarName);
 		MatrixBlock select = sec.getMatrixObject(selectName).acquireReadAndRelease();
 		MatrixBlock order = sec.getMatrixObject(orderName).acquireReadAndRelease();
-		MatrixBlock newOrder = new MatrixBlock(order);
 		int rlen = select.rlen;
 
-		if (isRow) {
-			// 根据 order 重新排列 select
-			int[] newSelectedRow = new int[rlen];
-			for (int i = 0; i < rlen; i++) {
-				int newI = (int) order.getValue(i, 0);
-				if (newI >= 0) {
-					newSelectedRow[newI] = (int) select.getValue(i, 0);
-				}
+		// 根据 order 重新排列 select
+		int[] newSelectedRow = new int[rlen];
+		for (int i = 0; i < rlen; i++) {
+			int newI = (int) order.getValue(i, 0);
+			if (newI >= 0) {
+				newSelectedRow[newI] = (int) select.getValue(i, 0);
 			}
-
-			// 设置 newIgnoredRowBlock, 从选行转为选行块
-			float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
-			int brlen = (int) Math.ceil(rlen / blockSize);
-			boolean[] newIgnoredRowBlock = new boolean[brlen];
-			for (int bi = 0; bi < brlen; bi++) {
-				boolean flag = false;
-				for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < rlen; i++) {
-					if (newSelectedRow[i] != 0) {
-						flag = true;
-						break;
-					}
-				}
-				if (!flag) {
-					newIgnoredRowBlock[bi] = true;
-				}
-			}
-
-			// 获取 newOrder
-			for (int i = 0; i < rlen; i++) {
-				double newI = newOrder.getValue(i, 0);
-				int newBi = (int) (newI / blockSize);
-				if (newIgnoredRowBlock[newBi]) {
-					newOrder.setValue(i, 0, -1);
-				}
-			}
-
-			String newOrderName = DWhileStatement.getNewRepartitionOrderName(dVarName);
-			if (!sec.containsVariable(newOrderName)) {
-				MatrixObject orderMo = new MatrixObject(Expression.ValueType.INT, "",
-						new MetaData(newOrder.getMatrixCharacteristics()));
-				sec.setVariable(newOrderName, orderMo);
-			}
-			sec.cleanupBroadcastByDWhile(sec.getMatrixObject(newOrderName));
-			sec.setMatrixOutput(newOrderName, newOrder);
-
-			// TODO added by czh debug
-			int count = 0;
-			for (int bi = 0; bi < brlen; bi++) {
-				count += newIgnoredRowBlock[bi] ? 0 : 1;
-			}
-			System.out.println("\tafter repartition blockNum: " + count);
-
-			if (count == 0) {
-				return null;
-			}
-
-		} else {
-			// TODO added by czh
-			throw new DMLRuntimeException("Shouldn't be here");
 		}
 
-		return newOrder;
+		// 设置 ignoredRowBlock, 从选行转为选行块
+		float blockSize = OptimizerUtils.DEFAULT_BLOCKSIZE;
+		int brlen = (int) Math.ceil(rlen / blockSize);
+		BitSet ignoredRowBlock = new BitSet(brlen);
+		for (int bi = 0; bi < brlen; bi++) {
+			boolean flag = false;
+			for (int i = (int) (bi * blockSize); i < (bi + 1) * blockSize && i < rlen; i++) {
+				if (newSelectedRow[i] != 0) {
+					flag = true;
+					break;
+				}
+			}
+			if (!flag) {
+				ignoredRowBlock.set(bi);
+			}
+		}
+
+		DWhileProgramBlock._ignoredRowBlocks.put(dVarName, ignoredRowBlock);
+
+		// TODO added by czh debug
+		int count = 0;
+		for (int bi = 0; bi < brlen; bi++) {
+			count += ignoredRowBlock.get(bi) ? 0 : 1;
+		}
+		System.out.println("\tafter repartition blockNum: " + count);
+
+		return count != 0;
 	}
 
 	/**
 	 * 按顺序repartition
 	 */
-	public static MatrixBlock repartitionIn2ByOrderCP(MatrixBlock in, MatrixBlock order) {
-		int rlen = in.rlen;
-		int clen = in.clen;
-		MatrixBlock newIn = new MatrixBlock(rlen, clen, in.sparse);
-		int brlen = (int) Math.ceil(rlen / (float) OptimizerUtils.DEFAULT_BLOCKSIZE);
+	public static MatrixBlock repartitionIn2ByOrderCP(SparkExecutionContext sec, MatrixBlock in, String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		MatrixBlock order = sec.getMatrixObject(orderName).acquireReadAndRelease();
+		BitSet ignoredRowBlock = DWhileProgramBlock._ignoredRowBlocks.get(dVarName);
+		int brlen = (int) Math.ceil(in.rlen / (float) OptimizerUtils.DEFAULT_BLOCKSIZE);
 		FilterBlock selectBlock = new FilterBlock(brlen, 1);
 
-		newIn.allocateBlock();
-		newIn.setSelectBlock(selectBlock);
+		in.setSelectBlock(selectBlock);
 		selectBlock.initData();
-		for (int i = 0; i < rlen; i++) {
+		for (int i = 0; i < in.rlen; i++) {
 			int newI = (int) order.getValue(i, 0);
-			if (newI < 0) {
+			int newBi = newI / OptimizerUtils.DEFAULT_BLOCKSIZE;
+			if (newI < 0 || ignoredRowBlock != null && ignoredRowBlock.get(newBi)) {
 				continue;
 			}
-			for (int j = 0; j < clen; j++) {
+			for (int j = 0; j < in.clen; j++) {
 				double v = in.getValue(i, j);
-				newIn.setValue(newI, j, v);
+				in.setValue(newI, j, v);
 			}
 			int blockI = newI / OptimizerUtils.DEFAULT_BLOCKSIZE;
 			selectBlock.setData(blockI, 0, 1);
 		}
 
-		return newIn;
+		return in;
 	}
 
 	/**
 	 * 按顺序repartition
 	 */
 	public static JavaPairRDD<MatrixIndexes, MatrixBlock> repartitionIn2ByOrderSP(
-			JavaPairRDD<MatrixIndexes, MatrixBlock> in, MatrixCharacteristics mc,
-			PartitionedBroadcast<MatrixBlock> orderPb) {
+			SparkExecutionContext sec, JavaPairRDD<MatrixIndexes, MatrixBlock> in, MatrixCharacteristics mc,
+			String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		PartitionedBroadcast<MatrixBlock> orderPb = sec.getBroadcastForVariable(orderName);
+
 		JavaPairRDD<MatrixIndexes, RowMatrixBlock> sortIn2 = in
-				.mapPartitionsToPair(
-						new ShuffleRowsFunction(mc.getRows(), mc.getRowsPerBlock(), orderPb.getBroadcasts()[0]))
+				.mapPartitionsToPair(new ShuffleRowsFunction(mc.getRows(), mc.getRowsPerBlock(),
+						orderPb.getBroadcasts()[0]))
+				.filter(new CpmmSPInstruction.FilterNonEmptyRowBlocksFunction());
+		return RDDAggregateUtils.mergeRowsByKey(sortIn2);
+	}
+
+	/**
+	 * 按顺序repartition
+	 */
+	public static JavaPairRDD<MatrixIndexes, MatrixBlock> repartitionIn2ByOrderAndIgnoreSP(
+			SparkExecutionContext sec, JavaPairRDD<MatrixIndexes, MatrixBlock> in, MatrixCharacteristics mc,
+			String dVarName) {
+		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
+		PartitionedBroadcast<MatrixBlock> orderPb = sec.getBroadcastForVariable(orderName);
+		sec.destroy(dVarName);
+		Broadcast<BitSet> ignore = sec.broadcast(dVarName, DWhileProgramBlock._ignoredRowBlocks.get(dVarName));
+
+		JavaPairRDD<MatrixIndexes, RowMatrixBlock> sortIn2 = in
+				.mapPartitionsToPair(new ShuffleRowsFunction(mc.getRows(), mc.getRowsPerBlock(),
+						orderPb.getBroadcasts()[0], ignore))
 				.filter(new CpmmSPInstruction.FilterNonEmptyRowBlocksFunction());
 		return RDDAggregateUtils.mergeRowsByKey(sortIn2);
 	}
@@ -766,13 +760,44 @@ public class LibMatrixReorg
 	public static JavaPairRDD<MatrixIndexes, MatrixBlock> repartitionIn1ByOrderSP(
 			SparkExecutionContext sec, JavaPairRDD<MatrixIndexes, MatrixBlock> in1, String dVarName, String in1Name,
 			String newIn1Name) {
+		return repartitionIn1ByOrderSP(sec, in1, dVarName, in1Name, newIn1Name, false);
+	}
+
+	/**
+	 * 按顺序repartition
+	 */
+	public static JavaPairRDD<MatrixIndexes, MatrixBlock> repartitionIn1ByOrderSP(
+			SparkExecutionContext sec, JavaPairRDD<MatrixIndexes, MatrixBlock> in1, String dVarName, String in1Name,
+			String newIn1Name, boolean localMm) {
 		String orderName = DWhileStatement.getRepartitionOrderName(dVarName);
 		PartitionedBroadcast<MatrixBlock> orderPb = sec.getBroadcastForVariable(orderName);
 		in1 = in1.mapPartitionsToPair(new RepartitionMapFunction(orderPb));
-		if (!sec.containsVariable(newIn1Name)) {
-			sec.setVariable(newIn1Name, new MatrixObject(sec.getMatrixObject(in1Name)));
+
+		if (ScriptExecutorUtils.dmlConfig.getIntValue(REORGANIZATION_STRATEGY) == 1 || localMm) {
+			in1 = RDDAggregateUtils.sumByKeyStable(in1, false);
 		}
-		in1 = sec.persistRdd(newIn1Name, in1, MEMORY_AND_DISK);
+
+		if (!sec.containsVariable(newIn1Name)) {
+			MatrixObject newMo = new MatrixObject(sec.getMatrixObject(in1Name));
+			newMo.setHDFSFileExists(false);
+			newMo.setFileName("tmp/" + newIn1Name + System.currentTimeMillis());
+			sec.setVariable(newIn1Name, newMo);
+		}
+		if (localMm) {
+			MatrixCharacteristics oldMc = sec.getMatrixCharacteristics(in1Name);
+			MatrixCharacteristics newMc = sec.getMatrixCharacteristics(newIn1Name);
+			String blockNumName = DWhileStatement.getRepartitionPreBlockNumName(dVarName);
+			long blockNum = DWhileProgramBlock._ec.getScalarInput(blockNumName, Expression.ValueType.INT, false)
+					.getLongValue();
+			long in1Col = blockNum * DEFAULT_BLOCKSIZE;
+			long in1Nnz = in1Col * oldMc.getRows();
+			in1Nnz = oldMc.getNonZeros() < 0 ? in1Nnz : Math.min(oldMc.getNonZeros(), in1Nnz);
+			newMc.setCols(in1Col);
+			newMc.setNonZeros(in1Nnz);
+
+		} else {
+			in1 = sec.persistRdd(newIn1Name, in1, MEMORY_AND_DISK_SER);
+		}
 		sec.setRDDHandleForVariable(newIn1Name, in1);
 		sec.addLineageBroadcast(newIn1Name, orderName);
 
@@ -790,10 +815,20 @@ public class LibMatrixReorg
 
 		private Broadcast<PartitionedBlock<MatrixBlock>> _pmb;
 
+		private Broadcast<BitSet> _ignore = null;
+
 		ShuffleRowsFunction(long rlen, int brlen, Broadcast<PartitionedBlock<MatrixBlock>> pmb) {
 			_rlen = rlen;
 			_brlen = brlen;
 			_pmb = pmb;
+		}
+
+		ShuffleRowsFunction(long rlen, int brlen, Broadcast<PartitionedBlock<MatrixBlock>> pmb,
+							Broadcast<BitSet> ignore) {
+			_rlen = rlen;
+			_brlen = brlen;
+			_pmb = pmb;
+			_ignore = ignore;
 		}
 
 		@Override
@@ -837,9 +872,10 @@ public class LibMatrixReorg
 					MatrixBlock mbTargetIndex = _pmb.value().getBlock((int) ixmap.getRowIndex(), 1);
 
 					long valix = (long) mbTargetIndex.getValue(_currPos, 0);
+					int newBi = (int) (valix / OptimizerUtils.DEFAULT_BLOCKSIZE);
 
 					// 处理不要的
-					if (valix < 0) {
+					if (valix < 0 || _ignore != null && _ignore.value().get(newBi)) {
 						_currPos++;
 						if (_currPos == data.getNumRows()) {
 							_currBlk = null;

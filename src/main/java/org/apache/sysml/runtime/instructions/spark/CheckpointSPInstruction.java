@@ -21,19 +21,23 @@ package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.storage.StorageLevel;
+import org.apache.sysml.api.ScriptExecutorUtils;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.lops.Checkpoint;
 import org.apache.sysml.parser.Expression.DataType;
+import org.apache.sysml.runtime.controlprogram.DWhileProgramBlock;
 import org.apache.sysml.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.BooleanObject;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
+import org.apache.sysml.runtime.instructions.spark.data.ColPartitioner;
 import org.apache.sysml.runtime.instructions.spark.data.RDDObject;
 import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.instructions.spark.functions.CopyFrameBlockFunction;
 import org.apache.sysml.runtime.instructions.spark.functions.CreateSparseBlockFunction;
+import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyBlocksFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.InputInfo;
@@ -44,9 +48,12 @@ import org.apache.sysml.runtime.matrix.data.SparseBlock;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.util.UtilFunctions;
 
+import static org.apache.sysml.conf.DMLConfig.PARTITION_NUM;
+import static org.apache.sysml.conf.DMLConfig.REORGANIZATION_STRATEGY;
+
 public class CheckpointSPInstruction extends UnarySPInstruction {
 	// default storage level
-	private StorageLevel _level = null;
+	private StorageLevel _level;
 
 	private CheckpointSPInstruction(Operator op, CPOperand in, CPOperand out, StorageLevel level, String opcode, String istr) {
 		super(SPType.Checkpoint, op, in, out, opcode, istr);
@@ -99,88 +106,106 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 		// Note that persist is an transformation which will be triggered on-demand with the next rdd operations
 		// This prevents unnecessary overhead if the dataset is only consumed by cp operations.
 
-		JavaPairRDD<?,?> out = null;
-		if( !in.getStorageLevel().equals( _level ) ) 
-		{
+		JavaPairRDD<?, ?> out = null;
+		if (!in.getStorageLevel().equals(_level) && DWhileProgramBlock._ec == null) {
 			//determine need for coalesce or repartitionNonZeros, and csr conversion
-			int numPartitions = SparkUtils.getNumPreferredPartitions(mcIn, in);
-			boolean coalesce = ( 1.2*numPartitions < in.getNumPartitions()
-				&& !SparkUtils.isHashPartitioned(in) && in.getNumPartitions()
-				> SparkExecutionContext.getDefaultParallelism(true));
+			int confNumPartitions = ScriptExecutorUtils.dmlConfig.getIntValue(PARTITION_NUM);
+			int numPartitions = confNumPartitions > 0 ?
+					confNumPartitions : SparkUtils.getNumPreferredPartitions(mcIn, in);
+			System.out.println("preferred # partition = " + numPartitions);
+			boolean coalesce = (1.2 * numPartitions < in.getNumPartitions()
+					&& !SparkUtils.isHashPartitioned(in) && in.getNumPartitions()
+					> SparkExecutionContext.getDefaultParallelism(true));
 			boolean repartition = mcIn.dimsKnown(true) && mcIn.isUltraSparse()
-				&& numPartitions > in.getNumPartitions();
-			boolean mcsr2csr = input1.getDataType()==DataType.MATRIX 
-				&& OptimizerUtils.checkSparseBlockCSRConversion(mcIn)
-				&& !_level.equals(Checkpoint.SER_STORAGE_LEVEL);
+					&& numPartitions > in.getNumPartitions();
+			boolean mcsr2csr = input1.getDataType() == DataType.MATRIX
+					&& OptimizerUtils.checkSparseBlockCSRConversion(mcIn)
+					&& !_level.equals(Checkpoint.SER_STORAGE_LEVEL);
+			boolean needRowPartition = (input1.getName().equals("G") || input1.getName().equals("pREADG")
+					|| input1.getName().equals("TG") || input1.getName().equals("pREADTG"))
+					&& !isRowPartitioned(in)
+					&& ScriptExecutorUtils.dmlConfig.getIntValue(REORGANIZATION_STRATEGY) != 1;
+//			boolean needRowPartition = false;
+
+//			// TODO added by czh 删
+//			if (numPartitions > 500) {
+//				System.out.println("(删) " + input1.getName());
+//				in = in.partitionBy(new ColPartitioner(mcIn, in.getNumPartitions()));
+//			}
 
 			//checkpoint pre-processing rdd operations
-			if( coalesce ) {
+			if (coalesce) {
 				//merge partitions without shuffle if too many partitions
-				// TODO added by czh
-				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
-						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
-					System.out.println("checkpoint in coalesce. " + this + ". # partition = " + numPartitions);
-					out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+				System.out.println("checkpoint in coalesce. " + this + ". # partition = " + numPartitions
+						+ ". old # partition = " + in.getNumPartitions());
+				if (needRowPartition) {
+					out = ((JavaPairRDD<MatrixIndexes, MatrixBlock>) in)
+							.filter(new FilterNonEmptyBlocksFunction())
+							.partitionBy(new RowPartitioner(mcIn, numPartitions));
 				} else {
 					out = in.coalesce(numPartitions);
 				}
 
-			} else if( repartition ) {
+			} else if (repartition) {
 				//repartitionNonZeros to preferred size as multiple of default parallelism
-//				out = in.repartition(UtilFunctions.roundToNext(numPartitions,
-//					SparkExecutionContext.getDefaultParallelism(true)));
-				// TODO added by czh
-//				if (input1.getName().equals("G") || input1.getName().equals("pREADG")) {
-					System.out.println("checkpoint in repartition. " + this);
-					out = in.partitionBy(new RowPartitioner(mcIn, UtilFunctions.roundToNext(numPartitions,
-							SparkExecutionContext.getDefaultParallelism(true))));
-//				}
+				if (confNumPartitions <= 0) {
+					numPartitions = UtilFunctions
+							.roundToNext(numPartitions, SparkExecutionContext.getDefaultParallelism(true));
+				}
+				System.out.println("checkpoint in repartition. " + this + ". # partition = " + numPartitions
+						+ ". old # partition = " + in.getNumPartitions());
+				if (needRowPartition) {
+					out = ((JavaPairRDD<MatrixIndexes, MatrixBlock>) in)
+							.filter(new FilterNonEmptyBlocksFunction())
+							.partitionBy(new RowPartitioner(mcIn, numPartitions));
+				} else {
+					out = in.repartition(numPartitions);
+				}
 
-			} else if( !mcsr2csr ) {
-				//since persist is an in-place marker for a storage level, we 
+			} else if (!mcsr2csr) {
+				//since persist is an in-place marker for a storage level, we
 				//apply a narrow shallow copy to allow for short-circuit collects
-				// TODO added by czh
-				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
-						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
+				if (needRowPartition) {
 					System.out.println("checkpoint in !mcsr2csr. " + this + ". # partition = " + in.getNumPartitions()
 							+ ". preferred # partition = " + numPartitions);
 					in = in.partitionBy(new RowPartitioner(mcIn, in.getNumPartitions()));
+					in = ((JavaPairRDD<MatrixIndexes, MatrixBlock>) in).filter(new FilterNonEmptyBlocksFunction());
 				}
-				if( input1.getDataType() == DataType.MATRIX )
+				if (input1.getDataType() == DataType.MATRIX)
 					out = SparkUtils.copyBinaryBlockMatrix(
-						(JavaPairRDD<MatrixIndexes,MatrixBlock>)in, false);
-				else if( input1.getDataType() == DataType.FRAME)
-					out = ((JavaPairRDD<Long,FrameBlock>)in)
-						.mapValues(new CopyFrameBlockFunction(false));
+							(JavaPairRDD<MatrixIndexes, MatrixBlock>) in, false);
+				else if (input1.getDataType() == DataType.FRAME)
+					out = ((JavaPairRDD<Long, FrameBlock>) in)
+							.mapValues(new CopyFrameBlockFunction(false));
 
 			} else {
-				if (input1.getName().equals("G") || input1.getName().equals("pREADG")
-						|| input1.getName().equals("TG") || input1.getName().equals("pREADTG")) {
+				if (needRowPartition) {
 					System.out.println("checkpoint in normal. " + this + ". # partition = " + numPartitions);
-					out = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+					in = in.partitionBy(new RowPartitioner(mcIn, numPartitions));
+					out = ((JavaPairRDD<MatrixIndexes, MatrixBlock>) in).filter(new FilterNonEmptyBlocksFunction());
 				} else {
 					out = in;
 				}
 			}
-			
+
 			//convert mcsr into memory-efficient csr if potentially sparse
-			if( mcsr2csr ) {
-				out = ((JavaPairRDD<MatrixIndexes,MatrixBlock>)out)
-					.mapValues(new CreateSparseBlockFunction(SparseBlock.Type.CSR));
+			if (mcsr2csr) {
+				out = ((JavaPairRDD<MatrixIndexes, MatrixBlock>) out)
+						.mapValues(new CreateSparseBlockFunction(SparseBlock.Type.CSR));
 			}
-			
+
 			//actual checkpoint into given storage level
-			out = out.persist( _level );
-			
+			out = out.persist(_level);
+
 			//trigger nnz computation for datasets that are forced to spark by their dimensions
 			//(larger than MAX_INT) to handle ultra-sparse data sets during recompilation because
 			//otherwise these their nnz would never be evaluated due to lazy evaluation in spark
-			if( input1.isMatrix() && mcIn.dimsKnown() 
-				&& !mcIn.dimsKnown(true) && !OptimizerUtils.isValidCPDimensions(mcIn) ) {
-				mcIn.setNonZeros(SparkUtils.getNonZeros((JavaPairRDD<MatrixIndexes,MatrixBlock>)out));
+			if (input1.isMatrix() && mcIn.dimsKnown()
+					&& !mcIn.dimsKnown(true) && !OptimizerUtils.isValidCPDimensions(mcIn)) {
+				mcIn.setNonZeros(SparkUtils.getNonZeros((JavaPairRDD<MatrixIndexes, MatrixBlock>) out));
 			}
-		}
-		else {
+
+		} else {
 			out = in; //pass-through
 		}
 		
@@ -203,4 +228,16 @@ public class CheckpointSPInstruction extends UnarySPInstruction {
 		}
 		sec.setVariable( output.getName(), cd);
 	}
+
+	private boolean isRowPartitioned(JavaPairRDD<?,?> in) {
+		try {
+			if (in.partitioner().get() instanceof RowPartitioner) {
+				return true;
+			}
+		} catch (Exception e) {
+			return false;
+		}
+		return false;
+	}
+
 }

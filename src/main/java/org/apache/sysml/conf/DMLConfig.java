@@ -98,6 +98,20 @@ public class DMLConfig
 	public static final String EVICTION_SHADOW_BUFFERSIZE = "sysml.gpu.eviction.shadow.bufferSize";
 	public static final String GPU_RECOMPUTE_ACTIVATIONS = "sysml.gpu.recompute.activations";
 
+	public static final String REORGANIZATION_STRATEGY = "sysml.codegen.reorganization.strategy"; // 0 不用; 1 naive; 2 用
+	public static final String REORGANIZATION_RATE = "sysml.codegen.reorganization.rate";
+	public static final String REORGANIZATION_COUNT = "sysml.codegen.reorganization.count";
+	public static final String DETECTION_START = "sysml.codegen.detect.start";
+	public static final String DETECTION_STEP = "sysml.codegen.detect.step";
+	public static final String RBLK_OUTPUT_EMPTY = "sysml.codegen.rblk.outputEmpty";
+	public static final String PARTITION_NUM = "sysml.codegen.partition.num";
+	public static final String USE_REORGANIZATION_IN_WRITE = "sysml.codegen.reorg.write";
+	public static final String COST_BROADCAST = "sysml.codegen.cost.broadcast";
+	public static final String COST_COLLECT = "sysml.codegen.cost.collect";
+	public static final String COST_JOIN = "sysml.codegen.cost.join";
+	public static final String COST_SHUFFLE = "sysml.codegen.cost.shuffle";
+	public static final String COST_HDFS = "sysml.codegen.cost.hdfs";
+
 	// supported prefixes for custom map/reduce configurations
 	public static final String PREFIX_MAPRED = "mapred";
 	public static final String PREFIX_MAPREDUCE = "mapreduce";
@@ -113,45 +127,54 @@ public class DMLConfig
 	private Element _xmlRoot = null;
 	private DocumentBuilder _documentBuilder = null;
 	private Document _document = null;
-	
-	static
-	{
+
+	static {
 		_defaultVals = new HashMap<>();
-		_defaultVals.put(LOCAL_TMP_DIR,          "/tmp/systemml" );
-		_defaultVals.put(SCRATCH_SPACE,          "scratch_space" );
-		_defaultVals.put(OPTIMIZATION_LEVEL,     String.valueOf(OptimizerUtils.DEFAULT_OPTLEVEL.ordinal()) );
-		_defaultVals.put(NUM_REDUCERS,           "10" );
-		_defaultVals.put(JVM_REUSE,              "false" );
-		_defaultVals.put(DEFAULT_BLOCK_SIZE,     String.valueOf(OptimizerUtils.DEFAULT_BLOCKSIZE) );
-		_defaultVals.put(YARN_APPMASTER,         "false" );
-		_defaultVals.put(YARN_APPMASTERMEM,      "2048" );
-		_defaultVals.put(YARN_MAPREDUCEMEM,      "-1" );
-		_defaultVals.put(YARN_APPQUEUE,    	     "default" );
-		_defaultVals.put(CP_PARALLEL_OPS,        "true" );
-		_defaultVals.put(CP_PARALLEL_IO,         "true" );
-		_defaultVals.put(COMPRESSED_LINALG,      Compression.CompressConfig.AUTO.name() );
-		_defaultVals.put(CODEGEN,                "false" );
-		_defaultVals.put(CODEGEN_COMPILER,       CompilerType.AUTO.name() );
-		_defaultVals.put(CODEGEN_OPTIMIZER,      PlanSelector.FUSE_COST_BASED_V2.name() );
-		_defaultVals.put(CODEGEN_PLANCACHE,      "true" );
-		_defaultVals.put(CODEGEN_LITERALS,       "1" );
-		_defaultVals.put(NATIVE_BLAS,            "none" );
-		_defaultVals.put(NATIVE_BLAS_DIR,        "none" );
-		_defaultVals.put(EXTRA_FINEGRAINED_STATS,"false" );
-		_defaultVals.put(PRINT_GPU_MEMORY_INFO,  "false" );
-		_defaultVals.put(EVICTION_SHADOW_BUFFERSIZE,  "0.5" );
-		_defaultVals.put(STATS_MAX_WRAP_LEN,     "30" );
-		_defaultVals.put(GPU_MEMORY_UTILIZATION_FACTOR,      "0.9" );
-		_defaultVals.put(GPU_MEMORY_ALLOCATOR,	 "cuda");
-		_defaultVals.put(AVAILABLE_GPUS,         "-1");
-		_defaultVals.put(GPU_EVICTION_POLICY,    "min_evict");
-		_defaultVals.put(SYNCHRONIZE_GPU,        "false" );
-		_defaultVals.put(CACHING_BUFFER_SIZE,    "0.15" );
-		_defaultVals.put(EAGER_CUDA_FREE,        "false" );
-		_defaultVals.put(GPU_RECOMPUTE_ACTIVATIONS, "false" );
-		_defaultVals.put(FLOATING_POINT_PRECISION,        	 "double" );
+		_defaultVals.put(LOCAL_TMP_DIR, "/tmp/systemml");
+		_defaultVals.put(SCRATCH_SPACE, "scratch_space");
+		_defaultVals.put(OPTIMIZATION_LEVEL, String.valueOf(OptimizerUtils.DEFAULT_OPTLEVEL.ordinal()));
+		_defaultVals.put(NUM_REDUCERS, "10");
+		_defaultVals.put(JVM_REUSE, "false");
+		_defaultVals.put(DEFAULT_BLOCK_SIZE, String.valueOf(OptimizerUtils.DEFAULT_BLOCKSIZE));
+		_defaultVals.put(YARN_APPMASTER, "false");
+		_defaultVals.put(YARN_APPMASTERMEM, "2048");
+		_defaultVals.put(YARN_MAPREDUCEMEM, "-1");
+		_defaultVals.put(YARN_APPQUEUE, "default");
+		_defaultVals.put(CP_PARALLEL_OPS, "true");
+		_defaultVals.put(CP_PARALLEL_IO, "true");
+		_defaultVals.put(COMPRESSED_LINALG, Compression.CompressConfig.AUTO.name());
+		_defaultVals.put(CODEGEN, "false");
+		_defaultVals.put(CODEGEN_COMPILER, CompilerType.AUTO.name());
+		_defaultVals.put(CODEGEN_OPTIMIZER, PlanSelector.FUSE_COST_BASED_V2.name());
+		_defaultVals.put(CODEGEN_PLANCACHE, "true");
+		_defaultVals.put(CODEGEN_LITERALS, "1");
+		_defaultVals.put(NATIVE_BLAS, "none");
+		_defaultVals.put(NATIVE_BLAS_DIR, "none");
+		_defaultVals.put(EXTRA_FINEGRAINED_STATS, "false");
+		_defaultVals.put(PRINT_GPU_MEMORY_INFO, "false");
+		_defaultVals.put(EVICTION_SHADOW_BUFFERSIZE, "0.5");
+		_defaultVals.put(STATS_MAX_WRAP_LEN, "30");
+		_defaultVals.put(GPU_MEMORY_UTILIZATION_FACTOR, "0.9");
+		_defaultVals.put(GPU_MEMORY_ALLOCATOR, "cuda");
+		_defaultVals.put(AVAILABLE_GPUS, "-1");
+		_defaultVals.put(GPU_EVICTION_POLICY, "min_evict");
+		_defaultVals.put(SYNCHRONIZE_GPU, "false");
+		_defaultVals.put(CACHING_BUFFER_SIZE, "0.15");
+		_defaultVals.put(EAGER_CUDA_FREE, "false");
+		_defaultVals.put(GPU_RECOMPUTE_ACTIVATIONS, "false");
+		_defaultVals.put(FLOATING_POINT_PRECISION, "double");
+		_defaultVals.put(DETECTION_START, "-1");
+		_defaultVals.put(DETECTION_STEP, "1");
+		_defaultVals.put(RBLK_OUTPUT_EMPTY, "true");
+		_defaultVals.put(PARTITION_NUM, "-1");
+		_defaultVals.put(USE_REORGANIZATION_IN_WRITE, "false");
+		_defaultVals.put(COST_BROADCAST, "1");
+		_defaultVals.put(COST_COLLECT, "1");
+		_defaultVals.put(COST_JOIN, "30");
+		_defaultVals.put(COST_SHUFFLE, "30");
+		_defaultVals.put(COST_HDFS, "30");
 	}
-	
+
 	public DMLConfig() {
 		
 	}

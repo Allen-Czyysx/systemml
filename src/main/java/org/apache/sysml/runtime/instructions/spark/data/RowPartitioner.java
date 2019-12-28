@@ -1,6 +1,7 @@
 package org.apache.sysml.runtime.instructions.spark.data;
 
 import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
+import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 
 public class RowPartitioner extends BlockPartitioner {
 
@@ -19,18 +20,21 @@ public class RowPartitioner extends BlockPartitioner {
 
 		double nblksPerPart = Math.max((double) nblks / numParts, 1);
 
-		if (ncblks <= nblksPerPart) {
-			_cbPerPart = ncblks;
-			_rbPerPart = (long) Math.max(Math.floor(nblksPerPart / _cbPerPart), 1);
-		} else {
-			_rbPerPart = 1;
-			_cbPerPart = (long) Math.max(Math.floor(nblksPerPart), 1);
-		}
+		_rbPerPart = (long) Math.max(Math.floor(nblksPerPart / ncblks), 1);
+		_cbPerPart = (long) Math.max(Math.floor(nblksPerPart / _rbPerPart), 1);
 
 		_ncparts = (int) Math.ceil((double) ncblks / _cbPerPart);
 		_numParts = numParts;
+	}
 
-		_numColumnsPerBlock = mc.getColsPerBlock();
+	public static void main(String[] args) {
+		MatrixCharacteristics mc =
+				new MatrixCharacteristics(2300000, 3200000, 1000, 1000, 277100000);
+		int numParts = 725;
+		ColPartitioner partitioner = new ColPartitioner(mc, numParts);
+
+		MatrixIndexes idx = new MatrixIndexes(2300, 4);
+		System.out.println(partitioner.getPartition(idx));
 	}
 
 }

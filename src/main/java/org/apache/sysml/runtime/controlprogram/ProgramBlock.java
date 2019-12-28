@@ -20,6 +20,8 @@
 package org.apache.sysml.runtime.controlprogram;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,6 +32,7 @@ import org.apache.sysml.hops.Hop;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.hops.recompile.Recompiler;
 import org.apache.sysml.lops.Lop;
+import org.apache.sysml.parser.DWhileStatement;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.parser.ParseInfo;
 import org.apache.sysml.parser.StatementBlock;
@@ -45,6 +48,8 @@ import org.apache.sysml.runtime.instructions.cp.DoubleObject;
 import org.apache.sysml.runtime.instructions.cp.IntObject;
 import org.apache.sysml.runtime.instructions.cp.ScalarObject;
 import org.apache.sysml.runtime.instructions.cp.StringObject;
+import org.apache.sysml.runtime.instructions.mr.BinaryInstruction;
+import org.apache.sysml.runtime.instructions.spark.MapmmSPInstruction;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.utils.Statistics;
 import org.apache.sysml.yarn.DMLAppMasterUtils;
@@ -231,12 +236,40 @@ public class ProgramBlock implements ParseInfo
 	}
 
 	protected void executeInstructions(ArrayList<Instruction> inst, ExecutionContext ec) {
+		boolean findInverse = false;
+		int skipPos = -1;
+
 		for (int i = 0; i < inst.size(); i++) {
 			//indexed access required due to dynamic add
 			Instruction currInst = inst.get(i);
+			Instruction nextInst = i < inst.size() - 1 ? inst.get(i + 1) : null;
+
+			// TODO added by czh 特殊
+			if (nextInst instanceof MapmmSPInstruction && !findInverse
+					&& DWhileStatement.isDWhileTmpVar(((MapmmSPInstruction) nextInst).input2.getName())
+					&& (DWhileStatement.getDVarNameFromTmpVar(((MapmmSPInstruction) nextInst).input2.getName()).equals("W")
+					|| DWhileStatement.getDVarNameFromTmpVar(((MapmmSPInstruction) nextInst).input2.getName()).equals("H"))) {
+				skipPos = i;
+				i += 4;
+				continue;
+			}
+
 			//execute instruction
 			ec.updateDebugState(i);
 			executeSingleInstruction(currInst, ec);
+
+			if (currInst.getOpcode().equals("inverse")) {
+				findInverse = true;
+				if (skipPos >= 0) {
+					i++;
+					ec.updateDebugState(i);
+					executeSingleInstruction(inst.get(i), ec);
+					for (int j = 0; j < 5; j++) {
+						ec.updateDebugState(skipPos + j);
+						executeSingleInstruction(inst.get(skipPos + j), ec);
+					}
+				}
+			}
 		}
 	}
 

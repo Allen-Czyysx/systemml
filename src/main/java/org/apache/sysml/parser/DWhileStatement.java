@@ -88,7 +88,7 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static boolean isDWhileTmpVar(String varName) {
-		if (varName == null) {
+		if (varName == null || varName.length() == 0) {
 			return false;
 		}
 		return Character.isDigit(varName.charAt(0));
@@ -107,7 +107,7 @@ public class DWhileStatement extends WhileStatement {
 		if (!isDWhileTmpVar(varName)) {
 			return false;
 		}
-		return Character.toString(varName.charAt(0)).equals("1");
+		return parseNumFromName(varName) == 1;
 	}
 
 	public static String getVarUseDeltaName(String varName) {
@@ -118,11 +118,18 @@ public class DWhileStatement extends WhileStatement {
 		if (!isDWhileTmpVar(varName)) {
 			return false;
 		}
-		return Character.toString(varName.charAt(0)).equals("2");
+		return parseNumFromName(varName) == 2;
 	}
 
 	public static String getSelectName(String varName) {
 		return "3_select_" + varName;
+	}
+
+	public static boolean isSelectName(String varName) {
+		if (!isDWhileTmpVar(varName)) {
+			return false;
+		}
+		return parseNumFromName(varName) == 3;
 	}
 
 	public static String getDeltaName(String varName) {
@@ -130,15 +137,21 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static String getPreOutputNameFromHop(Hop hop) {
+		StringBuilder sb = new StringBuilder();
+		for (String dVarName : hop.getDVarNames()) {
+			sb.append("_");
+			sb.append(dVarName);
+		}
+
 		return "5_preOutput_hop_" + hop.getName() + "_" + hop.getOpString() + "_" + hop.getBeginLine() + "_"
-				+ hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn();
+				+ hop.getBeginColumn() + "_" + hop.getEndLine() + "_" + hop.getEndColumn() + sb.toString();
 	}
 
 	public static boolean isPreOutputNameFromHop(String varName) {
 		if (!isDWhileTmpVar(varName)) {
 			return false;
 		}
-		return Character.toString(varName.charAt(0)).equals("5");
+		return parseNumFromName(varName) == 5;
 	}
 
 	public static String getPreOutputNameFromInst(Instruction inst) {
@@ -170,10 +183,6 @@ public class DWhileStatement extends WhileStatement {
 		return "12_selectBlock_" + varName;
 	}
 
-	public static String getNewRepartitionOrderName(String varName) {
-		return "13_newRepartitionOrder_" + varName;
-	}
-
 	public static String getSelectNumName(String varName) {
 		return "14_selectNum_" + varName;
 	}
@@ -191,7 +200,19 @@ public class DWhileStatement extends WhileStatement {
 	}
 
 	public static String getIsDetectName(String varName) {
-		return "19_isDetect" + varName;
+		return "19_isDetect_" + varName;
+	}
+
+	public static boolean isDetectName(String varName) {
+		if (!isDWhileTmpVar(varName)) {
+			return false;
+		}
+		return parseNumFromName(varName) == 19;
+	}
+
+	private static int parseNumFromName(String varName) {
+		String[] part = varName.split("_");
+		return Integer.parseInt(part[0]);
 	}
 
 	@Override

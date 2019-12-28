@@ -19,10 +19,7 @@
 
 package org.apache.sysml.hops;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -112,7 +109,7 @@ public abstract class Hop implements ParseInfo
 
 	// 用于增量迭代
 	String _preOutputName = null;
-	String[] _dVarNames = null;
+	Set<String> _dVarNames = new HashSet<>();
 	Hop _dHop = null;
 
 	// 在代价估计中是否被访问过
@@ -165,13 +162,19 @@ public abstract class Hop implements ParseInfo
 		_preOutputName = preOutputName;
 	}
 
-	public String[] getDVarNames() {
+	public Set<String> getDVarNames() {
 		return _dVarNames;
 	}
 
-	public void setDVarNames(String[] dVarNames) {
-		_dVarNames = dVarNames;
+	public void addDVarName(String dVarName) {
+		_dVarNames.add(dVarName);
 	}
+
+	public void addDVarNames(Set<String> dVarNames) {
+		_dVarNames.addAll(dVarNames);
+	}
+
+
 
 	public boolean isOutputEmptyDisabled() {
 		return _disableOutputEmpty;
@@ -2104,7 +2107,7 @@ public abstract class Hop implements ParseInfo
 		if (_needCache) {
 			_lops.setNeedCache(true);
 			_lops.setPreOutputName(_preOutputName);
-			_lops.setDVarNames(_dVarNames);
+			_lops.setDVarNames(_dVarNames.toArray(new String[0]));
 		}
 	}
 

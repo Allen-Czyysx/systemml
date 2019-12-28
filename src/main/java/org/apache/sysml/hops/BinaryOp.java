@@ -101,7 +101,8 @@ public class BinaryOp extends MultiThreadedHop
 		getInput().add(0, inp1);
 		getInput().add(1, inp2);
 
-		_dVarNames = (String[]) ArrayUtils.addAll(inp1._dVarNames, inp2._dVarNames);
+		_dVarNames.addAll(inp1._dVarNames);
+		_dVarNames.addAll(inp2._dVarNames);
 
 		inp1.getParent().add(this);
 		inp2.getParent().add(this);
@@ -112,10 +113,6 @@ public class BinaryOp extends MultiThreadedHop
 
 	public BinaryOp(String name, DataType dt, ValueType vt, Hop.OpOp2 o, Hop inp1, Hop inp2, boolean t ) {
 		this(name, dt, vt, o, inp1, inp2);
-
-
-
-
 	}
 
 	@Override

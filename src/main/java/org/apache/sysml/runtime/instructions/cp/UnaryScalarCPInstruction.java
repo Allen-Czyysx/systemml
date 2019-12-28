@@ -20,6 +20,7 @@
 package org.apache.sysml.runtime.instructions.cp;
 
 import org.apache.sysml.api.DMLScript;
+import org.apache.sysml.api.ScriptExecutorUtils;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.*;
 import org.apache.sysml.hops.codegen.SpoofCompiler;
@@ -37,11 +38,16 @@ import org.apache.sysml.runtime.controlprogram.LocalVariableMap;
 import org.apache.sysml.runtime.controlprogram.ProgramBlock;
 import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.spark.BinarySPInstruction;
+import org.apache.sysml.runtime.instructions.spark.data.ColPartitioner;
+import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
+import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.UnaryOperator;
 
 import java.util.ArrayList;
+import java.util.List;
 
+import static org.apache.sysml.conf.DMLConfig.*;
 import static org.apache.sysml.hops.OptimizerUtils.DEFAULT_BLOCKSIZE;
 import static org.apache.sysml.hops.recompile.Recompiler.*;
 
@@ -54,40 +60,101 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 	@Override
 	public void processInstruction(ExecutionContext ec) {
 		String opcode = getOpcode();
-		ScalarObject sores = null;
-		ScalarObject so = null;
+		ScalarObject sores;
 
 		//get the scalar input 
-		so = ec.getScalarInput(input1);
+		ScalarObject so = ec.getScalarInput(input1);
 
 		//core execution
-		if (DWhileStatement.isVarUseDeltaName(input1.getName())
-				&& DWhileStatement.isVarUseDeltaName(input1.getName())
-				&& opcode.equals("!")) {
+		if (DWhileStatement.isVarUseDeltaName(input1.getName()) && opcode.equals("!")) {
+			String dVarName = DWhileStatement.getDVarNameFromTmpVar(input1.getName());
 			DWhileProgramBlock pb = DWhileProgramBlock._pb;
 			if (pb == null) {
 				throw new DMLRuntimeException("DWhileProgramBlock._pb shouldn't be null");
 			}
 
+			List<ProgramBlock> comPb = new ArrayList<>();
+			List<ProgramBlock> incPb = new ArrayList<>();
+			List<ProgramBlock> aftPb = new ArrayList<>();
+
 			IfProgramBlock mainPb = (IfProgramBlock) (pb.getChildBlocks().get(0));
-			ArrayList<Hop> newComHops = recompileProgramBlock(ec, mainPb.getChildBlocksElseBody());
-			ArrayList<Hop> newIncHops = recompileProgramBlock(ec, mainPb.getChildBlocksIfBody());
-			ArrayList<Hop> newAftHops = recompileProgramBlock(ec, pb.getDIterAfter());
+			VariableCPInstruction pred = (VariableCPInstruction) mainPb.getPredicate().get(0);
+			ProgramBlock ifBody = mainPb.getChildBlocksIfBody().get(0);
+			ProgramBlock elseBody = mainPb.getChildBlocksElseBody().get(0);
+			if (DWhileStatement.getDVarNameFromTmpVar(pred.getInput(0).getName()).equals(dVarName)) {
+				if (ifBody instanceof IfProgramBlock && ((IfProgramBlock) ifBody).getPredicate().size() == 1) {
+					if (dVarName.equals("W")) {
+						IfProgramBlock tmpIfPb =
+								(IfProgramBlock) ((IfProgramBlock) ifBody).getChildBlocksElseBody().get(0);
+						incPb.add(tmpIfPb.getChildBlocksIfBody().get(0));
+						tmpIfPb =
+								(IfProgramBlock) ((IfProgramBlock) elseBody).getChildBlocksElseBody().get(0);
+						comPb.add(tmpIfPb.getChildBlocksIfBody().get(0));
+
+					} else {
+						incPb.add(((IfProgramBlock) ifBody).getChildBlocksElseBody().get(0));
+						comPb.add(((IfProgramBlock) elseBody).getChildBlocksElseBody().get(0));
+					}
+
+				} else {
+					incPb.add(ifBody);
+					comPb.add(elseBody);
+				}
+
+			} else {
+				if (dVarName.equals("H")) {
+					IfProgramBlock tmpIfPb =
+							(IfProgramBlock) ((IfProgramBlock) elseBody).getChildBlocksIfBody().get(0);
+					incPb.add(tmpIfPb.getChildBlocksElseBody().get(0));
+					tmpIfPb =
+							(IfProgramBlock) ((IfProgramBlock) elseBody).getChildBlocksElseBody().get(0);
+					comPb.add(tmpIfPb.getChildBlocksElseBody().get(0));
+
+				} else {
+					incPb.add(((IfProgramBlock) elseBody).getChildBlocksIfBody().get(0));
+					comPb.add(((IfProgramBlock) elseBody).getChildBlocksElseBody().get(0));
+				}
+			}
+
+			for (ProgramBlock tmpPb : pb.getDIterAfter()) {
+				if (tmpPb instanceof IfProgramBlock) {
+					VariableCPInstruction tmpPred =
+							(VariableCPInstruction) ((IfProgramBlock) tmpPb).getPredicate().get(0);
+					if (DWhileStatement.getDVarNameFromTmpVar(tmpPred.getInput(0).getName()).equals(dVarName)) {
+						aftPb.add(tmpPb);
+					}
+				} else {
+					aftPb.add(tmpPb);
+				}
+			}
+
+			ArrayList<Hop> newComHops = recompileProgramBlock(ec, comPb);
+			ArrayList<Hop> newIncHops = recompileProgramBlock(ec, incPb);
+			ArrayList<Hop> newAftHops = recompileProgramBlock(ec, aftPb);
 
 			HopCost comCost = estimateCost(newComHops);
 			HopCost incCost = estimateCost(newIncHops);
 			HopCost aftCost = estimateCost(newAftHops);
 
-//			System.out.println("com" + comCost);
-//			System.out.println("inc" + incCost);
-//			System.out.println("aft" + aftCost);
+			System.out.println("com" + comCost);
+			System.out.println("inc" + incCost);
+			System.out.println("aft" + aftCost);
+			System.out.println("inc total: " + (incCost.getCost() + aftCost.getCost()));
+			System.out.println("com total: " + comCost.getCost());
 
-//			if (so.getBooleanValue()) {
-			if (true) {
+
+			sores = new BooleanObject(incCost.getCost() + aftCost.getCost() < comCost.getCost());
+
+			if (incCost.getCost() + aftCost.getCost() < comCost.getCost()) {
+				int detectStep = ScriptExecutorUtils.dmlConfig.getIntValue(DETECTION_STEP);
+				if (detectStep < 1) {
+//					DWhileProgramBlock._detectStepHistory.putIfAbsent()
+				}
 				System.out.println("use delta next time");
-//				sores = new BooleanObject(so.getBooleanValue());
-				sores = new BooleanObject(true);
 			}
+
+		} else if (DWhileStatement.isDetectName(input1.getName()) && opcode.equals("!")) {
+			sores = isDetect(ec, input1.getName());
 
 		} else if (opcode.equalsIgnoreCase("print")) {
 			String outString = so.getLanguageSpecificStringValue();
@@ -206,7 +273,7 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 		return ret;
 	}
 
-	private ArrayList<Hop> recompileProgramBlock(ExecutionContext ec, ArrayList<ProgramBlock> pbs) {
+	private ArrayList<Hop> recompileProgramBlock(ExecutionContext ec, List<ProgramBlock> pbs) {
 		ArrayList<Hop> ret = new ArrayList<>();
 
 		for (ProgramBlock pb : pbs) {
@@ -299,7 +366,7 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 				}
 			}
 
-			double interS = 1 - Math.pow(1 - in1s * in2s, DEFAULT_BLOCKSIZE);
+			double interS = 1 - Math.pow(1 - in1s * in2s, in1c);
 			if (useRepartition) {
 				String dVarName = DWhileStatement.getDVarNameFromTmpVar(in2.getName());
 				String blockNumName = DWhileStatement.getRepartitionBlockNumName(dVarName);
@@ -307,21 +374,17 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 				interS *= blockNum / Math.ceil(1.0 * in2r / DEFAULT_BLOCKSIZE);
 			}
 
-			long m1SizeP = OptimizerUtils.estimatePartitionedSizeExactSparsity(
-					in1r, in1c, in1.getRowsInBlock(), in1.getColsInBlock(), in1s);
 			long m2SizeP = OptimizerUtils.estimatePartitionedSizeExactSparsity(
 					in2r, in2c, in2.getRowsInBlock(), in2.getColsInBlock(), in2s);
 			long mInterSizeP = OptimizerUtils.estimatePartitionedSizeExactSparsity(
-					in1r, in1c, in1.getRowsInBlock(), in1.getColsInBlock(), interS);
+					in1r, in2c, in1.getRowsInBlock(), in1.getColsInBlock(), interS);
 
 			if (lop instanceof MMCJ) { // CPMM
-				cost.join += m1SizeP + m2SizeP;
+				cost.join += m2SizeP;
 
-				if (((MMCJ) lop)._aggtype == AggBinaryOp.SparkAggType.SINGLE_BLOCK) {
-					cost.collect += mInterSizeP;
-				} else {
-					cost.shuffle += mInterSizeP;
-				}
+				int taskNum = ec.getMatrixObject("A").getRDDHandle().getRDD().getNumPartitions();
+				cost.shuffle += mInterSizeP * taskNum;
+//				cost.shuffle += mInterSizeP * 6;
 
 				cost.isRDD = true;
 
@@ -337,11 +400,11 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 
 				cost.broadcast += m2SizeP;
 
-				if (((MapMult) lop)._aggtype == AggBinaryOp.SparkAggType.SINGLE_BLOCK) {
-					cost.collect += mInterSizeP;
-				} else {
-					cost.shuffle += mInterSizeP;
-				}
+				int taskNum = ec.getMatrixObject("A").getRDDHandle().getRDD().getNumPartitions();
+				MatrixCharacteristics inMc =
+						new MatrixCharacteristics(in1.getDim1(), in1.getDim2(), 1000, 1000);
+				RowPartitioner p = new RowPartitioner(inMc, taskNum);
+				cost.shuffle += mInterSizeP * p._ncparts;
 
 				cost.isRDD = true;
 			}
@@ -411,6 +474,66 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 		return cost;
 	}
 
+	private static ScalarObject isDetect(ExecutionContext ec, String name) {
+		return isDetect(ec, name, 0);
+	}
+
+	public static ScalarObject isDetect(ExecutionContext ec, String name, int delta) {
+		String dVarName = DWhileStatement.getDVarNameFromTmpVar(name);
+		long dwhileCount = ec.getScalarInput(DWhileStatement.getDwhileCountName(), ValueType.INT, false)
+				.getLongValue() + delta;
+		ScalarObject sores =  new BooleanObject(isDetect(dVarName, dwhileCount));
+
+		if (sores.getBooleanValue()) {
+			System.out.println("detecting..." + dVarName);
+		}
+
+		return sores;
+	}
+
+	public static boolean isDetect(String dVarName, long dwhileCount) {
+		int detectStart = -1;
+		String[] detectStartConfs = ScriptExecutorUtils.dmlConfig.getTextValue(DETECTION_START).split(",");
+		for (String conf : detectStartConfs) {
+			String[] map = conf.split(":");
+			if (map.length == 2 && map[0].equals(dVarName)) {
+				detectStart = Integer.parseInt(map[1]);
+				break;
+			}
+		}
+
+		if (dwhileCount < detectStart) {
+			return false;
+		}
+
+		// TODO added by czh 特殊处理
+		int detectStep = Math.max(ScriptExecutorUtils.dmlConfig.getIntValue(DETECTION_STEP), 1);
+		if (dVarName.equals("au")) {
+			return dwhileCount % (2 * detectStep) == 0;
+		} else if (dVarName.equals("ho")) {
+			return dwhileCount % (2 * detectStep) == 1;
+		} else if (dVarName.equals("W")) {
+			return dwhileCount % (4 * detectStep) == 1;
+		} else if (dVarName.equals("H")) {
+			return dwhileCount % (4 * detectStep) == 0 && dwhileCount != 0;
+		} else {
+			return dwhileCount % detectStep == 0;
+		}
+	}
+
+	private static boolean getIsDetectWithCount(String dVarName) {
+		int detectStep = Math.max(ScriptExecutorUtils.dmlConfig.getIntValue(DETECTION_STEP), 1);
+		DWhileProgramBlock._detectStepCount.putIfAbsent(dVarName, detectStep);
+
+		int detectCount = DWhileProgramBlock._detectStepCount.get(dVarName) - 1;
+		if (detectCount > 0) {
+			DWhileProgramBlock._detectStepCount.put(dVarName, detectCount);
+			return false;
+		}
+		DWhileProgramBlock._detectStepCount.put(dVarName, detectStep);
+		return true;
+	}
+
 	private class HopCost {
 
 		double broadcast = 0;
@@ -432,13 +555,21 @@ public class UnaryScalarCPInstruction extends UnaryMatrixCPInstruction {
 			collect += cost.collect;
 		}
 
+		double getCost() {
+			return broadcast * ScriptExecutorUtils.dmlConfig.getDoubleValue(COST_BROADCAST)
+					+ collect * ScriptExecutorUtils.dmlConfig.getDoubleValue(COST_COLLECT)
+					+ join * ScriptExecutorUtils.dmlConfig.getDoubleValue(COST_JOIN)
+					+ shuffle * ScriptExecutorUtils.dmlConfig.getDoubleValue(COST_SHUFFLE)
+					+ hdfs * ScriptExecutorUtils.dmlConfig.getDoubleValue(COST_HDFS);
+		}
+
 		@Override
 		public String toString() {
-			return "\tbroadcast: " + broadcast
-					+ "\n\tjoin: " + join
-					+ "\n\tshuffle: " + shuffle
-					+ "\n\tcollect: " + collect
-					+ "\n\thdfs: " + hdfs;
+			return "\tbroadcast:" + broadcast
+					+ "\tjoin:" + join
+					+ "\tshuffle:" + shuffle
+					+ "\tcollect:" + collect
+					+ "\thdfs:" + hdfs;
 		}
 
 	}

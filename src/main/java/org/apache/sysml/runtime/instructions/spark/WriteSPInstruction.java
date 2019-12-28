@@ -28,6 +28,7 @@ import org.apache.hadoop.mapred.SequenceFileOutputFormat;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.util.LongAccumulator;
+import org.apache.sysml.api.ScriptExecutorUtils;
 import org.apache.sysml.parser.Expression.DataType;
 import org.apache.sysml.parser.Expression.ValueType;
 import org.apache.sysml.runtime.DMLRuntimeException;
@@ -35,9 +36,13 @@ import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.controlprogram.context.SparkExecutionContext;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.CPOperand;
+import org.apache.sysml.runtime.instructions.spark.data.ColPartitioner;
+import org.apache.sysml.runtime.instructions.spark.data.RowPartitioner;
 import org.apache.sysml.runtime.instructions.spark.functions.ComputeBinaryBlockNnzFunction;
+import org.apache.sysml.runtime.instructions.spark.functions.FilterNonEmptyBlocksFunction;
 import org.apache.sysml.runtime.instructions.spark.utils.FrameRDDConverterUtils;
 import org.apache.sysml.runtime.instructions.spark.utils.FrameRDDConverterUtils.LongFrameToLongWritableFrameFunction;
+import org.apache.sysml.runtime.instructions.spark.utils.SparkUtils;
 import org.apache.sysml.runtime.io.FileFormatPropertiesCSV;
 import org.apache.sysml.runtime.io.FileFormatProperties;
 import org.apache.sysml.runtime.instructions.spark.utils.RDDConverterUtils;
@@ -47,6 +52,8 @@ import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.data.OutputInfo;
 import org.apache.sysml.runtime.util.MapReduceTool;
+
+import static org.apache.sysml.conf.DMLConfig.USE_REORGANIZATION_IN_WRITE;
 
 public class WriteSPInstruction extends SPInstruction {
 	private CPOperand input1 = null;
@@ -212,7 +219,22 @@ public class WriteSPInstruction extends SPInstruction {
 				aNnz = sec.getSparkContext().sc().longAccumulator("nnz");
 				in1 = in1.mapValues(new ComputeBinaryBlockNnzFunction(aNnz));
 			}
-			
+
+			String[] path = fname.split("/");
+			if (path[path.length - 1].startsWith("R_")
+					&& ScriptExecutorUtils.dmlConfig.getBooleanValue(USE_REORGANIZATION_IN_WRITE)) {
+				System.out.println("partition in row: " + input1.getName()
+						+ ". # partition = " + in1.getNumPartitions());
+				in1 = in1.filter(new FilterNonEmptyBlocksFunction())
+						.partitionBy(new RowPartitioner(mc, in1.getNumPartitions()));
+			} else if (path[path.length - 1].startsWith("RC_")
+					&& ScriptExecutorUtils.dmlConfig.getBooleanValue(USE_REORGANIZATION_IN_WRITE)) {
+				System.out.println("partition in col: " + input1.getName()
+						+ ". # partition = " + in1.getNumPartitions());
+				in1 = in1.filter(new FilterNonEmptyBlocksFunction())
+						.partitionBy(new ColPartitioner(mc, in1.getNumPartitions()));
+			}
+
 			//save binary block rdd on hdfs
 			in1.saveAsHadoopFile(fname, MatrixIndexes.class, MatrixBlock.class, SequenceFileOutputFormat.class);
 			

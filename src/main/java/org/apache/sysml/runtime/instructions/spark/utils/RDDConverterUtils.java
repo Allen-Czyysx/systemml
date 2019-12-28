@@ -51,6 +51,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.LongAccumulator;
+import org.apache.sysml.api.ScriptExecutorUtils;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.parser.Expression.ValueType;
@@ -74,6 +75,8 @@ import org.apache.sysml.runtime.util.UtilFunctions;
 
 import scala.Tuple2;
 
+import static org.apache.sysml.conf.DMLConfig.RBLK_OUTPUT_EMPTY;
+
 public class RDDConverterUtils 
 {
 	public static final String DF_ID_COLUMN = "__INDEX";
@@ -85,11 +88,11 @@ public class RDDConverterUtils
 				.mapPartitionsToPair(new TextToBinaryBlockFunction(mcOut, mmProps));
 
 		//inject empty blocks (if necessary) 
-		if( outputEmptyBlocks && mcOut.mightHaveEmptyBlocks() ) {
-			out = out.union( 
-				SparkUtils.getEmptyBlockRDD(sc, mcOut) );
+		if (outputEmptyBlocks && mcOut.mightHaveEmptyBlocks()
+				&& ScriptExecutorUtils.dmlConfig.getBooleanValue(RBLK_OUTPUT_EMPTY)) {
+			out = out.union(SparkUtils.getEmptyBlockRDD(sc, mcOut));
 		}
-		
+
 		//aggregate partial matrix blocks
 		out = RDDAggregateUtils.mergeByKey(out, false); 
 		
@@ -520,30 +523,33 @@ public class RDDConverterUtils
 				//get input string (ignore matrix market comments as well as
 				//first row which indicates meta data, i.e., <nrow> <ncol> <nnz>)
 				String strVal = arg0.next().toString();
-				if( strVal.startsWith("%") ) {
-					first = true;
-					continue;
+				try {
+					if (strVal.startsWith("%")) {
+						first = true;
+						continue;
+					} else if (first) {
+						first = false;
+						continue;
+					}
+
+					//parse input ijv triple
+					st.reset(strVal.toString()); //reinit tokenizer
+					long row = st.nextLong();
+					long col = st.nextLong();
+					double val = (_mmProps == null) ? st.nextDouble() :
+							_mmProps.isPatternField() ? 1 : _mmProps.isIntField() ? st.nextLong() : st.nextDouble();
+
+					//flush buffer if necessary
+					if (rbuff.getSize() >= rbuff.getCapacity())
+						flushBufferToList(rbuff, ret);
+
+					//add value to reblock buffer
+					rbuff.appendCell(row, col, val);
+					if (_mmProps != null && _mmProps.isSymmetric() && row != col)
+						rbuff.appendCell(col, row, val);
+				} catch (Exception e) {
+					throw new Exception(strVal);
 				}
-				else if (first) {
-					first = false;
-					continue;
-				}
-				
-				//parse input ijv triple
-				st.reset( strVal.toString() ); //reinit tokenizer
-				long row = st.nextLong();
-				long col = st.nextLong();
-				double val = (_mmProps == null) ? st.nextDouble() : 
-					_mmProps.isPatternField() ? 1 : _mmProps.isIntField() ? st.nextLong() : st.nextDouble();
-				
-				//flush buffer if necessary
-				if( rbuff.getSize() >= rbuff.getCapacity() )
-					flushBufferToList(rbuff, ret);
-				
-				//add value to reblock buffer
-				rbuff.appendCell(row, col, val);
-				if( _mmProps != null && _mmProps.isSymmetric() && row!=col )
-					rbuff.appendCell(col, row, val);
 			}
 			
 			//final flush buffer

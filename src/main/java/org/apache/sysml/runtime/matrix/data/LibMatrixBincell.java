@@ -1066,7 +1066,7 @@ public class LibMatrixBincell
 					int alen = a.size(r);
 					double[] avals = a.values(r);
 					for (int j = apos; j < apos + alen; j++) {
-						if (!(Math.abs(avals[j]) < ratio)) {
+						if (Math.abs(avals[j]) >= ratio) {
 							dc.set(r, 0, 1);
 							nnz++;
 							break;
@@ -1117,7 +1117,7 @@ public class LibMatrixBincell
 			for (int i = 0; i < m1.rlen; i++) {
 				for (int j = 0; j < m1.clen; j++) {
 					double in = da.get(i, j);
-					if (!(Math.abs(in) < ratio)) {
+					if (Math.abs(in) >= ratio) {
 						dc.set(i, 0, 1);
 						nnz++;
 						break;

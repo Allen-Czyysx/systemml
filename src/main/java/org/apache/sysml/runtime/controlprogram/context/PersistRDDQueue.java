@@ -8,6 +8,13 @@ public class PersistRDDQueue {
 
 	private JavaPairRDD[] _rddHandles = new JavaPairRDD[_size];
 
+	public PersistRDDQueue() {
+	}
+
+	public PersistRDDQueue(int size) {
+		_size = size;
+	}
+
 	// 表示最新值的位置
 	private int _flag = 0;
 
@@ -24,6 +31,13 @@ public class PersistRDDQueue {
 	 */
 	public JavaPairRDD getOld() {
 		return _rddHandles[(_flag + 1) % _size];
+	}
+
+	/**
+	 * @return 新的 rddHandle
+	 */
+	public JavaPairRDD getNew () {
+		return _rddHandles[_flag % _size];
 	}
 
 }

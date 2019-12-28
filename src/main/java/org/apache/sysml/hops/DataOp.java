@@ -272,8 +272,12 @@ public class DataOp extends Hop
 				l = new Data(HopsData2Lops.get(_dataop), getInput().get(0).constructLops(), inputLops, getName(), null, 
 						getDataType(), getValueType(), false, getInputFormatType());
 				((Data) l).setExecType(et);
-				((Data) l).setExecType(ExecType.SPARK); // TODO added by czh
-				setOutputDimensions(l);
+				if (inputLops.get("iofilename").getOutputParameters().getLabel().equals("output/avazu_D_W")
+						|| inputLops.get("iofilename").getOutputParameters().getLabel().startsWith("output/url_svmlight_D")) {
+					((Data) l).setExecType(ExecType.SPARK);
+				} else {
+					setOutputDimensions(l);
+				}
 				break;
 				
 			case TRANSIENTWRITE:
@@ -594,6 +598,18 @@ public class DataOp extends Hop
 				_paramIndexMap.put(entry.getKey(), (entry.getValue() - 1));
 			}
 		}
+	}
+
+	public static void main(String[] args) {
+		long dim1 = (long) (134217726);
+		long dim2 = (long) (134217726);
+		long nnz = (long) (2111632322.0);
+
+		double sparsity = OptimizerUtils.getSparsity(dim1, dim2, nnz);
+//		double sparsity = 518137568.7 * 10 / dim1 / dim2;
+		System.out.println(sparsity);
+		System.out.println(OptimizerUtils.estimateSizeExactSparsity(dim1, dim2, sparsity) / 1024.0 / 1024.0 / 1024.0
+				+ " GB");
 	}
 
 }

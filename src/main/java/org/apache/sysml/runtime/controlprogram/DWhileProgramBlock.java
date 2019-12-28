@@ -7,8 +7,7 @@ import org.apache.sysml.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysml.runtime.instructions.Instruction;
 import org.apache.sysml.runtime.instructions.spark.MapmmSPInstruction;
 
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.*;
 
 // TODO added by czh 退出dwhile时要删除多余变量
 public class DWhileProgramBlock extends WhileProgramBlock {
@@ -16,6 +15,12 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 	public static ExecutionContext _ec = null;
 
 	public static DWhileProgramBlock _pb = null; // for compare in UnaryScalarCPInstruction
+
+	public static Map<String, BitSet> _ignoredRowBlocks = null;
+
+	public static Map<String, Integer> _detectStepCount = null;
+
+	public static Map<String, Integer> _detectStepHistory = null;
 
 	private ArrayList<ProgramBlock> _dIterInit;
 
@@ -68,8 +73,11 @@ public class DWhileProgramBlock extends WhileProgramBlock {
 
 	@Override
 	public void execute(ExecutionContext ec) {
-		DWhileProgramBlock._ec = ec;
-		DWhileProgramBlock._pb = this;
+		_ec = ec;
+		_pb = this;
+		_ignoredRowBlocks = new HashMap<>();
+		_detectStepCount = new HashMap<>();
+		_detectStepHistory = new HashMap<>();
 
 		// execute while loop
 		try {

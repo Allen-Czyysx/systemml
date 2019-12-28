@@ -19,6 +19,7 @@
 
 package org.apache.sysml.runtime.instructions.spark.utils;
 
+import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
@@ -30,8 +31,8 @@ import org.apache.sysml.runtime.functionobjects.Plus;
 import org.apache.sysml.runtime.instructions.InstructionUtils;
 import org.apache.sysml.runtime.instructions.cp.KahanObject;
 import org.apache.sysml.runtime.instructions.spark.AggregateUnarySPInstruction.RDDUAggFunction2;
-import org.apache.sysml.runtime.instructions.spark.data.CorrMatrixBlock;
-import org.apache.sysml.runtime.instructions.spark.data.RowMatrixBlock;
+import org.apache.sysml.runtime.instructions.spark.data.*;
+import org.apache.sysml.runtime.matrix.MatrixCharacteristics;
 import org.apache.sysml.runtime.matrix.data.MatrixBlock;
 import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.data.OperationsOnMatrixValues;
@@ -98,7 +99,18 @@ public class RDDAggregateUtils
 		return out;
 	}
 
-	
+	public static JavaPairRDD<MatrixIndexes, MatrixBlock> cpmmSumByKeyStable(
+			JavaPairRDD<MatrixIndexes, MatrixBlock> in, MatrixCharacteristics mc1, MatrixCharacteristics mc2) {
+		MatrixCharacteristics newMc = new MatrixCharacteristics(mc1);
+		newMc.setCols(mc2.getCols());
+		return in
+				.combineByKey(new CreateCorrBlockCombinerFunction(false),
+						new MergeSumBlockValueFunction(false),
+						new MergeSumBlockCombinerFunction(false),
+						new NewBlockPartitioner(newMc, in.getNumPartitions()))
+				.mapValues(new ExtractMatrixBlock());
+	}
+
 	public static JavaPairRDD<MatrixIndexes, Double> sumCellsByKeyStable( JavaPairRDD<MatrixIndexes, Double> in ) {
 		return sumCellsByKeyStable(in, in.getNumPartitions());
 	}

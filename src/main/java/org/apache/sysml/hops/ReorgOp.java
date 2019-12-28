@@ -157,6 +157,9 @@ public class ReorgOp extends MultiThreadedHop
 		{
 			case TRANS:
 			{
+				// TODO added by czh 暴力
+				et = ExecType.SPARK;
+
 				Lop lin = getInput().get(0).constructLops();
 				if( lin instanceof Transform && ((Transform)lin).getOperationType()==OperationTypes.Transpose )
 					setLops(lin.getInputs().get(0)); //if input is already a transpose, avoid redundant transpose ops

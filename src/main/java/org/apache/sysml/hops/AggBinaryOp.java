@@ -19,7 +19,6 @@
 
 package org.apache.sysml.hops;
 
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.sysml.api.DMLScript.RUNTIME_PLATFORM;
 import org.apache.sysml.conf.ConfigurationManager;
 import org.apache.sysml.hops.rewrite.HopRewriteUtils;
@@ -99,8 +98,8 @@ public class AggBinaryOp extends MultiThreadedHop
 	
 	//hints set by previous to operator selection
 	private boolean _hasLeftPMInput = false; //left input is permutation matrix
-	
-	private AggBinaryOp() {
+
+	public AggBinaryOp() {
 		//default constructor for clone
 	}
 	
@@ -114,8 +113,9 @@ public class AggBinaryOp extends MultiThreadedHop
 		in1.getParent().add(this);
 		in2.getParent().add(this);
 
-		_dVarNames = (String[]) ArrayUtils.addAll(in1._dVarNames, in2._dVarNames);
-		
+		_dVarNames.addAll(in1._dVarNames);
+		_dVarNames.addAll(in2._dVarNames);
+
 		//compute unknown dims and nnz
 		refreshSizeInformation();
 	}
@@ -188,7 +188,18 @@ public class AggBinaryOp extends MultiThreadedHop
 			//matrix mult operation selection part 2 (specific pattern)
 			MMTSJType mmtsj = checkTransposeSelf(); //determine tsmm pattern
 			ChainType chain = checkMapMultChain(); //determine mmchain pattern
-			
+
+			// TODO added by czh 暴力
+			//  ALS 特殊处理
+////			MMultMethod method = optFindMMultMethodCP(input1.getDim1(), input1.getDim2(),
+////					input2.getDim1(), input2.getDim2(), mmtsj, chain, _hasLeftPMInput);
+//			if (input1.getName().equals("G") || input1.getName().equals("TG")) {
+//				et = ExecType.SPARK;
+//			} else if (input2.getName().equals("tmp2")) {
+//			if (input2.getName().startsWith("tmp2")) {
+//				et = ExecType.CP;
+//			}
+
 			if( et == ExecType.CP || et == ExecType.GPU ) 
 			{
 				//matrix mult operation selection part 3 (CP type)
@@ -346,7 +357,7 @@ public class AggBinaryOp extends MultiThreadedHop
 	}
 
 	@Override
-	protected double computeOutputMemEstimate( long dim1, long dim2, long nnz )
+	public double computeOutputMemEstimate( long dim1, long dim2, long nnz )
 	{		
 		//NOTES:  
 		// * The estimate for transpose-self is the same as for normal matrix multiplications
@@ -379,7 +390,7 @@ public class AggBinaryOp extends MultiThreadedHop
 	}
 	
 	@Override
-	protected double computeIntermediateMemEstimate( long dim1, long dim2, long nnz )
+	public double computeIntermediateMemEstimate( long dim1, long dim2, long nnz )
 	{
 		double ret = 0;
 

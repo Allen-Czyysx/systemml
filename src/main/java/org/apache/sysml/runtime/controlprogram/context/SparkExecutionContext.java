@@ -111,8 +111,10 @@ public class SparkExecutionContext extends ExecutionContext
 	private static boolean[] _poolBuff = FAIR_SCHEDULER_MODE ?
 		new boolean[InfrastructureAnalyzer.getLocalParallelism()] : null;
 
-	// 每个算子对应2个槽位
+	// 每个算子对应3个槽位
 	private HashMap<String, PersistRDDQueue> _persistRddMap = new HashMap<>();
+
+	private HashMap<String, BroadcastQueue> _broadcastMap = new HashMap<>();
 
 	static {
 		// for internal debugging only
@@ -135,7 +137,13 @@ public class SparkExecutionContext extends ExecutionContext
 	public JavaPairRDD persistRdd(String key, JavaPairRDD rdd, StorageLevel level) {
 		rdd = rdd.persist(level);
 		if (!_persistRddMap.containsKey(key)) {
-			_persistRddMap.put(key, new PersistRDDQueue());
+			if (key.equals("W") || key.equals("H")) {
+				_persistRddMap.put(key, new PersistRDDQueue());
+			} else if (key.endsWith("_binary")) {
+				_persistRddMap.put(key, new PersistRDDQueue(2));
+			} else {
+				_persistRddMap.put(key, new PersistRDDQueue());
+			}
 		}
 		_persistRddMap.get(key).add(rdd);
 		return rdd;
@@ -146,6 +154,31 @@ public class SparkExecutionContext extends ExecutionContext
 			JavaPairRDD rdd = _persistRddMap.get(key).getOld();
 			if (rdd != null) {
 				rdd.unpersist();
+			}
+		}
+	}
+
+	public JavaPairRDD getNewPersistRdd(String key) {
+		if (_persistRddMap.containsKey(key)) {
+			return _persistRddMap.get(key).getNew();
+		}
+		return null;
+	}
+
+	public Broadcast broadcast(String key, Object data) {
+		Broadcast broadcast = getSparkContext().broadcast(data);
+		if (!_broadcastMap.containsKey(key)) {
+			_broadcastMap.put(key, new BroadcastQueue());
+		}
+		_broadcastMap.get(key).add(broadcast);
+		return broadcast;
+	}
+
+	public void destroy(String key) {
+		if (_broadcastMap.containsKey(key)) {
+			Broadcast rdd = _broadcastMap.get(key).getOld();
+			if (rdd != null) {
+				rdd.destroy(!ASYNCHRONOUS_VAR_DESTROY);
 			}
 		}
 	}

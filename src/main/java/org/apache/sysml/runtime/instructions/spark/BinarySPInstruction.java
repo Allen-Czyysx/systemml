@@ -21,6 +21,7 @@ package org.apache.sysml.runtime.instructions.spark;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.StorageLevels;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.sysml.hops.OptimizerUtils;
 import org.apache.sysml.lops.Lop;
 import org.apache.sysml.lops.BinaryM.VectorType;
@@ -46,10 +47,13 @@ import org.apache.sysml.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysml.runtime.matrix.operators.BinaryOperator;
 import org.apache.sysml.runtime.matrix.operators.Operator;
 import org.apache.sysml.runtime.matrix.operators.ScalarOperator;
+import scala.Tuple2;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+
+import static org.apache.spark.api.java.StorageLevels.MEMORY_AND_DISK_SER;
 
 public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
@@ -156,44 +160,60 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 
 	/**
 	 * Common binary matrix-matrix process instruction
-	 * 
+	 *
 	 * @param ec execution context
 	 */
-	protected void processMatrixMatrixBinaryInstruction(ExecutionContext ec) 
-	{
-		SparkExecutionContext sec = (SparkExecutionContext)ec;
-		
+	protected void processMatrixMatrixBinaryInstruction(ExecutionContext ec) {
+		SparkExecutionContext sec = (SparkExecutionContext) ec;
+
 		//sanity check dimensions
 		checkMatrixMatrixBinaryCharacteristics(sec);
 		updateBinaryOutputMatrixCharacteristics(sec);
-		
+
+		String in1Name = input1.getName();
+		String in2Name = input2.getName();
+
 		// Get input RDDs
-		JavaPairRDD<MatrixIndexes,MatrixBlock> in1 = sec.getBinaryBlockRDDHandleForVariable(input1.getName());
-		JavaPairRDD<MatrixIndexes,MatrixBlock> in2 = sec.getBinaryBlockRDDHandleForVariable(input2.getName());
-		MatrixCharacteristics mc1 = sec.getMatrixCharacteristics(input1.getName());
-		MatrixCharacteristics mc2 = sec.getMatrixCharacteristics(input2.getName());
+		JavaPairRDD<MatrixIndexes, MatrixBlock> in1 = sec.getBinaryBlockRDDHandleForVariable(in1Name);
+		JavaPairRDD<MatrixIndexes, MatrixBlock> in2 = sec.getBinaryBlockRDDHandleForVariable(in2Name);
+		MatrixCharacteristics mc1 = sec.getMatrixCharacteristics(in1Name);
+		MatrixCharacteristics mc2 = sec.getMatrixCharacteristics(in2Name);
 		MatrixCharacteristics mcOut = sec.getMatrixCharacteristics(output.getName());
-		
+
 		BinaryOperator bop = (BinaryOperator) _optr;
-	
+
 		//vector replication if required (mv or outer operations)
-		boolean rowvector = (mc2.getRows()==1 && mc1.getRows()>1);
+		boolean rowvector = (mc2.getRows() == 1 && mc1.getRows() > 1);
 		long numRepLeft = getNumReplicas(mc1, mc2, true);
 		long numRepRight = getNumReplicas(mc1, mc2, false);
-		if( numRepLeft > 1 )
-			in1 = in1.flatMapToPair(new ReplicateVectorFunction(false, numRepLeft ));
-		if( numRepRight > 1 )
+		if (numRepLeft > 1)
+			in1 = in1.flatMapToPair(new ReplicateVectorFunction(false, numRepLeft));
+		if (numRepRight > 1)
 			in2 = in2.flatMapToPair(new ReplicateVectorFunction(rowvector, numRepRight));
 		int numPrefPart = SparkUtils.isHashPartitioned(in1) ? in1.getNumPartitions() :
-			SparkUtils.isHashPartitioned(in2) ? in2.getNumPartitions() :
-			Math.min(in1.getNumPartitions() + in2.getNumPartitions(),
-				2 * SparkUtils.getNumPreferredPartitions(mcOut));
-		
+				SparkUtils.isHashPartitioned(in2) ? in2.getNumPartitions() :
+						Math.min(in1.getNumPartitions() + in2.getNumPartitions(),
+								2 * SparkUtils.getNumPreferredPartitions(mcOut));
+
 		//execute binary operation
-		JavaPairRDD<MatrixIndexes,MatrixBlock> out = in1
-			.join(in2, numPrefPart)
-			.mapValues(new MatrixMatrixBinaryOpFunction(bop));
-		
+		JavaPairRDD<MatrixIndexes, Tuple2<MatrixBlock, MatrixBlock>> tmp = in1.join(in2, numPrefPart);
+
+		// TODO added by czh 特殊处理
+		if ((in1Name.equals("W") || in1Name.equals("H")) && DWhileStatement.isPreVarName(in2Name)) {
+			if (instOpcode.equals("-")) {
+				tmp = sec.getNewPersistRdd(in2Name + "_binary");
+				if (tmp == null) {
+					throw new RuntimeException("Should not be here");
+				}
+
+			} else {
+				sec.unpersistRdd(in2Name + "_binary");
+				tmp = sec.persistRdd(in2Name + "_binary", tmp, MEMORY_AND_DISK_SER);
+			}
+		}
+
+		JavaPairRDD<MatrixIndexes,MatrixBlock> out = tmp.mapValues(new MatrixMatrixBinaryOpFunction(bop));
+
 		//set output RDD
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(output.getName(), input1.getName());
@@ -203,12 +223,7 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixBVectorBinaryInstruction(ExecutionContext ec, VectorType vtype) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
-		boolean needCacheNow = needCacheNow(sec);
 
-		if (needCacheNow) {
-			sec.unpersistRdd(_preOutputName);
-		}
-		
 		//sanity check dimensions
 		checkMatrixMatrixBinaryCharacteristics(sec);
 
@@ -252,10 +267,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 					new MatrixVectorBinaryOpPartitionFunction(bop, in2, vtype), true);
 		}
 
-		if (needCacheNow) {
-			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
-		}
-
 		//set output RDD
 		updateBinaryOutputMatrixCharacteristics(sec);
 		sec.setRDDHandleForVariable(output.getName(), out);
@@ -266,11 +277,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 	protected void processMatrixScalarBinaryInstruction(ExecutionContext ec) 
 	{
 		SparkExecutionContext sec = (SparkExecutionContext)ec;
-		boolean needCacheNow = needCacheNow(sec);
-
-		if (needCacheNow) {
-			sec.unpersistRdd(_preOutputName);
-		}
 
 		//get input RDD
 		String rddVar = (input1.getDataType() == DataType.MATRIX) ? input1.getName() : input2.getName();
@@ -284,10 +290,6 @@ public abstract class BinarySPInstruction extends ComputationSPInstruction {
 		
 		//execute scalar matrix arithmetic instruction
 		JavaPairRDD<MatrixIndexes,MatrixBlock> out = in1.mapValues( new MatrixScalarUnaryFunction(sc_op) );
-
-		if (needCacheNow) {
-			out = sec.persistRdd(_preOutputName, out, StorageLevels.MEMORY_AND_DISK);
-		}
 
 		//put output RDD handle into symbol table
 		updateUnaryOutputMatrixCharacteristics(sec, rddVar, output.getName());

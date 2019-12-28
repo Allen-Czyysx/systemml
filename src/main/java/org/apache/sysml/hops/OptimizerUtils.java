@@ -68,7 +68,7 @@ public class OptimizerUtils
 	 * Utilization factor used in deciding whether an operation to be scheduled on CP or MR. 
 	 * NOTE: it is important that MEM_UTIL_FACTOR+CacheableData.CACHING_BUFFER_SIZE &lt; 1.0
 	 */
-	public static double MEM_UTIL_FACTOR = 0.7d;
+	public static double MEM_UTIL_FACTOR = 0.5d;
 	
 	/** Default blocksize if unspecified or for testing purposes */
 	public static final int DEFAULT_BLOCKSIZE = 1000;
@@ -480,10 +480,10 @@ public class OptimizerUtils
 	}
 	
 	public static boolean checkSparkCollectMemoryBudget( MatrixCharacteristics mc, long memPinned, boolean checkBP ) {
-//		// TODO added by czh 暴力解决估计内存不够, 需要写HDFS
-//		return true;
-		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
-			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
+		// TODO added by czh 暴力解决估计内存不够, 需要写HDFS
+		return true;
+//		return checkSparkCollectMemoryBudget(mc.getRows(), mc.getCols(), mc.getRowsPerBlock(),
+//			mc.getColsPerBlock(), mc.getNonZerosBound(), memPinned, checkBP);
 	}
 	
 	public static boolean checkSparkCollectMemoryBudget( long rlen, long clen, int brlen, int bclen, long nnz, long memPinned, boolean checkBP ) {
